@@ -79,6 +79,10 @@ class Version:
     restrict: str
     eapi: str
     installed: bool
+    #: ``False`` when Portage would not say whether this version is masked.
+    #: :attr:`masking` is then empty for want of an answer, not for want of a
+    #: reason, and the two must not read the same.
+    masking_known: bool = True
 
     @property
     def atom(self) -> str:
@@ -94,8 +98,13 @@ class Version:
 
     @property
     def is_installable(self) -> bool:
-        """True when Portage would accept this version as it stands today."""
-        return not self.masking
+        """True when Portage would accept this version as it stands today.
+
+        ``False`` also when the check itself failed. Offering to install a
+        version nobody has managed to ask Portage about is the worse of the two
+        wrong answers: the button would work, and ``emerge`` would refuse.
+        """
+        return self.masking_known and not self.masking
 
 
 @dataclass(frozen=True, slots=True)
@@ -184,7 +193,13 @@ def _split_slot(raw: str) -> tuple[str, str]:
     return slot, sub or slot
 
 
-def _masking_status(env: PortageEnv, cpv: str, repo: str) -> tuple[str, ...]:
+def _masking_status(env: PortageEnv, cpv: str, repo: str) -> tuple[tuple[str, ...], bool]:
+    """Portage's reasons this version is masked, and whether it would say.
+
+    The second half of the answer is the difference between "no reasons" and
+    "no answer". One unreadable ebuild must not empty the version list, but it
+    must not pass for an installable version either.
+    """
     import portage  # noqa: PLC0415 — slow import, deferred
 
     try:
@@ -193,8 +208,8 @@ def _masking_status(env: PortageEnv, cpv: str, repo: str) -> tuple[str, ...]:
         )
     except Exception:  # pragma: no cover - broken ebuild metadata
         log.warning("Could not determine masking status of %s", cpv, exc_info=True)
-        return ()
-    return tuple(str(reason) for reason in status)
+        return (), False
+    return tuple(str(reason) for reason in status), True
 
 
 def details(cp: str, env: PortageEnv | None = None, repo: str = "") -> PackageDetails:
@@ -250,6 +265,7 @@ def details(cp: str, env: PortageEnv | None = None, repo: str = "") -> PackageDe
             continue
         slot, sub_slot = _split_slot(slot_raw)
         keyword_list = tuple(keywords.split())
+        masking_reasons, masking_known = _masking_status(env, str(cpv), source_repo)
         versions.append(
             Version(
                 cpv=str(cpv),
@@ -260,7 +276,8 @@ def details(cp: str, env: PortageEnv | None = None, repo: str = "") -> PackageDe
                 sub_slot=sub_slot,
                 keywords=keyword_list,
                 keywording=classify_keywords(keyword_list, arch, getattr(cpv, "version", "")),
-                masking=_masking_status(env, str(cpv), source_repo),
+                masking=masking_reasons,
+                masking_known=masking_known,
                 iuse=tuple(iuse.split()),
                 restrict=restrict,
                 eapi=eapi,

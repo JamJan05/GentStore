@@ -21,7 +21,9 @@ situations hide behind that one sentence, and they are not equally serious:
     licences — see :mod:`gentstore.core.licenses`.
 
 Each one maps to a different file under ``/etc/portage``, which is the other
-half of what this module produces.
+half of what this module produces. There is a sixth answer, ``unknown``, for
+when Portage will not say: it maps to no file and no fix, and exists so that a
+failed check cannot be mistaken for a clean one.
 """
 
 from __future__ import annotations
@@ -45,6 +47,9 @@ class BlockKind(StrEnum):
     PACKAGE_MASK = "package-mask"
     LICENCE = "licence"
     OTHER = "other"
+    #: Portage refused to answer. Not "installable" and not any known block —
+    #: the one state where Gentstore has nothing to tell the user but says so.
+    UNKNOWN = "unknown"
 
 
 #: Portage's own wording, which is what these patterns have to match.
@@ -117,12 +122,13 @@ class Blockage:
         story first.
         """
         order = {
-            BlockKind.PACKAGE_MASK: 0,
-            BlockKind.UNSUPPORTED_ARCH: 1,
-            BlockKind.LICENCE: 2,
-            BlockKind.MISSING_KEYWORD: 3,
-            BlockKind.TESTING_KEYWORD: 4,
-            BlockKind.OTHER: 5,
+            BlockKind.UNKNOWN: 0,
+            BlockKind.PACKAGE_MASK: 1,
+            BlockKind.UNSUPPORTED_ARCH: 2,
+            BlockKind.LICENCE: 3,
+            BlockKind.MISSING_KEYWORD: 4,
+            BlockKind.TESTING_KEYWORD: 5,
+            BlockKind.OTHER: 6,
         }
         return min(self.blocks, key=lambda b: order[b.kind], default=None)
 
@@ -152,7 +158,14 @@ def _classify(raw: str) -> Block:
 
 
 def inspect(cpv: str, repo: str = "", env: PortageEnv | None = None) -> Blockage:
-    """Work out why *cpv* cannot be installed. An empty result means it can."""
+    """Work out why *cpv* cannot be installed. An empty result means it can.
+
+    A failure here yields one :attr:`BlockKind.UNKNOWN` block, not an empty
+    result. One unreadable ebuild still must not take the panel down with it,
+    but "Portage would not answer" and "nothing is in the way" are opposite
+    answers, and returning the second for the first is what kept this whole
+    class of bug off the screen.
+    """
     import portage  # noqa: PLC0415 — slow import, deferred
 
     env = env or _default_env()
@@ -162,7 +175,9 @@ def inspect(cpv: str, repo: str = "", env: PortageEnv | None = None) -> Blockage
         )
     except Exception:  # pragma: no cover - broken ebuild metadata
         log.warning("Could not determine why %s is masked", cpv, exc_info=True)
-        statuses = []
+        return Blockage(
+            cpv=cpv, cp=_cp_of(cpv), repo=repo, blocks=(Block(BlockKind.UNKNOWN, ""),)
+        )
 
     blocks = [_classify(str(status)) for status in statuses]
     blocks = [_enrich(block, cpv, repo, env) for block in blocks]

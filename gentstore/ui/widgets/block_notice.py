@@ -185,6 +185,10 @@ class BlockNotice(QFrame):
 
     # -- wording -----------------------------------------------------------
 
+    def _icon_name(self, block: Block) -> str:
+        """A failed check is a question about Gentstore, not about the package."""
+        return "info" if block.kind is BlockKind.UNKNOWN else "shield-warning"
+
     def _title_text(self, block: Block) -> str:
         return {
             BlockKind.TESTING_KEYWORD: self.tr("Not marked stable yet"),
@@ -193,6 +197,7 @@ class BlockNotice(QFrame):
             BlockKind.PACKAGE_MASK: self.tr("Masked by a developer"),
             BlockKind.LICENCE: self.tr("Licence not accepted"),
             BlockKind.OTHER: self.tr("Portage will not install this version"),
+            BlockKind.UNKNOWN: self.tr("Could not be checked"),
         }[block.kind]
 
     def _explanation_text(self, block: Block) -> str:
@@ -227,6 +232,13 @@ class BlockNotice(QFrame):
                 "cover every licence this package carries. Read the ones below and "
                 "decide for this package alone."
             ).format(accepted=self._accept_license())
+        if block.kind is BlockKind.UNKNOWN:
+            return self.tr(
+                "Portage could not say whether this version installs, so Gentstore is "
+                "not going to guess. Nothing here is necessarily wrong with the package "
+                "— the check itself failed. Run emerge --pretend for this version to "
+                "see Portage's own answer; the log has the details."
+            )
         return self.tr("Portage gave this reason and Gentstore has nothing to add to it.")
 
     def _accept_license(self) -> str:
@@ -288,10 +300,11 @@ class BlockNotice(QFrame):
         colour = t.ERR if block.is_serious else t.WARN
         size = max(14, round(self.fontMetrics().height() * 1.05))
         self._icon.setPixmap(
-            icons.tinted_pixmap("shield-warning", colour, size, self.devicePixelRatioF())
+            icons.tinted_pixmap(self._icon_name(block), colour, size, self.devicePixelRatioF())
         )
         self._title.setText(self._title_text(block))
         self._raw.setText(block.raw)
+        self._raw.setVisible(bool(block.raw))
 
         self._comment.setText(block.comment)
         self._comment.setVisible(bool(block.comment))

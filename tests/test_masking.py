@@ -54,6 +54,18 @@ def test_licence_names_are_pulled_out_of_the_message() -> None:
     assert block.licences == ("BUSL-1.1", "Microsoft-vscode")
 
 
+def test_a_check_that_failed_does_not_read_as_a_package_that_is_fine() -> None:
+    """The distinction the whole ``unknown`` kind exists for."""
+    unchecked = Blockage(
+        cpv="a/b-1", cp="a/b", repo="", blocks=(Block(BlockKind.UNKNOWN, ""),)
+    )
+    clean = Blockage(cpv="a/b-1", cp="a/b", repo="", blocks=())
+
+    assert unchecked.is_blocked and not clean.is_blocked
+    assert unchecked.primary.kind is BlockKind.UNKNOWN
+    assert fix_for(unchecked.primary, "a/b-1") is None, "there is nothing to offer"
+
+
 def test_an_unfamiliar_reason_is_kept_verbatim() -> None:
     block = _classify("EAPI 9 is not supported")
     assert block.kind is BlockKind.OTHER

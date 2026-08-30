@@ -603,6 +603,8 @@ class SearchPage(SplitPage):
             return self.tr("live")
         if version.masking:
             return self.tr("blocked")
+        if not version.masking_known:
+            return self.tr("unchecked")
         if version.keywording is Keywording.TESTING:
             return self.tr("testing")
         if version.keywording is Keywording.STABLE:

@@ -236,6 +236,8 @@ def cmd_show(args: argparse.Namespace) -> int:
             flags.append("installed")
         if version.masking:
             flags.append("masked: " + ", ".join(version.masking))
+        elif not version.masking_known:
+            flags.append("masking unknown: Portage would not say")
         suffix = f"   ({'; '.join(flags)})" if flags else ""
         print(
             f"    {version.version:<20} ::{version.repo:<14} slot {version.slot_display:<8} "
