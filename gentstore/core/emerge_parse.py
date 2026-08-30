@@ -64,6 +64,17 @@ _REQUIRED_CHANGE_HEADINGS = (
     "The following REQUIRED_USE flag constraints are unsatisfied",
 )
 
+#: ``The following USE changes are …`` — the word that says which file.
+_CHANGE_KIND = re.compile(r"^The following (?P<kind>\S+) changes are necessary")
+
+#: Where each kind of change is written. Keyed by emerge's own word for it.
+_REQUIRED_CHANGE_FILES = {
+    "USE": "package.use",
+    "keyword": "package.accept_keywords",
+    "mask": "package.unmask",
+    "license": "package.license",
+}
+
 
 @dataclass(frozen=True, slots=True)
 class UseChange:
@@ -126,11 +137,62 @@ class MergeRow:
 
 
 @dataclass(frozen=True, slots=True)
+class RequiredEntry:
+    """One line emerge is asking for, in the shape a writer can use."""
+
+    #: The file under ``/etc/portage`` it belongs in.
+    file: str
+    atom: str
+    tokens: tuple[str, ...] = ()
+    #: The ``# required by`` lines emerge printed above it, markers stripped.
+    #: This is the "why", and it is the half that says whose fault it is —
+    #: often a dependency the user has never heard of.
+    required_by: tuple[str, ...] = ()
+
+    @property
+    def line(self) -> str:
+        return " ".join([self.atom, *self.tokens])
+
+
+@dataclass(frozen=True, slots=True)
 class RequiredChange:
     """A block of ``/etc/portage`` changes emerge is asking for."""
 
     heading: str
     lines: tuple[str, ...]
+
+    @property
+    def file(self) -> str:
+        """The file this block wants a line in, or ``""`` when there is none.
+
+        REQUIRED_USE constraints land here too and deliberately get nothing:
+        they are not a configuration change but the package's own flags
+        contradicting each other, and no line in ``/etc/portage`` settles that.
+        """
+        match = _CHANGE_KIND.match(self.heading)
+        return _REQUIRED_CHANGE_FILES.get(match.group("kind"), "") if match else ""
+
+    @property
+    def entries(self) -> tuple[RequiredEntry, ...]:
+        """The lines themselves, each carrying the comments printed above it."""
+        target = self.file
+        if not target:
+            return ()
+        found: list[RequiredEntry] = []
+        context: list[str] = []
+        for raw in self.lines:
+            line = raw.strip()
+            # The "(see ... in the portage(5) man page)" pointer is emerge
+            # talking to the reader, not a line to write anywhere.
+            if not line or line.startswith("("):
+                continue
+            if line.startswith("#"):
+                context.append(line.lstrip("#").strip())
+                continue
+            atom, *tokens = line.split()
+            found.append(RequiredEntry(target, atom, tuple(tokens), tuple(context)))
+            context = []
+        return tuple(found)
 
 
 @dataclass(frozen=True, slots=True)

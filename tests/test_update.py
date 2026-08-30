@@ -194,6 +194,56 @@ def test_a_run_that_wants_configuration_changes_says_so() -> None:
     assert preview.problems
 
 
+# -- the lines emerge asks for ----------------------------------------------
+
+#: Captured on this machine: sci-ml/lmstudio-bin needs squashfs-tools built
+#: with zstd, and says so only after the licence and keyword were accepted.
+DEPENDENCY_USE = """
+[ebuild  N     ] sys-fs/squashfs-tools-4.7.5::gentoo  USE="xattr zstd -debug" 403 KiB
+[ebuild  N    ~] sci-ml/lmstudio-bin-0.4.23::overlay-nuda  USE="-cuda" 986657 KiB
+
+Total: 2 packages (2 new), Size of downloads: 987060 KiB
+
+The following USE changes are necessary to proceed:
+ (see "package.use" in the portage(5) man page for more details)
+# required by sci-ml/lmstudio-bin-0.4.23::overlay-nuda
+# required by =sci-ml/lmstudio-bin-0.4.23::overlay-nuda (argument)
+>=sys-fs/squashfs-tools-4.7.5 zstd
+
+Use --autounmask-write to write changes to config files (honoring
+CONFIG_PROTECT).
+"""
+
+
+def test_a_required_change_becomes_a_line_somebody_can_write() -> None:
+    """Heading to file, line to atom and tokens, comments to the reason."""
+    change = parse_pretend(DEPENDENCY_USE).required_changes[0]
+    assert change.file == "package.use"
+
+    entry = change.entries[0]
+    assert entry.atom == ">=sys-fs/squashfs-tools-4.7.5"
+    assert entry.tokens == ("zstd",)
+    assert entry.line == ">=sys-fs/squashfs-tools-4.7.5 zstd"
+    # The demand comes from a package the user never asked about by name, so
+    # carrying the "why" across is most of the value.
+    assert any("lmstudio" in reason for reason in entry.required_by)
+
+
+def test_a_required_use_conflict_is_not_offered_as_a_line() -> None:
+    """There is no line in /etc/portage that settles REQUIRED_USE.
+
+    It arrives in the same shape as the others and has to be turned away here,
+    or the interface would offer a write that could not possibly help.
+    """
+    text = """
+The following REQUIRED_USE flag constraints are unsatisfied:
+  media-video/mpv-0.41.0: vulkan? ( egl )
+"""
+    change = parse_pretend(text).required_changes[0]
+    assert change.file == ""
+    assert change.entries == ()
+
+
 # -- depclean ---------------------------------------------------------------
 
 REAL_DEPCLEAN = """
