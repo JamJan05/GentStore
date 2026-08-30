@@ -361,14 +361,28 @@ here: **the clean installation on a second machine itself**, because there is on
 The S0–S12 plan is done. What could not be closed out from this session, and what naturally
 follows:
 
-**For the repository owner to verify**
+**Settled since — the privileged path has run live**
 
-- **The privileged path, live.** `pkexec` needs an interactive authentication agent, so no write
-  to `/etc/portage` and no `emerge` that installs anything has been run end to end. Everything
-  around it is tested, including the helper protocol against a real subprocess. The minimal
-  run-through: `python -m gentstore` → `app-misc/hello` → *Install* → *Uninstall*, then change a
-  USE flag and *Save*.
-- **A clean installation on a second machine**, following the README.
+The one thing S4–S11 could not close out is closed. On the owner's machine, over 28–30 August
+2026, the application drove the whole privileged path against a real system:
+
+- **73 launcher invocations through `pkexec`** — 50 × `emerge --color=n`, 21 × `emaint sync`,
+  2 × `eselect news`.
+- **Real writes through the helper** — `append_line`, `replace_line` and `remove_line` against
+  `package.use`, `package.license` and `package.accept_keywords`, for `dev-util/claude-desktop-bin`,
+  `app-office/obsidian-bin` and `sys-apps/mission-center`. The lines landed in the shape the
+  design calls for: USE flags per package, licences and keywords pinned to an exact version
+  (`=cat/pkg-1.2.3`), as [06-decisions.md](06-decisions.md) requires.
+- **Seven `/etc/portage.bak-*` copies**, one per session that wrote anything — the rule from
+  [04-privileges.md §5](04-privileges.md), doing its job unprompted.
+- **Installation through Portage**, from the overlay, with the package in `@world` and all 425
+  files owned by it.
+
+**Still open**
+
+- **A clean installation on a second machine**, following the README. There is still one
+  machine, and it is amd64, which is why the release ebuild is keyworded `~amd64` and nothing
+  else.
 
 **Natural next steps**
 

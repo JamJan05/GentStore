@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "gentstore"
-version = "0.1.0"
+version = "1.0.0"
 description = "Graphical front-end for Portage on Gentoo Linux"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -12,7 +12,7 @@ license = { text = "GPL-2.0-only" }
 authors = [{ name = "Janek" }]
 keywords = ["gentoo", "portage", "emerge", "package-manager", "qt"]
 classifiers = [
-    "Development Status :: 2 - Pre-Alpha",
+    "Development Status :: 5 - Production/Stable",
     "Environment :: X11 Applications :: Qt",
     "Intended Audience :: System Administrators",
     "License :: OSI Approved :: GNU General Public License v2 (GPLv2)",

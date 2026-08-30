@@ -6,11 +6,15 @@ system update cycle.
 
 Written in Python 3 with PyQt6. Bilingual: **Polish and English**.
 
-> **Status: alpha.** All nine screens work. The read-only side — search, USE flags, masks,
-> repositories, the update preview, configuration files, `make.conf`, elog and `@world` — has
-> been verified against a live system. The privileged path (`pkexec` → writing to
-> `/etc/portage`, `emerge`) is built and tested, but has not yet had a full end-to-end run on
-> a live machine; the details are in [`Docs/05-session-plan.md`](Docs/05-session-plan.md).
+> **Version 1.0.0.** All nine screens work, and both halves have been exercised on a live
+> system: the read-only side — search, USE flags, masks, repositories, the update preview,
+> configuration files, `make.conf`, elog and `@world` — and the privileged one, which has
+> written real `package.use`, `package.license` and `package.accept_keywords` entries through
+> `pkexec` and run `emerge`, `emaint sync` and `eselect` through the launcher. 514 tests pass.
+>
+> What that number does not claim: this has run on **one** machine, amd64 only, so the ebuild
+> is keyworded `~amd64`. Bug reports from other setups are the fastest way to make the next
+> release better.
 
 ## What it looks like
 
