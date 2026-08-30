@@ -752,47 +752,77 @@ Licensed under the GNU GPL version 2.</translation>
 </context><context>
     <name>MasksPage</name>
     <message>
-        <location filename="../ui/pages/masks.py" line="210" />
+        <location filename="../ui/pages/masks.py" line="291" />
         <source>No entries.</source>
         <translation>No entries.</translation>
     </message>
     <message>
-        <location filename="../ui/pages/masks.py" line="251" />
+        <location filename="../ui/pages/masks.py" line="330" />
+        <source>Reading every ebuild's LICENSE…</source>
+        <translation>Reading every ebuild's LICENSE…</translation>
+    </message>
+    <message>
+        <location filename="../ui/pages/masks.py" line="337" />
+        <source>Nothing here changes its licence with a flag.</source>
+        <translation>Nothing here changes its licence with a flag.</translation>
+    </message>
+    <message>
+        <location filename="../ui/pages/masks.py" line="360" />
+        <source>Turning {flag} on also means accepting {licences}</source>
+        <translation>Turning {flag} on also means accepting {licences}</translation>
+    </message>
+    <message>
+        <location filename="../ui/pages/masks.py" line="363" />
+        <source>Turning {flag} off also means accepting {licences}</source>
+        <translation>Turning {flag} off also means accepting {licences}</translation>
+    </message>
+    <message>
+        <location filename="../ui/pages/masks.py" line="400" />
         <source>Removed the line from {path}.</source>
         <translation>Removed the line from {path}.</translation>
     </message>
     <message>
-        <location filename="../ui/pages/masks.py" line="258" />
+        <location filename="../ui/pages/masks.py" line="407" />
         <source>Cancelled — nothing was written.</source>
         <translation>Cancelled — nothing was written.</translation>
     </message>
     <message>
-        <location filename="../ui/pages/masks.py" line="261" />
+        <location filename="../ui/pages/masks.py" line="410" />
         <source>Nothing was written: {error}</source>
         <translation>Nothing was written: {error}</translation>
     </message>
     <message>
-        <location filename="../ui/pages/masks.py" line="274" />
+        <location filename="../ui/pages/masks.py" line="423" />
         <source>Versions accepted despite not being marked stable for this architecture.</source>
         <translation>Versions accepted despite not being marked stable for this architecture.</translation>
     </message>
     <message>
-        <location filename="../ui/pages/masks.py" line="277" />
+        <location filename="../ui/pages/masks.py" line="426" />
         <source>Versions installed despite a developer having masked them.</source>
         <translation>Versions installed despite a developer having masked them.</translation>
     </message>
     <message>
-        <location filename="../ui/pages/masks.py" line="278" />
+        <location filename="../ui/pages/masks.py" line="427" />
         <source>Licences accepted for one package rather than system-wide.</source>
         <translation>Licences accepted for one package rather than system-wide.</translation>
     </message>
     <message>
-        <location filename="../ui/pages/masks.py" line="279" />
+        <location filename="../ui/pages/masks.py" line="428" />
         <source>Versions you have blocked yourself.</source>
         <translation>Versions you have blocked yourself.</translation>
     </message>
     <message>
-        <location filename="../ui/pages/masks.py" line="296" />
+        <location filename="../ui/pages/masks.py" line="439" />
+        <source>Licences that depend on a USE flag</source>
+        <translation>Licences that depend on a USE flag</translation>
+    </message>
+    <message>
+        <location filename="../ui/pages/masks.py" line="441" />
+        <source>Not a file — worked out. These packages carry a licence you have not accepted, hidden behind a flag that is currently off. Nothing is wrong with them today; turn the flag on and the install stops.</source>
+        <translation>Not a file — worked out. These packages carry a licence you have not accepted, hidden behind a flag that is currently off. Nothing is wrong with them today; turn the flag on and the install stops.</translation>
+    </message>
+    <message>
+        <location filename="../ui/pages/masks.py" line="454" />
         <source>empty</source>
         <translation>empty</translation>
     </message>
@@ -1152,17 +1182,17 @@ eselect repository remove -f {name}</translation>
         <translation>Portage stopped before building anything because it needs these lines in your configuration first. Each one is shown with the package that asked for it.</translation>
     </message>
     <message>
-        <location filename="../ui/widgets/required_changes.py" line="183" />
+        <location filename="../ui/widgets/required_changes.py" line="190" />
         <source>Asked for by {package}</source>
         <translation>Asked for by {package}</translation>
     </message>
     <message>
-        <location filename="../ui/widgets/required_changes.py" line="214" />
+        <location filename="../ui/widgets/required_changes.py" line="219" />
         <source>Add this line…</source>
         <translation>Add this line…</translation>
     </message>
     <message>
-        <location filename="../ui/widgets/required_changes.py" line="230" />
+        <location filename="../ui/widgets/required_changes.py" line="235" />
         <source>Emerge needs a change first</source>
         <translation>Emerge needs a change first</translation>
     </message>
@@ -2236,6 +2266,13 @@ This will run:
         <translation>Enable</translation>
     </message>
 </context><context>
+    <name>_ConditionalRow</name>
+    <message>
+        <location filename="../ui/pages/masks.py" line="126" />
+        <source>Open this package</source>
+        <translation>Open this package</translation>
+    </message>
+</context><context>
     <name>_ConfiguredRow</name>
     <message>
         <location filename="../ui/pages/repos.py" line="108" />
@@ -2268,7 +2305,7 @@ This will run:
 </context><context>
     <name>_EntryRow</name>
     <message>
-        <location filename="../ui/pages/masks.py" line="104" />
+        <location filename="../ui/pages/masks.py" line="106" />
         <source>Remove…</source>
         <translation>Remove…</translation>
     </message>
