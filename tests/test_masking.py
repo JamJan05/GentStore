@@ -335,3 +335,69 @@ def test_the_licence_check_agrees_with_the_masking_status(portage_env) -> None:
     from_status = set(blockage.primary.licences)
     from_manager = set(licenses.missing_for(blockage.cpv, blockage.repo, portage_env))
     assert from_status == from_manager
+
+
+# -- the configuration a package is judged against --------------------------
+#
+# The bug these cover: Portage calls ``config.setcpv()`` on whatever settings
+# object it is handed, but only for packages whose ``LICENSE`` carries a USE
+# conditional — until USE is resolved there is no telling which licences apply.
+# Gentstore used to hand it the shared configuration, which is locked against
+# being mutated, so those packages raised "Configuration is locked." and came
+# back looking entirely unblocked.
+
+
+def conditional_licence_cpv(portage_env):
+    """A package in the tree whose ``LICENSE`` has a USE conditional.
+
+    Found rather than named: which packages these are changes with every sync,
+    and roughly one ebuild in eighty carries one, so the scan is short.
+    """
+    for cp in portage_env.portdb.cp_all():
+        versions = portage_env.portdb.cp_list(cp)
+        if not versions:
+            continue
+        cpv = versions[-1]
+        repo = getattr(cpv, "repo", "") or ""
+        try:
+            licence = portage_env.portdb.aux_get(cpv, ["LICENSE"], myrepo=repo or None)[0]
+        except Exception:  # pragma: no cover - unreadable ebuild
+            continue
+        if "?" in licence:
+            return str(cpv), repo
+    return None, ""  # pragma: no cover - a tree without a single conditional
+
+
+def test_a_conditional_licence_does_not_leave_portage_unable_to_answer(portage_env) -> None:
+    cpv, repo = conditional_licence_cpv(portage_env)
+    if cpv is None:  # pragma: no cover - no such package in this tree
+        pytest.skip("no ebuild here declares LICENSE with a USE conditional")
+
+    blockage = inspect(cpv, repo, portage_env)
+    kinds = {block.kind for block in blockage.blocks}
+    assert BlockKind.UNKNOWN not in kinds, (
+        f"{cpv} could not be checked at all — Portage needs to call setcpv() on a "
+        "configuration it is allowed to mutate"
+    )
+
+
+def test_asking_about_one_package_does_not_rewrite_the_shared_configuration(
+    portage_env,
+) -> None:
+    """The clone must not leak, and the original must come back untouched.
+
+    ``setcpv()`` leaves the last package's ``PORTAGE_USE`` behind in whatever it
+    was called on. If that ever became the shared configuration, every later
+    reader would be answering about the wrong package — and the lock that makes
+    this bug visible would be gone with it.
+    """
+    cpv, repo = conditional_licence_cpv(portage_env)
+    if cpv is None:  # pragma: no cover - no such package in this tree
+        pytest.skip("no ebuild here declares LICENSE with a USE conditional")
+
+    inspect(cpv, repo, portage_env)
+
+    assert portage_env.settings.locked == 1, "the shared configuration stays locked"
+    assert portage_env.settings.get("PORTAGE_USE", None) is None, (
+        "the shared configuration still describes the system, not one package"
+    )

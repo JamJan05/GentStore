@@ -160,6 +160,10 @@ def _classify(raw: str) -> Block:
 def inspect(cpv: str, repo: str = "", env: PortageEnv | None = None) -> Blockage:
     """Work out why *cpv* cannot be installed. An empty result means it can.
 
+    ``getmaskingstatus`` is given the per-package clone rather than the shared
+    configuration: it calls ``setcpv()`` itself whenever ``LICENSE`` carries a
+    USE conditional, and the shared object is locked against exactly that.
+
     A failure here yields one :attr:`BlockKind.UNKNOWN` block, not an empty
     result. One unreadable ebuild still must not take the panel down with it,
     but "Portage would not answer" and "nothing is in the way" are opposite
@@ -170,9 +174,10 @@ def inspect(cpv: str, repo: str = "", env: PortageEnv | None = None) -> Blockage
 
     env = env or _default_env()
     try:
-        statuses = portage.getmaskingstatus(
-            cpv, settings=env.settings, portdb=env.portdb, myrepo=repo or None
-        )
+        with env.configured(cpv) as settings:
+            statuses = portage.getmaskingstatus(
+                cpv, settings=settings, portdb=env.portdb, myrepo=repo or None
+            )
     except Exception:  # pragma: no cover - broken ebuild metadata
         log.warning("Could not determine why %s is masked", cpv, exc_info=True)
         return Blockage(

@@ -196,6 +196,11 @@ def _split_slot(raw: str) -> tuple[str, str]:
 def _masking_status(env: PortageEnv, cpv: str, repo: str) -> tuple[tuple[str, ...], bool]:
     """Portage's reasons this version is masked, and whether it would say.
 
+    The per-package clone, not ``env.settings``: ``getmaskingstatus()`` calls
+    ``setcpv()`` on the configuration it is given whenever ``LICENSE`` carries a
+    USE conditional, and the shared configuration is locked against being
+    mutated.
+
     The second half of the answer is the difference between "no reasons" and
     "no answer". One unreadable ebuild must not empty the version list, but it
     must not pass for an installable version either.
@@ -203,9 +208,10 @@ def _masking_status(env: PortageEnv, cpv: str, repo: str) -> tuple[tuple[str, ..
     import portage  # noqa: PLC0415 — slow import, deferred
 
     try:
-        status = portage.getmaskingstatus(
-            cpv, settings=env.settings, portdb=env.portdb, myrepo=repo or None
-        )
+        with env.configured(cpv) as settings:
+            status = portage.getmaskingstatus(
+                cpv, settings=settings, portdb=env.portdb, myrepo=repo or None
+            )
     except Exception:  # pragma: no cover - broken ebuild metadata
         log.warning("Could not determine masking status of %s", cpv, exc_info=True)
         return (), False
