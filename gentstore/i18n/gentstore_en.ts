@@ -1140,6 +1140,33 @@ eselect repository remove -f {name}</translation>
         </translation>
     </message>
 </context><context>
+    <name>RequiredChanges</name>
+    <message>
+        <location filename="../ui/widgets/required_changes.py" line="166" />
+        <source>Nothing is wrong with the package you asked for. Something it needs is built without a feature it requires, and Portage will not guess whether rebuilding it is acceptable to you. Each line below turns one feature on for one package.</source>
+        <translation>Nothing is wrong with the package you asked for. Something it needs is built without a feature it requires, and Portage will not guess whether rebuilding it is acceptable to you. Each line below turns one feature on for one package.</translation>
+    </message>
+    <message>
+        <location filename="../ui/widgets/required_changes.py" line="172" />
+        <source>Portage stopped before building anything because it needs these lines in your configuration first. Each one is shown with the package that asked for it.</source>
+        <translation>Portage stopped before building anything because it needs these lines in your configuration first. Each one is shown with the package that asked for it.</translation>
+    </message>
+    <message>
+        <location filename="../ui/widgets/required_changes.py" line="183" />
+        <source>Asked for by {package}</source>
+        <translation>Asked for by {package}</translation>
+    </message>
+    <message>
+        <location filename="../ui/widgets/required_changes.py" line="214" />
+        <source>Add this line…</source>
+        <translation>Add this line…</translation>
+    </message>
+    <message>
+        <location filename="../ui/widgets/required_changes.py" line="230" />
+        <source>Emerge needs a change first</source>
+        <translation>Emerge needs a change first</translation>
+    </message>
+</context><context>
     <name>RestoreDialog</name>
     <message>
         <location filename="../ui/widgets/restore_dialog.py" line="144" />
@@ -1218,114 +1245,114 @@ eselect repository remove -f {name}</translation>
 </context><context>
     <name>SearchPage</name>
     <message>
-        <location filename="../ui/pages/search.py" line="361" />
+        <location filename="../ui/pages/search.py" line="369" />
         <source>unavailable</source>
         <translation>unavailable</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="363" />
+        <location filename="../ui/pages/search.py" line="371" />
         <source>Portage could not be read: {error}</source>
         <translation>Portage could not be read: {error}</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="940" />
-        <location filename="../ui/pages/search.py" line="378" />
+        <location filename="../ui/pages/search.py" line="974" />
+        <location filename="../ui/pages/search.py" line="386" />
         <source>all</source>
         <translation>all</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="541" />
+        <location filename="../ui/pages/search.py" line="551" />
         <source>installed: {versions}</source>
         <translation>installed: {versions}</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="544" />
+        <location filename="../ui/pages/search.py" line="554" />
         <source>not installed</source>
         <translation>not installed</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="546" />
+        <location filename="../ui/pages/search.py" line="556" />
         <source>no description</source>
         <translation>no description</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="566" />
+        <location filename="../ui/pages/search.py" line="576" />
         <source>download: {size}</source>
         <translation>download: {size}</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="601" />
+        <location filename="../ui/pages/search.py" line="611" />
         <source>installed</source>
         <translation>installed</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="603" />
+        <location filename="../ui/pages/search.py" line="613" />
         <source>live</source>
         <translation>live</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="605" />
+        <location filename="../ui/pages/search.py" line="615" />
         <source>blocked</source>
         <translation>blocked</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="607" />
+        <location filename="../ui/pages/search.py" line="617" />
         <source>unchecked</source>
         <translation>unchecked</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="609" />
+        <location filename="../ui/pages/search.py" line="619" />
         <source>testing</source>
         <translation>testing</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="611" />
+        <location filename="../ui/pages/search.py" line="621" />
         <source>stable</source>
         <translation>stable</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="632" />
+        <location filename="../ui/pages/search.py" line="642" />
         <source>Pretend</source>
         <translation>Pretend</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="634" />
+        <location filename="../ui/pages/search.py" line="644" />
         <source>Uninstall</source>
         <translation>Uninstall</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="689" />
-        <location filename="../ui/pages/search.py" line="634" />
+        <location filename="../ui/pages/search.py" line="699" />
+        <location filename="../ui/pages/search.py" line="644" />
         <source>Add to @world</source>
         <translation>Add to @world</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="636" />
+        <location filename="../ui/pages/search.py" line="646" />
         <source>Update</source>
         <translation>Update</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="636" />
+        <location filename="../ui/pages/search.py" line="646" />
         <source>Install</source>
         <translation>Install</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="679" />
+        <location filename="../ui/pages/search.py" line="689" />
         <source>Update package</source>
         <translation>Update package</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="679" />
+        <location filename="../ui/pages/search.py" line="689" />
         <source>Install package</source>
         <translation>Install package</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="704" />
+        <location filename="../ui/pages/search.py" line="714" />
         <source>Uninstall package</source>
         <translation>Uninstall package</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="705" />
+        <location filename="../ui/pages/search.py" line="715" />
         <source>The log above lists what would be removed.
 
 Remove {package} now?
@@ -1338,7 +1365,7 @@ Remove {package} now?
 {command}</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="719" />
+        <location filename="../ui/pages/search.py" line="729" />
         <source>This will run:
 
 {command}</source>
@@ -1347,46 +1374,46 @@ Remove {package} now?
 {command}</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="821" />
+        <location filename="../ui/pages/search.py" line="855" />
         <source>Cancelled — nothing was written.</source>
         <translation>Cancelled — nothing was written.</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="824" />
+        <location filename="../ui/pages/search.py" line="858" />
         <source>Nothing was written: {error}</source>
         <translation>Nothing was written: {error}</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="834" />
+        <location filename="../ui/pages/search.py" line="868" />
         <source>No change was needed: {detail}</source>
         <translation>No change was needed: {detail}</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="838" />
+        <location filename="../ui/pages/search.py" line="872" />
         <source>Removed the line from {path}.</source>
         <translation>Removed the line from {path}.</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="840" />
+        <location filename="../ui/pages/search.py" line="874" />
         <source>Replaced one line in {path} with:
 {line}</source>
         <translation>Replaced one line in {path} with:
 {line}</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="843" />
+        <location filename="../ui/pages/search.py" line="877" />
         <source>Added to {path}:
 {line}</source>
         <translation>Added to {path}:
 {line}</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="903" />
+        <location filename="../ui/pages/search.py" line="937" />
         <source>loading…</source>
         <translation>loading…</translation>
     </message>
     <message numerus="yes">
-        <location filename="../ui/pages/search.py" line="905" />
+        <location filename="../ui/pages/search.py" line="939" />
         <source>%n package(s)</source>
         <translation>
             <numerusform>%n package</numerusform>
@@ -1394,7 +1421,7 @@ Remove {package} now?
         </translation>
     </message>
     <message numerus="yes">
-        <location filename="../ui/pages/search.py" line="907" />
+        <location filename="../ui/pages/search.py" line="941" />
         <source>%n result(s)</source>
         <translation>
             <numerusform>%n result</numerusform>
@@ -1402,7 +1429,7 @@ Remove {package} now?
         </translation>
     </message>
     <message numerus="yes">
-        <location filename="../ui/pages/search.py" line="911" />
+        <location filename="../ui/pages/search.py" line="945" />
         <source>%n package(s) outside ::gentoo hidden. Overlays keep syncing.</source>
         <translation>
             <numerusform>%n package outside ::gentoo hidden. Overlays keep syncing.</numerusform>
@@ -1410,23 +1437,23 @@ Remove {package} now?
         </translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="920" />
+        <location filename="../ui/pages/search.py" line="954" />
         <source>Nothing matches the query.</source>
         <translation>Nothing matches the query.</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="946" />
-        <location filename="../ui/pages/search.py" line="922" />
+        <location filename="../ui/pages/search.py" line="980" />
+        <location filename="../ui/pages/search.py" line="956" />
         <source>Type a name, a category or a word from the description.</source>
         <translation>Type a name, a category or a word from the description.</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="928" />
+        <location filename="../ui/pages/search.py" line="962" />
         <source>name, category or description</source>
         <translation>name, category or description</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="936" />
+        <location filename="../ui/pages/search.py" line="970" />
         <source>VERSION</source>
         <translation>VERSION</translation>
     </message>
