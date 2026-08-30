@@ -11,6 +11,7 @@ for everything they will ever install.
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -21,6 +22,11 @@ log = logging.getLogger(__name__)
 
 #: Licence texts are big; a handful is plenty to keep around.
 _TEXT_CACHE: dict[tuple[str, str], str] = {}
+
+#: The conditional-licence scan reads every package in the tree, so its result
+#: is kept until something says the configuration changed.
+_CONDITIONAL: tuple[ConditionalLicence, ...] | None = None
+_CONDITIONAL_FOR: PortageEnv | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,7 +50,10 @@ class Licence:
 
 
 def clear_caches() -> None:
+    global _CONDITIONAL, _CONDITIONAL_FOR
     _TEXT_CACHE.clear()
+    _CONDITIONAL = None
+    _CONDITIONAL_FOR = None
 
 
 def accept_license(env: PortageEnv | None = None) -> str:
@@ -121,6 +130,163 @@ def missing_for(
         log.warning("Could not check the licences of %s", cpv, exc_info=True)
         return ()
     return tuple(missing)
+
+
+def _cp_of(cpv: str) -> str:
+    from portage.versions import cpv_getkey  # noqa: PLC0415 — slow import, deferred
+
+    try:
+        return cpv_getkey(cpv) or cpv
+    except Exception:  # pragma: no cover - a cpv Portage cannot split
+        return cpv
+
+
+# ---------------------------------------------------------------------------
+# licences that depend on how the package is built
+# ---------------------------------------------------------------------------
+
+#: ``cuda?``, ``!bindist?``, ``l10n_de?`` — a USE condition in a ``LICENSE``.
+_CONDITION = re.compile(r"(!?[A-Za-z0-9][\w+@-]*)\?")
+
+
+@dataclass(frozen=True, slots=True)
+class LicenceCondition:
+    """One USE flag, and the licences that come with agreeing to it."""
+
+    #: The flag as ``LICENSE`` wrote it, ``!`` and all.
+    token: str
+    #: Licences that appear when the condition holds and are not accepted today.
+    licences: tuple[str, ...]
+
+    @property
+    def flag(self) -> str:
+        return self.token.lstrip("!")
+
+    @property
+    def when_enabled(self) -> bool:
+        """``True`` when turning the flag *on* is what brings the licences in."""
+        return not self.token.startswith("!")
+
+
+@dataclass(frozen=True, slots=True)
+class ConditionalLicence:
+    """A package whose licence bill is not fixed until USE is decided."""
+
+    cpv: str
+    cp: str
+    repo: str
+    #: ``LICENSE`` exactly as the ebuild wrote it.
+    expression: str
+    #: Not accepted as the package would be built today.
+    missing_now: tuple[str, ...]
+    #: What each flag would add on top of that.
+    conditions: tuple[LicenceCondition, ...]
+
+
+def conditions_for(
+    cpv: str, repo: str = "", env: PortageEnv | None = None
+) -> ConditionalLicence | None:
+    """How *cpv*'s licences depend on its USE flags, or ``None`` if they do not.
+
+    Every answer comes from ``getMissingLicenses``, asked once per condition
+    with the flag flipped. Nothing here evaluates ``LICENSE`` itself; the regex
+    only picks out *which* flags to ask about, and Portage decides what each
+    one means — including the nesting and the ``||`` groups a regex could not
+    survive.
+
+    Only licences this system does not already accept are reported. A
+    ``handbook? ( FDL-1.3 )`` on a machine whose ``ACCEPT_LICENSE`` covers
+    ``@FREE`` changes nothing anybody needs telling about.
+    """
+    env = env or _default_env()
+    manager = getattr(env.settings, "_license_manager", None)
+    if manager is None:  # pragma: no cover
+        return None
+    try:
+        expression, slot, repository = env.portdb.aux_get(
+            cpv, ["LICENSE", "SLOT", "repository"], myrepo=repo or None
+        )
+    except Exception:  # pragma: no cover - unreadable ebuild
+        return None
+    if "?" not in expression:
+        return None
+
+    where = repo or repository
+    short_slot = slot.partition("/")[0]
+    try:
+        with env.configured(cpv) as settings:
+            use = (settings.get("PORTAGE_USE") or "").split()
+        now = tuple(manager.getMissingLicenses(cpv, " ".join(use), expression, short_slot, where))
+
+        conditions = []
+        for token in dict.fromkeys(_CONDITION.findall(expression)):
+            flag = token.lstrip("!")
+            # Satisfy the condition, whichever way round it is written, and ask
+            # again. The difference is what agreeing to that flag would cost.
+            if token.startswith("!"):
+                flipped = [item for item in use if item != flag]
+            else:
+                flipped = [*use, flag]
+            added = tuple(
+                name
+                for name in manager.getMissingLicenses(
+                    cpv, " ".join(flipped), expression, short_slot, where
+                )
+                if name not in now
+            )
+            if added:
+                conditions.append(LicenceCondition(token, added))
+    except Exception:  # pragma: no cover - a LICENSE Portage cannot parse
+        log.warning("Could not work out the licence conditions of %s", cpv, exc_info=True)
+        return None
+
+    if not conditions:
+        return None
+    return ConditionalLicence(
+        cpv=cpv,
+        cp=_cp_of(cpv),
+        repo=where,
+        expression=expression,
+        missing_now=now,
+        conditions=tuple(conditions),
+    )
+
+
+def conditional_licences(env: PortageEnv | None = None) -> tuple[ConditionalLicence, ...]:
+    """Every package here whose licence bill can grow when a flag is turned on.
+
+    The newest version of each package is the one asked about, because that is
+    the one an install would pick up.
+
+    Deliberately not every package with a conditional ``LICENSE`` — there are a
+    couple of hundred of those and almost all are ``doc?`` or ``handbook?``
+    pulling in a licence the system already accepts. What is worth a screen is
+    the shorter list where saying yes to a flag means saying yes to a licence
+    nobody has agreed to yet: ``rar? ( unRAR )``, ``x-pack? ( Elastic )``,
+    ``cuda? ( NVIDIA-CUDA )``. Those are the ones that stop an install after
+    the user thought the licence question was settled.
+
+    Cached: the scan reads ``LICENSE`` for every package in every repository,
+    which is seconds rather than milliseconds. :func:`clear_caches` drops it.
+    """
+    global _CONDITIONAL, _CONDITIONAL_FOR
+    env = env or _default_env()
+    if _CONDITIONAL is not None and _CONDITIONAL_FOR is env:
+        return _CONDITIONAL
+
+    found: list[ConditionalLicence] = []
+    for cp in env.portdb.cp_all():
+        versions = env.portdb.cp_list(cp)
+        if not versions:
+            continue
+        cpv = versions[-1]
+        entry = conditions_for(str(cpv), getattr(cpv, "repo", "") or "", env)
+        if entry is not None:
+            found.append(entry)
+
+    _CONDITIONAL = tuple(found)
+    _CONDITIONAL_FOR = env
+    return _CONDITIONAL
 
 
 def declared_for(cpv: str, repo: str = "", env: PortageEnv | None = None) -> str:

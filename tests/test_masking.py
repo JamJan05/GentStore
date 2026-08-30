@@ -501,3 +501,85 @@ def test_asking_about_one_package_does_not_rewrite_the_shared_configuration(
     assert portage_env.settings.get("PORTAGE_USE", None) is None, (
         "the shared configuration still describes the system, not one package"
     )
+
+
+# -- licences hidden behind a USE flag ---------------------------------------
+
+
+class _ConditionManager:
+    """Portage's licence manager for one expression, as it really behaves.
+
+    ``NVIDIA-CUDA`` is not accepted here and ``MIT`` is, so what comes back
+    depends on whether the USE string satisfies the condition — which is the
+    only thing :func:`licenses.conditions_for` is being asked to get right.
+    """
+
+    ACCEPTED = frozenset({"MIT", "Apache-2.0"})
+
+    def getMissingLicenses(  # noqa: N802 - Portage's own spelling
+        self, cpv: str, use: str, licence: str, slot: str, repo: str
+    ) -> list[str]:
+        flags = set(use.split())
+        names = {"MIT"}
+        if "cuda" in flags:
+            names.add("NVIDIA-CUDA")
+        if "bindist" not in flags:
+            names.add("BINARY-REDIST")
+        return sorted(n for n in names if n not in self.ACCEPTED)
+
+
+class _ConditionEnv:
+    """Just enough PortageEnv for the conditional-licence scan."""
+
+    EXPRESSION = "MIT cuda? ( NVIDIA-CUDA ) !bindist? ( BINARY-REDIST )"
+
+    def __init__(self, portage_use: str) -> None:
+        self.portage_use = portage_use
+        self.settings = SimpleNamespace(_license_manager=_ConditionManager())
+        self.portdb = SimpleNamespace(aux_get=self._aux_get, cp_all=lambda: ["x/y"])
+
+    def _aux_get(self, cpv: str, keys: list[str], myrepo: str | None = None) -> list[str]:
+        values = {"LICENSE": self.EXPRESSION, "SLOT": "0", "repository": "gentoo"}
+        return [values[key] for key in keys]
+
+    @contextmanager
+    def configured(self, cpv: str):  # noqa: ANN201 - stands in for portage.config
+        yield {"PORTAGE_USE": self.portage_use}
+
+
+def test_a_licence_waiting_behind_a_flag_is_reported_with_the_flag() -> None:
+    """Both directions: ``cuda?`` costs when turned on, ``!bindist?`` when off."""
+    found = licenses.conditions_for("x/y-1", "gentoo", _ConditionEnv("bindist"))
+    assert found is not None
+    assert found.missing_now == ()
+
+    by_token = {c.token: c for c in found.conditions}
+    assert set(by_token) == {"cuda", "!bindist"}
+
+    assert by_token["cuda"].licences == ("NVIDIA-CUDA",)
+    assert by_token["cuda"].flag == "cuda"
+    assert by_token["cuda"].when_enabled is True
+
+    assert by_token["!bindist"].licences == ("BINARY-REDIST",)
+    assert by_token["!bindist"].flag == "bindist"
+    assert by_token["!bindist"].when_enabled is False
+
+
+def test_a_licence_already_owed_is_not_also_charged_to_the_flag() -> None:
+    """With cuda already on, NVIDIA-CUDA is a current problem, not a future one.
+
+    Listing it under the flag as well would tell the user that turning cuda on
+    would cost them something, when it is already costing them.
+    """
+    found = licenses.conditions_for("x/y-1", "gentoo", _ConditionEnv("cuda bindist"))
+    assert found is not None
+    assert found.missing_now == ("NVIDIA-CUDA",)
+    # cuda is on, so it has nothing left to add; bindist is on, so turning it
+    # off still does.
+    assert [c.token for c in found.conditions] == ["!bindist"]
+
+
+def test_a_flat_licence_has_no_conditions_to_report() -> None:
+    env_ = _ConditionEnv("")
+    env_.EXPRESSION = "MIT"
+    assert licenses.conditions_for("x/y-1", "gentoo", env_) is None
