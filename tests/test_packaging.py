@@ -274,17 +274,52 @@ def test_the_synced_overlay_and_the_publisher_agree_on_the_branch(
     assert told.group(1) == written.group(1)
 
 
-def test_the_accept_file_covers_both_the_live_and_the_release_ebuild(
-    script: str,
-) -> None:
-    """A live ebuild needs ``**``; a keyworded release needs ``~arch``.
+def test_the_live_ebuild_is_not_accepted_unless_it_was_asked_for(script: str) -> None:
+    """``9999`` outranks every release, so accepting it decides the install.
 
-    Writing only one of them leaves half the overlay uninstallable, and which
-    half depends on the user's ACCEPT_KEYWORDS rather than on anything visible.
+    This is the whole reason the installer asks. If ``=…-9999 **`` reached
+    package.accept_keywords by default, a plain ``emerge app-portage/gentstore``
+    would resolve to the git tip for everyone — including people who piped the
+    installer somewhere with no terminal and were never offered the choice.
+    Verified against Portage's resolver on a stable profile: with that line the
+    bare atom gives 9999, without it, 1.0.0.
     """
-    body = script[script.index("install_synced()") : script.index("install_overlay()")]
-    assert "=${ATOM}-9999 **" in body, "the live ebuild is no longer accepted"
-    assert "${ATOM} ~amd64" in body, "the release ebuild is no longer accepted"
+    # The if/else that writes the accept file, sliced on its own indentation so
+    # that an `else` belonging to some inner block cannot be mistaken for it.
+    block = re.search(
+        r"\n\tif \$\{LIVE\}; then\n(?P<live>.*?)\n\telse\n(?P<default>.*?)\n\tfi\n",
+        script,
+        re.S,
+    )
+    assert block, "the accept file is no longer written by one if/else"
+
+    def written(branch: str) -> str:
+        """Only the lines that reach the file — the comments explain how to opt
+        into the live ebuild and naturally quote the very line under test."""
+        return "\n".join(
+            line for line in branch.splitlines() if not line.lstrip().startswith("#")
+        )
+
+    assert "=${ATOM}-9999 **" in written(block["live"]), \
+        "--live no longer accepts the live ebuild"
+    assert "=${ATOM}-9999 **" not in written(block["default"]), (
+        "the default accept file accepts 9999, which makes it win by default"
+    )
+    assert "${ATOM} ~amd64" in written(block["default"]), "the release is no longer accepted"
+
+
+def test_the_choice_is_read_from_the_terminal_not_from_stdin(script: str) -> None:
+    """Piped into bash, stdin *is* the script.
+
+    A ``read`` there consumes the script's own remaining lines instead of
+    waiting for an answer — the installer would both misread the reply and
+    truncate itself.
+    """
+    assert "read -r reply < /dev/tty" in script, "the prompt no longer reads from the tty"
+    assert re.search(r"have_tty\(\)\s*\{\s*\{ : < /dev/tty; \} 2>/dev/null", script), (
+        "the tty probe must open the device inside braces, so that a failure to "
+        "open is silenced rather than printed"
+    )
 
 
 def test_every_release_ebuild_has_its_dist_entry(ebuild: str) -> None:

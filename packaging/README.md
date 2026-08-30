@@ -28,15 +28,18 @@ less make-overlay.sh
 sudo bash make-overlay.sh
 ```
 
-Nothing about the result differs. The ebuild is live, so `git-r3` does the cloning either way;
-the only thing a clone was ever needed for is the two files the script cannot generate — the
-ebuild and its `metadata.xml`. Without one it downloads them from `raw.githubusercontent.com`
-into a `mktemp -d` that a trap removes on exit, and refuses to go on unless what came back
-contains an `EGIT_REPO_URI` line. A captive portal's login page is a 200 as far as the shell is
-concerned, and it should not be able to become an ebuild.
+Nothing about the result differs. In the default synced mode the script writes configuration and
+nothing else — the ebuilds arrive with the first sync, so there is nothing for a clone to have
+supplied.
 
-`GENTSTORE_REF` selects the branch or tag to fetch from (default `main`). `--local` is the one
-option that needs a clone, and it says so rather than quietly building from the remote instead.
+`--no-sync` is the mode that needs the files themselves, and without a clone it downloads them
+from `raw.githubusercontent.com` into a `mktemp -d` that a trap removes on exit, refusing to go
+on unless what came back contains an `EGIT_REPO_URI` line. A captive portal's login page is a
+200 as far as the shell is concerned, and it should not be able to become an ebuild.
+
+`GENTSTORE_REF` selects the branch or tag to fetch the *script's* sources from (default `main`).
+`--local` is the one option that needs a clone, and it says so rather than quietly building from
+the remote instead.
 
 The piped form — `curl … | sudo bash` — works and is documented, but the two-step version above
 is the one to prefer. Everything else in this project refuses to let something reach root
@@ -60,14 +63,27 @@ until you say so.
 
 ### Which version, and how it updates
 
-The accept-keywords file carries two lines — `=app-portage/gentstore-9999 **` for the live
-ebuild, which has no keywords at all, and `app-portage/gentstore ~amd64` for the releases, which
-a stable system would otherwise refuse. Either works:
+Both ebuilds arrive with the sync, but only one of them is *accepted*, and that is what decides
+which one a plain `emerge app-portage/gentstore` resolves to. The default accept-keywords file
+is one line:
 
-```bash
-emerge --ask app-portage/gentstore          # the release
-emerge --ask =app-portage/gentstore-9999    # the git tip
 ```
+app-portage/gentstore ~amd64
+```
+
+which leaves the live ebuild masked. That is deliberate rather than incidental: `9999` sorts
+above every release there will ever be, so the moment `=app-portage/gentstore-9999 **` is in
+that file, the bare atom resolves to the git tip — for everyone, including people who never
+asked for it. Verified with Portage's own resolver on a stable profile:
+
+| accept-keywords | `bestmatch-visible` |
+|---|---|
+| `app-portage/gentstore ~amd64` | `gentstore-1.0.0` |
+| that plus `=app-portage/gentstore-9999 **` | `gentstore-9999` |
+| nothing | masked |
+
+So the installer asks — on a terminal — and writes only the line matching the answer. `--stable`
+and `--live` skip the question; with no terminal to ask on, the release wins.
 
 A release updates through `--sync` and then `--update @world`, like anything else. A live
 install does not: `9999` never changes, so `--update` sees nothing to do. `git-r3` sets
@@ -96,11 +112,14 @@ sudo packaging/make-overlay.sh --remove   # the overlay itself
 emerge --deselect --unmerge app-portage/gentstore
 ```
 
-### Where the build comes from
+### Where each build comes from
 
-The ebuild is **live** (`git-r3`, empty `KEYWORDS`) — until there is a release there is nothing
-to point a tarball at. It clones from `EGIT_REPO_URI`, that is, from GitHub, **not** from your
-working directory. Uncommitted changes will not make it into the package.
+The **release** ebuild fetches the tarball attached to its GitHub release — a fixed set of bytes
+with a Manifest entry to prove it.
+
+The **live** ebuild (`git-r3`, empty `KEYWORDS`) clones from `EGIT_REPO_URI`, that is, from
+GitHub, **not** from your working directory. Uncommitted changes will not make it into the
+package; `git-r3` builds the last commit on the branch.
 
 ### When root cannot manage the clone
 
@@ -139,8 +158,10 @@ Newer commits:
 emerge --ask --update app-portage/gentstore
 ```
 
-`git-r3` detects on its own that the branch has moved. The overlay has `auto-sync = no`, so
-`emaint sync -a` skips it — rightly, because there is nothing there to sync.
+`git-r3` detects on its own that the branch has moved — though for a live install
+`@live-rebuild` is the set that actually reaches it, since the version number never changes.
+Under `--no-sync` the overlay carries `auto-sync = no` and `emaint sync -a` skips it, correctly,
+because this script is then the only thing that puts ebuilds there.
 
 ### The Manifest
 

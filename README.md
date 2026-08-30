@@ -101,26 +101,39 @@ The script registers `/var/db/repos/gentstore` as a **synced** overlay: Portage 
 back here. It prints every file it writes and overwrites nobody else's. You run `emerge`
 yourself — the script only prints the command.
 
-### Choosing a version, and keeping it current
+### Which version you get
 
-The overlay carries two ebuilds, and the accept-keywords file the script writes lets you take
-either:
+**The tagged release**, unless you say otherwise. Run on a terminal, the installer asks:
 
-```bash
-emerge --ask app-portage/gentstore          # the release — 1.0.0
-emerge --ask =app-portage/gentstore-9999    # the git tip instead
+```
+Which one should Portage install?
+
+  1) 1.0.0 — the release. Tagged, and replaced by the next one on an
+     ordinary "emerge --sync && emerge --update @world". Recommended.
+  2) 9999 — the live ebuild. Rebuilt from the newest commit whenever you
+     run "emerge @live-rebuild". Newer, and occasionally broken.
+
+  [1/2, blank for 1]:
 ```
 
-A **release** install updates like any other package, once the overlay has synced:
+With no terminal to ask on — a pipe on both ends, a CI job — it takes the release and says so.
+`--stable` and `--live` skip the question outright.
+
+This is not just which command gets printed: `9999` sorts above every release there will ever
+be, so if the live ebuild were accepted in `package.accept_keywords`, a plain
+`emerge app-portage/gentstore` would resolve to the git tip for everybody. Choosing the release
+means the live ebuild is deliberately left unaccepted.
+
+Afterwards a release install updates like any other package:
 
 ```bash
 emerge --ask --sync                         # or the Sync step inside Gentstore
 emerge --ask --update @world
 ```
 
-A **live** (`9999`) install has a version number that never changes, so `--update` has nothing
-to notice. Rebuilding it from the newest commit is a set of its own — this is Portage's, not
-ours, and it covers every live package you have:
+A live install has a version number that never changes, so `--update` has nothing to notice.
+Rebuilding it from the newest commit is a set of Portage's own, covering every live package you
+have:
 
 ```bash
 emerge --ask @live-rebuild

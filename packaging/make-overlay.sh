@@ -2,6 +2,8 @@
 # Put Gentstore into an overlay so Portage can install, update and remove it.
 #
 #     sudo packaging/make-overlay.sh             a synced overlay (the default)
+#     sudo packaging/make-overlay.sh --stable    the release, without asking
+#     sudo packaging/make-overlay.sh --live      the git tip, without asking
 #     sudo packaging/make-overlay.sh --no-sync   a pinned copy, never updated
 #     sudo packaging/make-overlay.sh --local     build from this working tree
 #
@@ -10,6 +12,12 @@
 # and no second visit here. This needs no clone of your own, which is what the
 # README's one-liner relies on — the configuration is all this writes, and the
 # ebuilds come down with the first sync.
+#
+# Two ebuilds come down with it, and the accept-keywords file decides which one
+# a plain `emerge app-portage/gentstore` resolves to. 9999 sorts above every
+# release there will ever be, so accepting it makes it win by default — which is
+# why it is NOT accepted unless you ask. Run on a terminal this offers the
+# choice; piped somewhere without one it takes the release and says so.
 #
 # --no-sync is the older behaviour: the ebuild is copied in once and Portage is
 # told to leave the overlay alone. Choose it if you want a package that cannot
@@ -43,6 +51,9 @@ ATOM="app-portage/gentstore"
 GENTSTORE_REF="${GENTSTORE_REF:-main}"
 GITHUB_REPO="https://github.com/JamJan05/GentStore.git"
 OVERLAY_BRANCH="overlay"
+#: The newest release ebuild in packaging/, or a sensible word when this
+#: script was fetched on its own and there is no packaging/ to look in.
+RELEASE_VERSION="the release"
 RAW_BASE="https://raw.githubusercontent.com/JamJan05/GentStore/${GENTSTORE_REF}"
 SELF_URL="${RAW_BASE}/packaging/make-overlay.sh"
 
@@ -59,6 +70,8 @@ FETCHED=false
 [[ -n ${EBUILD} && -f ${EBUILD} ]] || FETCHED=true
 
 LOCAL=false
+LIVE=false
+ASKED=false   # --live or --stable given, so do not ask
 
 say()  { printf '  %s\n' "$*"; }
 step() { printf '\n\033[1m%s\033[0m\n' "$*"; }
@@ -169,6 +182,69 @@ remove() {
 	printf '\nGone. If Gentstore is still installed, remove it with:\n    emerge --deselect --unmerge %s\n' "${ATOM}"
 }
 
+# Is there a terminal to ask on? Testing -r /dev/tty is not enough: the node
+# exists in every namespace, and opening it fails with ENXIO when the process
+# has no controlling terminal. Only an actual open answers the question.
+# The braces matter: redirections are applied left to right, so a bare
+# `: < /dev/tty 2>/dev/null` fails on the open before stderr is silenced and
+# prints the error anyway.
+have_tty() { { : < /dev/tty; } 2>/dev/null; }
+
+# Which of the two ebuilds this install should resolve to.
+#
+# Read from /dev/tty, never from stdin: piped into bash, stdin *is* the script,
+# and a `read` there would swallow the rest of it instead of waiting for an
+# answer. With no terminal at all — a CI job, a pipe on both ends — the release
+# is the answer, because an installer that stops to ask a question nobody can
+# see is an installer that hangs.
+# The newest release in the overlay we just synced — asked of the tree rather
+# than hard-coded, so this script never has to be edited when a version lands.
+newest_release() {
+	local best="" v
+	for e in "${REPO_PATH}/${ATOM}"/gentstore-*.ebuild; do
+		[[ -e ${e} ]] || continue
+		v="$(basename "${e}" .ebuild)"; v="${v#gentstore-}"
+		[[ ${v} == 9999 ]] && continue
+		best="${v}"
+	done
+	echo "${best}"
+}
+
+choose_version() {
+	local release; release="$(newest_release)"
+
+	if [[ -z ${release} ]]; then
+		say "no release ebuild in the overlay — falling back to the live one"
+		LIVE=true
+	elif ! ${ASKED} && have_tty; then
+		cat <<-EOF
+
+		Which one should Portage install?
+
+		  1) ${release} — the release. Tagged, and replaced by the next one on an
+		     ordinary "emerge --sync && emerge --update @world". Recommended.
+		  2) 9999 — the live ebuild. Rebuilt from the newest commit whenever you
+		     run "emerge @live-rebuild". Newer, and occasionally broken.
+
+		EOF
+		local reply=""
+		printf '  [1/2, blank for 1]: '
+		read -r reply < /dev/tty || reply=""
+		case "${reply}" in
+			2|live|l|9999) LIVE=true ;;
+			*)             LIVE=false ;;
+		esac
+	elif ! ${ASKED}; then
+		say "nothing to ask on — installing ${release}"
+	fi
+
+	# Decided in exactly one place, so the name printed, the line written and
+	# the atom suggested can never disagree about which ebuild this is.
+	if ${LIVE}; then RELEASE_VERSION="9999 (the git tip)"
+	else RELEASE_VERSION="${release}"; fi
+	say "chose ${RELEASE_VERSION}"
+}
+
 # The synced overlay: Portage clones the `overlay` branch and every later
 # ebuild arrives with an ordinary `emerge --sync`. Nothing is copied here, so
 # this path needs neither a clone nor the two files fetch_sources downloads.
@@ -203,19 +279,7 @@ install_synced() {
 	say "wrote ${CONF}"
 	say "syncs from ${GITHUB_REPO} (branch ${OVERLAY_BRANCH})"
 
-	step "2/3  Accepting the ebuilds — ${ACCEPT}"
-	install -d -m 0755 "${ACCEPT_DIR}"
-	cat > "${ACCEPT}" <<-EOF
-		# 9999 is the live ebuild and carries no keywords at all, so it needs the
-		# "**" that accepts anything. The release ebuilds are keyworded ~amd64,
-		# which a stable system would otherwise refuse; the second line is what
-		# lets you choose either.
-		=${ATOM}-9999 **
-		${ATOM} ~amd64
-	EOF
-	say "accepted =${ATOM}-9999 ** and ${ATOM} ~amd64"
-
-	step "3/3  First sync"
+	step "2/3  First sync"
 	say "running: emaint sync -r ${REPO_NAME}"
 	if emaint sync -r "${REPO_NAME}"; then
 		say "synced"
@@ -225,20 +289,54 @@ install_synced() {
 		exit 1
 	fi
 
+
+	choose_version
+
+	step "3/3  Accepting — ${ACCEPT}"
+	install -d -m 0755 "${ACCEPT_DIR}"
+	# Only the release, deliberately. 9999 sorts above every release Portage
+	# will ever see, so accepting it here would make `emerge app-portage/gentstore`
+	# pick the git tip for everyone who never asked for it — which is the one
+	# thing an installer must not decide on your behalf.
+	if ${LIVE}; then
+		cat > "${ACCEPT}" <<-EOF
+			# --live was asked for. 9999 carries no keywords at all, so it needs
+			# the "**" that accepts anything, and it outranks every release: with
+			# this line the plain atom resolves to the git tip.
+			=${ATOM}-9999 **
+			${ATOM} ~amd64
+		EOF
+		say "accepted =${ATOM}-9999 ** and ${ATOM} ~amd64"
+	else
+		cat > "${ACCEPT}" <<-EOF
+			# The releases are keyworded ~amd64, which a stable system refuses
+			# without this line. The live ebuild is deliberately NOT accepted:
+			# add "=${ATOM}-9999 **" here, or re-run the installer with --live,
+			# if you would rather track the git tip.
+			${ATOM} ~amd64
+		EOF
+		say "accepted ${ATOM} ~amd64 — releases only"
+	fi
+
+	local refresh
+	if ${LIVE}; then
+		refresh="A live install has a version number that never changes, so
+	--update sees nothing to do. Rebuild it from the newest commit with:
+	    emerge --ask @live-rebuild"
+	else
+		refresh="The overlay syncs, so later releases arrive on their own:
+	    emerge --ask --sync && emerge --ask --update @world
+	(or the Sync and Update steps inside Gentstore.)"
+	fi
+
 	cat <<-EOF
 
-	Done. The overlay is registered, synced and accepted.
+	Done. The overlay is registered, synced, and set to install ${RELEASE_VERSION}.
 
-	Install the release:
+	Now run:
 	    emerge --ask ${ATOM}
 
-	Or track the git tip instead:
-	    emerge --ask =${ATOM}-9999
-
-	The overlay is a synced repository now, so "emerge --sync" (or the Sync
-	step in Gentstore itself) brings in later ebuilds on its own. A live
-	install is rebuilt from the newest commit by:
-	    emerge --ask @live-rebuild
+	${refresh}
 	EOF
 }
 
@@ -336,19 +434,23 @@ install_overlay() {
 
 usage() {
 	if [[ -f ${SELF} ]]; then
-		sed -n '2,31p' "${SELF}" | sed 's/^# \?//'
+		sed -n '2,38p' "${SELF}" | sed 's/^# \?//'
 	else
 		cat <<-EOF
 		Put Gentstore into an overlay so Portage can install, update and remove it.
 
 		    curl -fsSL ${SELF_URL} | sudo bash
-		    curl -fsSL ${SELF_URL} | sudo bash -s -- --no-sync
+		    curl -fsSL ${SELF_URL} | sudo bash -s -- --live
 		    curl -fsSL ${SELF_URL} | sudo bash -s -- --remove
 
 		By default this registers a synced overlay: Portage clones the
 		${OVERLAY_BRANCH} branch, and later ebuilds arrive with an ordinary
-		"emerge --sync" without another visit here. --no-sync pins a copy that
-		never changes under you instead.
+		"emerge --sync" without another visit here.
+
+		It installs the tagged release unless you say otherwise. On a terminal
+		it offers the choice between that and the live 9999 ebuild; with no
+		terminal to ask on it takes the release. --stable and --live skip the
+		question, --no-sync pins a copy that never changes under you.
 
 		It never runs emerge, and prints the command to run instead. --local
 		needs a clone, so it is not available here. For the full commentary,
@@ -373,6 +475,8 @@ case "${1:-}" in
 	# once and Portage is told not to sync it. What the installer did before
 	# syncing existed, kept for anyone who wants exactly that.
 	--no-sync|-n) install_overlay ;;
+	--live)      LIVE=true;  ASKED=true; install_synced ;;
+	--stable)    LIVE=false; ASKED=true; install_synced ;;
 	"")          install_synced ;;
 	*)           echo "Unknown option: $1 (try --help)" >&2; exit 1 ;;
 esac
