@@ -357,3 +357,54 @@ def test_details_for_a_repository_that_is_no_longer_selected_are_dropped(
     page._details = None
     page._on_details(make_details(repo=""))
     assert page._details is None
+
+
+# -- the changes emerge asks for --------------------------------------------
+
+
+REFUSED_FOR_A_DEPENDENCY = """
+[ebuild  N     ] sys-fs/squashfs-tools-4.7.5::gentoo  USE="xattr zstd" 403 KiB
+[ebuild  N    ~] sci-ml/lmstudio-bin-0.4.23::overlay-nuda  USE="-cuda" 986657 KiB
+
+The following USE changes are necessary to proceed:
+ (see "package.use" in the portage(5) man page for more details)
+# required by sci-ml/lmstudio-bin-0.4.23::overlay-nuda
+>=sys-fs/squashfs-tools-4.7.5 zstd
+"""
+
+
+def test_a_refusal_about_a_dependency_becomes_a_line_to_save(app) -> None:  # noqa: ANN001
+    """emerge stops, and the line it wants is offered rather than just printed.
+
+    The package itself is fine here — nothing is masked — so the block notice
+    has nothing to say and this frame is the only thing standing between the
+    user and retyping an atom out of the terminal pane.
+    """
+    from gentstore.core.emerge_parse import parse_pretend
+    from gentstore.ui.widgets.required_changes import RequiredChanges
+
+    frame = RequiredChanges()
+    frame.set_preview(parse_pretend(REFUSED_FOR_A_DEPENDENCY))
+
+    assert not frame.isHidden()
+    assert [entry.line for entry in frame.entries] == [
+        ">=sys-fs/squashfs-tools-4.7.5 zstd"
+    ]
+
+    # Pressing the row's button only arms the preview; nothing is written.
+    frame._arm(frame.entries[0])
+    assert frame.plan is not None
+    assert frame.plan.line == ">=sys-fs/squashfs-tools-4.7.5 zstd"
+    assert frame.plan.path.name == "squashfs-tools"
+    assert "package.use" in str(frame.plan.path)
+
+
+def test_output_with_nothing_to_change_leaves_the_frame_away(app) -> None:  # noqa: ANN001
+    """An ordinary run must not leave a demand on the screen."""
+    from gentstore.core.emerge_parse import parse_pretend
+    from gentstore.ui.widgets.required_changes import RequiredChanges
+
+    frame = RequiredChanges()
+    frame.set_preview(parse_pretend("[ebuild  N     ] app-misc/foo-1.2::gentoo 10 KiB\n"))
+    assert frame.isHidden()
+    assert frame.entries == ()

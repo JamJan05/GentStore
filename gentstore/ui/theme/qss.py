@@ -323,7 +323,7 @@ QWidget#useFlagDetails {{ background: {t.BG}; }}
 /* A left edge in the semantic colour, the way the canvas marks anything the
    user has to make a decision about. Amber for the routine cases, red for the
    two that deserve a second thought. */
-QFrame#blockNotice {{
+QFrame#blockNotice, QFrame#requiredChanges {{
     background: {t.SURFACE};
     border: 1px solid {t.BORDER};
     border-left: 2px solid {t.WARN};

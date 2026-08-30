@@ -36,6 +36,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ...core.confedit import WritePlan
+from ...core.emerge_parse import parse_pretend
 from ...core.masking import Blockage
 from ...core.masking import inspect as inspect_blocks
 from ...core.packages import (
@@ -67,6 +68,7 @@ from ..widgets.flow_layout import FlowWidget
 from ..widgets.licence_dialog import LicenceDialog
 from ..widgets.package_list import PackageListView
 from ..widgets.repo_badge import RepoBadge
+from ..widgets.required_changes import RequiredChanges
 from ..widgets.use_flags_panel import UseFlagsPanel
 from .registry import PageSpec
 from .split_page import SplitPage
@@ -320,6 +322,12 @@ class SearchPage(SplitPage):
         self._block_notice.licence_requested.connect(self._on_licence_requested)
         layout.addWidget(self._block_notice)
 
+        self._required = RequiredChanges()
+        self._required.write_requested.connect(
+            lambda plan: self._on_write_requested(plan, self._required)
+        )
+        layout.addWidget(self._required)
+
         self._use_panel = UseFlagsPanel()
         self._use_panel.write_requested.connect(
             lambda plan: self._on_write_requested(plan, self._use_panel)
@@ -493,6 +501,8 @@ class SearchPage(SplitPage):
         self._use_cpv = None
         self._use_panel.set_picture(None)
         self._block_notice.set_blockage(None)
+        # What emerge last refused was about the package being left behind.
+        self._required.clear()
         self.package_selected.emit(summary.cp)
         run_async(
             load_details, self._on_details, self._on_details_failed,
@@ -726,9 +736,33 @@ class SearchPage(SplitPage):
         pending, self._after_command = self._after_command, None
         if code == 0 and pending is not None:
             pending()
+        self._absorb_required_changes()
         # Whatever ran may have installed or removed something.
         self._model.invalidate_states()
         self._reload_package()
+
+    def _absorb_required_changes(self) -> None:
+        """Read back what emerge refused to proceed without.
+
+        Deliberately not conditional on the exit code. A run that stops for
+        autounmask *always* exits non-zero — that refusal is the whole message,
+        and treating a non-zero exit as nothing to read is what left these
+        blocks sitting in the terminal pane with no way to act on them.
+
+        The log view is cleared when a command starts, so what it holds belongs
+        to the run that just finished; anything without such a block parses to
+        nothing and hides the frame.
+        """
+        window = self.window()
+        output = window.log_view.text() if hasattr(window, "log_view") else ""
+        if not output:
+            self._required.clear()
+            return
+        try:
+            self._required.set_preview(parse_pretend(output))
+        except Exception:  # pragma: no cover - output we could not make sense of
+            log.warning("Could not read the emerge output back", exc_info=True)
+            self._required.clear()
 
     def _forget_pending(self) -> None:
         self._after_command = None
