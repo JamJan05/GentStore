@@ -440,17 +440,34 @@ def parse_pretend(text: str) -> Preview:
 
 
 def _collect_block(lines: list[str], start: int) -> tuple[tuple[str, ...], int]:
-    """The indented lines under a heading, up to the next blank-separated block."""
+    """The lines under a heading, up to the blank line that closes the block.
+
+    Where the block ends is decided by the blank line emerge puts after it and
+    by the things that can only be the start of something else — never by what
+    the line's first character looks like. The entries in these blocks are
+    atoms, and an atom starts with whatever its operator happens to be:
+    ``>=cat/pkg-1``, ``=cat/pkg-1``, ``<cat/pkg-2``, or a bare ``cat/pkg``. A
+    rule written in terms of the first character kept the ``>=`` lines and
+    dropped every other one — which is to say, it dropped the licence and
+    keyword lines, the two the user is most often asked to write.
+    """
     collected = []
     index = start
     while index < len(lines):
         line = lines[index]
-        if not line.strip():
+        stripped = line.strip()
+        if not stripped:
             if collected:
                 break
             index += 1
             continue
-        if not line.startswith((" ", "\t", "#", ">")):
+        starts_something_else = (
+            parse_row(line) is not None
+            or stripped.startswith("!!!")
+            or _TOTAL.match(stripped)
+            or any(stripped.startswith(h) for h in _REQUIRED_CHANGE_HEADINGS)
+        )
+        if starts_something_else:
             break
         collected.append(line.rstrip())
         index += 1

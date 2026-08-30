@@ -229,6 +229,46 @@ def test_a_required_change_becomes_a_line_somebody_can_write() -> None:
     assert any("lmstudio" in reason for reason in entry.required_by)
 
 
+#: The same shape for the other three files. These lines start with "=", which
+#: is the point: a licence or keyword entry never begins with ">".
+OTHER_FILES = """
+The following keyword changes are necessary to proceed:
+ (see "package.accept_keywords" in the portage(5) man page for more details)
+# required by @world
+=app-misc/foo-1.2 ~amd64
+
+The following license changes are necessary to proceed:
+ (see "package.license" in the portage(5) man page for more details)
+# required by =app-misc/foo-1.2 (argument)
+=app-misc/foo-1.2 SOME-EULA
+
+The following mask changes are necessary to proceed:
+ (see "package.unmask" in the portage(5) man page for more details)
+# required by @world
+=app-misc/foo-1.2
+"""
+
+
+def test_a_change_line_is_kept_whatever_operator_it_starts_with() -> None:
+    """The block ends at the blank line, not at an unfamiliar first character.
+
+    Collecting by prefix kept ">=" lines and dropped every other one, so the
+    licence and keyword entries — the two most often asked for — were parsed
+    down to their comments and the user was shown a demand with no line in it.
+    """
+    changes = parse_pretend(OTHER_FILES).required_changes
+    assert [c.file for c in changes] == [
+        "package.accept_keywords",
+        "package.license",
+        "package.unmask",
+    ]
+    assert [c.entries[0].line for c in changes] == [
+        "=app-misc/foo-1.2 ~amd64",
+        "=app-misc/foo-1.2 SOME-EULA",
+        "=app-misc/foo-1.2",
+    ]
+
+
 def test_a_required_use_conflict_is_not_offered_as_a_line() -> None:
     """There is no line in /etc/portage that settles REQUIRED_USE.
 
