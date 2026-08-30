@@ -8,7 +8,9 @@ quietly falls back to "Portage will not install this version".
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -345,6 +347,88 @@ def test_the_licence_check_agrees_with_the_masking_status(portage_env) -> None:
 # Gentstore used to hand it the shared configuration, which is locked against
 # being mutated, so those packages raised "Configuration is locked." and came
 # back looking entirely unblocked.
+
+
+class _StubManager:
+    """Portage's licence manager, reduced to the question this asks it.
+
+    What it returns is not the point — evaluating ``LICENSE`` is Portage's job
+    and the real system tests below check that. What it records is: which USE
+    string ``missing_for()`` handed over.
+    """
+
+    def __init__(self) -> None:
+        self.use_seen: str | None = None
+
+    def getMissingLicenses(  # noqa: N802 - Portage's own spelling
+        self, cpv: str, use: str, licence: str, slot: str, repo: str
+    ) -> list[str]:
+        self.use_seen = use
+        missing = ["LM-Studio-EULA"]
+        if "cuda" in use.split():
+            missing.append("NVIDIA-CUDA")
+        return missing
+
+
+class _StubEnv:
+    """The two faces of the configuration, kept apart the way the real one does.
+
+    ``settings`` is the shared, locked object and has no ``PORTAGE_USE`` at all
+    — that is not an omission, it is what a real ``PortageEnv`` looks like.
+    ``configured()`` is the per-package clone and does have one. Code reading
+    USE off the wrong one gets the empty string and silently drops every
+    conditional branch.
+    """
+
+    def __init__(self, manager: _StubManager, portage_use: str) -> None:
+        self.manager = manager
+        self.portage_use = portage_use
+        self.settings = SimpleNamespace(_license_manager=manager, get=self._no_such_key)
+        self.portdb = SimpleNamespace(aux_get=self._aux_get)
+
+    @staticmethod
+    def _no_such_key(key: str, default: object = None) -> object:
+        return default
+
+    @staticmethod
+    def _aux_get(cpv: str, keys: list[str], myrepo: str | None = None) -> list[str]:
+        values = {
+            "LICENSE": "LM-Studio-EULA MIT cuda? ( NVIDIA-CUDA )",
+            "SLOT": "0",
+            "repository": "overlay-nuda",
+        }
+        return [values[key] for key in keys]
+
+    @contextmanager
+    def configured(self, cpv: str):  # noqa: ANN201 - stands in for portage.config
+        yield {"PORTAGE_USE": self.portage_use}
+
+
+def test_a_conditional_licence_is_judged_against_the_packages_own_use() -> None:
+    with_cuda = _StubManager()
+    assert licenses.missing_for("x/y-1", "overlay-nuda", _StubEnv(with_cuda, "cuda")) == (
+        "LM-Studio-EULA",
+        "NVIDIA-CUDA",
+    )
+    assert with_cuda.use_seen == "cuda"
+
+    without = _StubManager()
+    assert licenses.missing_for("x/y-1", "overlay-nuda", _StubEnv(without, "")) == (
+        "LM-Studio-EULA",
+    )
+    assert without.use_seen == ""
+
+
+def test_the_licence_check_never_reads_use_off_the_shared_configuration() -> None:
+    """The shared object has no ``PORTAGE_USE``; falling back to it loses cuda.
+
+    This is the failure that looked like success: one licence to accept, the
+    user accepts it, and ``emerge`` still refuses over a second one Gentstore
+    never mentioned.
+    """
+    env_ = _StubEnv(_StubManager(), "cuda")
+    assert env_.settings.get("PORTAGE_USE", None) is None
+    assert "NVIDIA-CUDA" in licenses.missing_for("x/y-1", "overlay-nuda", env_)
 
 
 def conditional_licence_cpv(portage_env):

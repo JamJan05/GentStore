@@ -94,6 +94,15 @@ def missing_for(
     Delegated to Portage: ``LICENSE`` is a dependency-style expression with
     ``||`` groups and USE conditionals, and re-implementing its evaluation would
     be a second opinion nobody asked for.
+
+    Those USE conditionals are why the flags come from
+    :meth:`PortageEnv.configured` and not from the shared configuration. The
+    shared object describes the system, which has no ``PORTAGE_USE`` at all —
+    that value only exists once ``setcpv()`` has resolved USE for one package.
+    Passing the empty string instead drops every conditional branch, so a
+    package like ``LICENSE="MIT cuda? ( NVIDIA-CUDA )"`` would report only
+    ``MIT`` as missing, the user would accept it, and ``emerge`` would still
+    refuse over a licence Gentstore never named.
     """
     env = env or _default_env()
     manager = getattr(env.settings, "_license_manager", None)
@@ -103,7 +112,8 @@ def missing_for(
         licence, slot, repository = env.portdb.aux_get(
             cpv, ["LICENSE", "SLOT", "repository"], myrepo=repo or None
         )
-        use = env.settings.get("PORTAGE_USE", "")
+        with env.configured(cpv) as settings:
+            use = settings.get("PORTAGE_USE", "")
         missing = manager.getMissingLicenses(
             cpv, use, licence, slot.partition("/")[0], repo or repository
         )
