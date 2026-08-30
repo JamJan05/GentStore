@@ -339,15 +339,20 @@ usage() {
 		sed -n '2,31p' "${SELF}" | sed 's/^# \?//'
 	else
 		cat <<-EOF
-		Put Gentstore into a local overlay so Portage can install and remove it.
+		Put Gentstore into an overlay so Portage can install, update and remove it.
 
 		    curl -fsSL ${SELF_URL} | sudo bash
+		    curl -fsSL ${SELF_URL} | sudo bash -s -- --no-sync
 		    curl -fsSL ${SELF_URL} | sudo bash -s -- --remove
 
-		Fetched this way it downloads the ebuild it needs and registers the
-		overlay; it never runs emerge, and prints the command to run instead.
-		--local needs a clone, so it is not available here. For the full
-		commentary, read the script rather than piping it:
+		By default this registers a synced overlay: Portage clones the
+		${OVERLAY_BRANCH} branch, and later ebuilds arrive with an ordinary
+		"emerge --sync" without another visit here. --no-sync pins a copy that
+		never changes under you instead.
+
+		It never runs emerge, and prints the command to run instead. --local
+		needs a clone, so it is not available here. For the full commentary,
+		read the script rather than piping it:
 
 		    curl -fsSL -O ${SELF_URL}
 		EOF
