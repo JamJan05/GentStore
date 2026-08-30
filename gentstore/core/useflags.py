@@ -25,7 +25,6 @@ from __future__ import annotations
 import logging
 import os
 import re
-import threading
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -151,31 +150,14 @@ class UseState:
 # reading the configuration
 # ---------------------------------------------------------------------------
 
-#: ``config.setcpv()`` mutates the object it is called on, so the clone used for
-#: it never leaves this module and only one thread reads it at a time.
-_lock = threading.Lock()
-_clone = None
-_clone_for: PortageEnv | None = None
-
-
-def _configured(env: PortageEnv, cpv: str, repo: str):  # noqa: ANN202 - portage type
-    """A configuration with ``setcpv`` applied for *cpv*. Call under ``_lock``."""
-    global _clone, _clone_for
-    import portage  # noqa: PLC0415 — slow import, deferred
-
-    if _clone is None or _clone_for is not env:
-        _clone = portage.config(clone=env.settings)
-        _clone_for = env
-    _clone.setcpv(cpv, mydb=env.portdb)
-    return _clone
-
 
 def clear_caches() -> None:
-    """Forget the cloned configuration and the parsed description files."""
-    global _clone, _clone_for
-    with _lock:
-        _clone = None
-        _clone_for = None
+    """Forget the parsed description files.
+
+    The configuration this module reads USE out of is not its own: it borrows
+    :meth:`PortageEnv.configured` for the length of one call, and a newer
+    configuration means a newer :class:`PortageEnv`.
+    """
     _GLOBAL_DESCRIPTIONS.clear()
     _EXPAND_DESCRIPTIONS.clear()
     _LOCAL_DESCRIPTIONS.clear()
@@ -208,8 +190,7 @@ def collect(cpv: str, repo: str = "", env: PortageEnv | None = None) -> UseState
     env = env or _default_env()
     cp = _cp_of(cpv)
 
-    with _lock:
-        settings = _configured(env, cpv, repo)
+    with env.configured(cpv) as settings:
         iuse_raw, required_use = env.portdb.aux_get(
             cpv, ["IUSE", "REQUIRED_USE"], myrepo=repo or None
         )
