@@ -1,0 +1,15 @@
+[Desktop Entry]
+Type=Application
+Name=Gentstore
+GenericName=Portage front-end
+GenericName[pl]=Nakładka na Portage
+Comment=Search, install and configure packages on Gentoo
+Comment[pl]=Wyszukiwanie, instalowanie i konfigurowanie pakietów na Gentoo
+Exec=gentstore
+Icon=gentstore
+Terminal=false
+Categories=System;PackageManager;
+Keywords=portage;emerge;package;gentoo;
+Keywords[pl]=portage;emerge;pakiet;gentoo;
+StartupNotify=true
+StartupWMClass=Gentstore

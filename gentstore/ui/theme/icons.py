@@ -1,0 +1,84 @@
+"""Icon loading and tinting.
+
+Gentstore ships its own small monochrome icon set (``theme/icons/*.svg``) instead
+of relying on the desktop icon theme, so the window looks the same whether the
+user runs Breeze, Adwaita or Papirus. The SVGs are drawn in black; every icon is
+recoloured at paint time with :func:`tinted_pixmap`, which lets one file serve
+the active, inactive and hover states.
+
+If the Qt SVG image plugin is unavailable, we fall back to the desktop theme via
+``QIcon.fromTheme``; if that fails too the caller simply gets a null pixmap and
+the interface stays usable, just without the glyph.
+"""
+
+from __future__ import annotations
+
+from functools import lru_cache
+from pathlib import Path
+
+from PyQt6.QtCore import QSize, Qt
+from PyQt6.QtGui import QColor, QIcon, QPainter, QPixmap
+
+_ICON_DIR = Path(__file__).parent / "icons"
+
+#: Fallback names in the freedesktop icon naming spec, used only when our own
+#: SVG cannot be rendered.
+_THEME_FALLBACK = {
+    "magnifying-glass": "system-search",
+    "arrow-circle-up": "software-update-available",
+    "git-branch": "folder-remote",
+    "shield-warning": "security-medium",
+    "files": "text-x-generic",
+    "sliders": "preferences-system",
+    "envelope": "mail-message",
+    "package": "package-x-generic",
+    "user-gear": "preferences-desktop-user",
+    "arrows-clockwise": "view-refresh",
+    "terminal-window": "utilities-terminal",
+    "warning": "dialog-warning",
+    "info": "dialog-information",
+    "check": "dialog-ok",
+}
+
+
+@lru_cache(maxsize=64)
+def load_icon(name: str) -> QIcon:
+    """Return the bundled icon *name*, falling back to the desktop theme."""
+    path = _ICON_DIR / f"{name}.svg"
+    if path.is_file():
+        icon = QIcon(str(path))
+        if not icon.isNull():
+            return icon
+    return QIcon.fromTheme(_THEME_FALLBACK.get(name, name))
+
+
+@lru_cache(maxsize=512)
+def tinted_pixmap(name: str, color: str, size: int, dpr: float = 1.0) -> QPixmap:
+    """Return icon *name* rendered at *size* px and recoloured to *color*.
+
+    The tint works by filling the icon's alpha channel, so it is correct for any
+    monochrome source — including a theme fallback that happens to be a different
+    colour.
+    """
+    px = int(round(size * dpr))
+    base = load_icon(name).pixmap(QSize(px, px))
+    if base.isNull():
+        return base
+
+    tinted = QPixmap(base.size())
+    tinted.fill(Qt.GlobalColor.transparent)
+
+    painter = QPainter(tinted)
+    painter.drawPixmap(0, 0, base)
+    painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
+    painter.fillRect(tinted.rect(), QColor(color))
+    painter.end()
+
+    tinted.setDevicePixelRatio(dpr)
+    return tinted
+
+
+def clear_cache() -> None:
+    """Drop cached pixmaps — call after a font-scale or theme change."""
+    tinted_pixmap.cache_clear()
+    load_icon.cache_clear()

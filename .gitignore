@@ -1,0 +1,42 @@
+# --- Python ------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# --- Generated at build or install time --------------------------------------
+# Compiled translations — generated from the .ts files, see Docs/03-i18n.md
+gentstore/i18n/*.qm
+
+# --- Prototype and specification material ------------------------------------
+# The design mock-up and the original functional brief. They shaped the project
+# but nothing in it reads them: every token, screen and rule that mattered was
+# copied into Docs/. Kept locally, out of the repository.
+Gentoo portage UI prototype.zip
+prompt-gentoo-gui.md
+*.dc.html
+
+# --- Tooling caches and test leftovers ---------------------------------------
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# --- Local editor / tooling noise --------------------------------------------
+.idea/
+.vscode/
+*.swp
+*~
+*.orig
+*.rej
+*.bak
+.DS_Store
+
+# --- Runtime output ----------------------------------------------------------
+# The application logs to ~/.local/state/gentstore/, but a stray run redirected
+# into the working tree should not become a commit.
+*.log

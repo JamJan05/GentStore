@@ -1,0 +1,583 @@
+"""Tests for running commands and for deciding how to become root.
+
+Nothing here runs anything privileged: the tests that matter are about what the
+launcher refuses, how a command line is assembled, and whether a running command
+can actually be stopped — and that last one is checked against a real process.
+"""
+
+from __future__ import annotations
+
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+import pytest
+from PyQt6.QtWidgets import QApplication
+
+from gentstore.core import backup as backup_core
+from gentstore.helper import gentstore_helper as helper
+from gentstore.helper import gentstore_launcher as launcher
+from gentstore.runner import emerge, eselect, privilege
+from gentstore.runner.command import Command, CommandError, CommandSpec
+from gentstore.ui.widgets.log_view import classify
+
+# -- the launcher's allowlist ----------------------------------------------
+
+
+def test_the_launcher_runs_only_the_programs_gentstore_drives() -> None:
+    with pytest.raises(launcher.LauncherError, match="not one of"):
+        launcher.resolve("rm")
+
+
+def test_the_launcher_refuses_a_path_instead_of_a_name() -> None:
+    """Otherwise the allowlist could be walked around with /bin/../bin/sh."""
+    with pytest.raises(launcher.LauncherError, match="not a path"):
+        launcher.resolve("/bin/sh")
+    with pytest.raises(launcher.LauncherError, match="not a path"):
+        launcher.resolve("../../bin/sh")
+
+
+def test_the_launcher_finds_emerge_where_it_lives() -> None:
+    if not any((directory / "emerge").exists() for directory in launcher.SEARCH_PATH):
+        pytest.skip("Portage is not installed here")
+    assert launcher.resolve("emerge").name == "emerge"
+
+
+def test_the_launcher_ignores_a_planted_path(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    """PATH is the obvious thing to bend under the sudo fallback."""
+    fake = tmp_path / "emerge"
+    fake.write_text("#!/bin/sh\n", encoding="utf-8")
+    fake.chmod(0o755)
+    monkeypatch.setenv("PATH", str(tmp_path))
+
+    if not any((directory / "emerge").exists() for directory in launcher.SEARCH_PATH):
+        pytest.skip("Portage is not installed here")
+    assert launcher.resolve("emerge").parent in launcher.SEARCH_PATH
+
+
+def test_the_launcher_no_longer_offers_an_editor() -> None:
+    """dispatch-conf and etc-update spawn one, and nothing here asks for them."""
+    assert "dispatch-conf" not in launcher.ALLOWED
+    assert "etc-update" not in launcher.ALLOWED
+
+
+def test_the_launcher_accepts_every_command_the_interface_builds() -> None:
+    """The grammar in the launcher and the two builders have to stay in step.
+
+    If this fails after a command was added to runner/emerge.py or
+    runner/eselect.py, the command is the thing that is new — say so in the
+    launcher too. That file is the list of what one authentication buys.
+    """
+    for spec in (
+        emerge.install(["media-video/mpv"], oneshot=True, binaries=True),
+        emerge.unmerge(["media-video/mpv"]),
+        emerge.deselect(["media-video/mpv"]),
+        emerge.select(["media-video/mpv"]),
+        emerge.update_world(binaries=True),
+        emerge.depclean(),
+        emerge.preserved_rebuild(),
+        emerge.sync_all(),
+        eselect.enable("guru"),
+        eselect.add("myrepo", "git", "https://github.com/x/y.git"),
+        eselect.disable("guru", force=True),
+        eselect.remove("guru"),
+        eselect.sync("guru"),
+        eselect.read_news(privileged=True),
+        eselect.fix_glsa(),
+        eselect.fix_glsa(("202501-15",)),
+        eselect.set_profile(7),
+    ):
+        launcher.check_arguments(spec.argv[0], list(spec.argv[1:]))
+
+
+@pytest.mark.parametrize(
+    ("program", "arguments"),
+    [
+        # --config runs a package's own configuration script as root.
+        ("emerge", ["--config", "sys-apps/portage"]),
+        ("emerge", ["--root=/tmp/somewhere", "media-video/mpv"]),
+        ("emerge", ["--sync"]),
+        ("emerge", ["--usepkgonly", "media-video/mpv"]),
+        # An option carrying a value is a place to hide one.
+        ("emerge", ["--color=y", "media-video/mpv"]),
+        # emerge reads these as a file to merge, not as a package to look up.
+        ("emerge", ["/tmp/evil.ebuild"]),
+        ("emerge", ["tmp/evil.ebuild"]),
+        ("eselect", ["modules", "list"]),
+        # git reads ext:: as "run this command"; the "://" is decoration.
+        ("eselect", ["repository", "add", "evil", "git", "ext::sh -c 'id' ://"]),
+        ("emaint", ["merges", "-f"]),
+        ("glsa-check", ["-f", "; id"]),
+    ],
+)
+def test_the_launcher_refuses_arguments_the_interface_never_builds(
+    program: str, arguments: list[str]
+) -> None:
+    """One authentication buys the commands Gentstore runs, and no others.
+
+    polkit remembers the answer for a few minutes (``auth_admin_keep``), so
+    during that window anything else running as the user reaches this program
+    without a dialog of its own. What it finds here has to be worth no more
+    than what the dialog said it would be.
+    """
+    with pytest.raises(launcher.LauncherError):
+        launcher.check_arguments(program, arguments)
+
+
+def test_the_child_gets_an_unbuffered_environment() -> None:
+    environment = launcher.child_environment()
+    assert environment["PYTHONUNBUFFERED"] == "1"
+    assert "PATH" in environment
+
+
+def test_the_launcher_stops_a_child_when_told_to_abort() -> None:
+    """The whole reason the launcher exists: the interface cannot signal root."""
+    process = subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(30)"], start_new_session=True
+    )
+    try:
+        launcher.watch_for_abort(process, iter(["abort\n"]))
+        assert process.poll() is not None, "the child should have been stopped"
+    finally:
+        if process.poll() is None:  # pragma: no cover - only if the test failed
+            process.kill()
+
+
+def test_end_of_input_also_stops_the_child() -> None:
+    """If the interface died, its build should not carry on unattended."""
+    process = subprocess.Popen(
+        [sys.executable, "-c", "import time; time.sleep(30)"], start_new_session=True
+    )
+    try:
+        launcher.watch_for_abort(process, iter([]))
+        assert process.poll() is not None
+    finally:
+        if process.poll() is None:  # pragma: no cover
+            process.kill()
+
+
+# -- becoming root ----------------------------------------------------------
+
+
+def test_pkexec_is_preferred_when_it_is_there(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(privilege.shutil, "which", lambda name: f"/usr/bin/{name}")
+    escalation = privilege.detect()
+    assert escalation.kind == "pkexec"
+    assert escalation.is_available
+
+
+def test_sudo_is_the_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        privilege.shutil, "which", lambda name: "/usr/bin/sudo" if name == "sudo" else None
+    )
+    monkeypatch.setenv("SUDO_ASKPASS", "/usr/bin/ssh-askpass")
+    escalation = privilege.detect()
+    assert escalation.kind == "sudo"
+    assert escalation.wrap(("emerge", "-pv"))[:2] == ("/usr/bin/sudo", "-A")
+
+
+def test_sudo_without_a_way_to_ask_says_so(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        privilege.shutil, "which", lambda name: "/usr/bin/sudo" if name == "sudo" else None
+    )
+    monkeypatch.delenv("SUDO_ASKPASS", raising=False)
+    monkeypatch.setattr(privilege.sys, "stdin", None)
+
+    escalation = privilege.detect()
+    assert not escalation.is_available
+    assert "SUDO_ASKPASS" in (escalation.problem or "")
+
+
+def test_running_as_root_needs_no_escalation(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(privilege.os, "geteuid", lambda: 0)
+    escalation = privilege.detect()
+    assert escalation.kind == "direct"
+    assert escalation.is_available
+    assert escalation.wrap(("emerge", "-pv")) == ("emerge", "-pv")
+
+
+def test_no_way_to_become_root_at_all(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(privilege.shutil, "which", lambda _name: None)
+    escalation = privilege.detect()
+    assert escalation.kind == "none"
+    assert not escalation.is_available
+
+
+def test_the_helper_is_found_where_it_is_installed() -> None:
+    """Installed is the case that works without anybody asking for it."""
+    program = privilege.helper_command()
+    if program is None:
+        pytest.skip("the helper is not installed and the development opt-in is off")
+
+    assert not program.is_development_copy
+    assert Path(program.argv[-1]).name == privilege.HELPER_NAME
+    assert Path(program.argv[0]).parent == privilege.INSTALL_DIR
+
+
+def test_the_source_copy_is_not_run_as_root_unless_asked_for(tmp_path, monkeypatch) -> None:
+    """A checkout is files the user can write; pkexec checks python3, not them.
+
+    So the fallback that runs `python3 …/gentstore_helper.py` as root is off
+    unless somebody turns it on. Anything able to write into the checkout would
+    otherwise be one authentication away from root — and the dialog would be
+    the generic "run a program as another user" one, because polkit has no
+    action registered for that path.
+    """
+    source = tmp_path / "gentstore_helper.py"
+    source.write_text("print('hello')\n", encoding="utf-8")
+    monkeypatch.setattr(privilege, "INSTALL_DIR", tmp_path / "nothing-installed")
+    monkeypatch.delenv(privilege.DEV_VARIABLE, raising=False)
+
+    assert privilege._locate(privilege.HELPER_NAME, source) is None
+
+    monkeypatch.setenv(privilege.DEV_VARIABLE, "1")
+    program = privilege._locate(privilege.HELPER_NAME, source)
+    assert program is not None
+    assert program.is_development_copy
+    assert program.argv == (sys.executable, str(source))
+
+
+def test_a_file_other_users_can_write_is_never_run_as_root(tmp_path, monkeypatch) -> None:
+    """The opt-in is for a machine you develop on, not for a shared one."""
+    monkeypatch.setattr(privilege, "INSTALL_DIR", tmp_path / "nothing-installed")
+    monkeypatch.setenv(privilege.DEV_VARIABLE, "1")
+
+    writable = tmp_path / "gentstore_helper.py"
+    writable.write_text("print('hello')\n", encoding="utf-8")
+    writable.chmod(0o666)
+    assert privilege._locate(privilege.HELPER_NAME, writable) is None
+
+    # A directory is enough: whoever can write one can swap the file inside it.
+    loose = tmp_path / "loose"
+    loose.mkdir()
+    loose.chmod(0o777)
+    inside = loose / "gentstore_helper.py"
+    inside.write_text("print('hello')\n", encoding="utf-8")
+    inside.chmod(0o644)
+    assert privilege._locate(privilege.HELPER_NAME, inside) is None
+
+
+def test_a_stale_installed_copy_is_noticed() -> None:
+    """The two halves are versioned together, so a mismatch has to be visible.
+
+    Not asserted as a failure: whether the machine running the tests has
+    reinstalled after the last change is not a property of the code. What *is*
+    a property of the code is that it can tell, and this checks that it can.
+    """
+    status = privilege.installed_status(privilege.HELPER_NAME, refresh=True)
+    if not status.installed:
+        pytest.skip("the helper is not installed on this machine")
+
+    source = Path(privilege.__file__).resolve().parent.parent / "helper" / "gentstore_helper.py"
+    same = status.path.read_bytes() == source.read_bytes()
+    assert status.current is same
+    assert status.is_stale is not same
+
+
+def test_a_matching_copy_is_not_reported_as_stale(tmp_path, monkeypatch) -> None:
+    source = tmp_path / "gentstore_helper.py"
+    source.write_text("print('hello')\n", encoding="utf-8")
+    installed = tmp_path / "installed"
+    installed.mkdir()
+    (installed / privilege.HELPER_NAME).write_text("print('hello')\n", encoding="utf-8")
+
+    monkeypatch.setattr(privilege, "INSTALL_DIR", installed)
+    monkeypatch.setattr(privilege, "_PROGRAMS", {privilege.HELPER_NAME: source})
+
+    status = privilege.installed_status(privilege.HELPER_NAME, refresh=True)
+    assert status.installed and status.current and not status.is_stale
+    assert privilege.stale_programs(refresh=True) == ()
+
+
+def test_a_differing_copy_is_reported_as_stale(tmp_path, monkeypatch) -> None:
+    """The case that produced a baffling refusal until it was detected.
+
+    An installed helper from before ``cfg_apply`` learned to reach outside
+    /etc/portage refuses a perfectly ordinary configuration-file decision with
+    "outside_root", and nothing in the interface explains why.
+    """
+    source = tmp_path / "gentstore_helper.py"
+    source.write_text("print('new')\n", encoding="utf-8")
+    installed = tmp_path / "installed"
+    installed.mkdir()
+    (installed / privilege.HELPER_NAME).write_text("print('old')\n", encoding="utf-8")
+
+    monkeypatch.setattr(privilege, "INSTALL_DIR", installed)
+    monkeypatch.setattr(privilege, "_PROGRAMS", {privilege.HELPER_NAME: source})
+
+    assert privilege.installed_status(privilege.HELPER_NAME, refresh=True).is_stale
+    assert [s.name for s in privilege.stale_programs(refresh=True)] == [privilege.HELPER_NAME]
+
+
+def test_a_refusal_says_when_a_stale_helper_may_be_the_reason(tmp_path, monkeypatch) -> None:
+    from gentstore.runner import helper_client
+
+    source = tmp_path / "gentstore_helper.py"
+    source.write_text("new\n", encoding="utf-8")
+    installed = tmp_path / "installed"
+    installed.mkdir()
+    (installed / privilege.HELPER_NAME).write_text("old\n", encoding="utf-8")
+    monkeypatch.setattr(privilege, "INSTALL_DIR", installed)
+    monkeypatch.setattr(privilege, "_PROGRAMS", {privilege.HELPER_NAME: source})
+    privilege.stale_programs(refresh=True)
+
+    annotated = helper_client._annotate("outside_root: /etc/fstab is outside /etc/portage")
+    assert "older version" in annotated
+    assert "make install-system" in annotated
+
+
+# -- the command lines ------------------------------------------------------
+
+
+def test_pretend_needs_no_privileges() -> None:
+    spec = emerge.pretend(["media-video/mpv"])
+    assert not spec.privileged
+    assert "--pretend" in spec.argv
+
+
+def test_installing_does_need_them() -> None:
+    assert emerge.install(["media-video/mpv"]).privileged
+
+
+def test_every_emerge_command_turns_colour_and_the_spinner_off() -> None:
+    for spec in (
+        emerge.pretend(["x"]),
+        emerge.install(["x"]),
+        emerge.unmerge(["x"]),
+        emerge.update_world(),
+    ):
+        assert "--color=n" in spec.argv
+        assert "--nospinner" in spec.argv
+
+
+def test_oneshot_keeps_a_package_out_of_world() -> None:
+    assert "--oneshot" in emerge.install(["x"], oneshot=True).argv
+    assert "--oneshot" not in emerge.install(["x"]).argv
+
+
+def test_removing_is_unmerge_and_never_depclean() -> None:
+    """--unmerge removes what it is given; --depclean decides for itself."""
+    argv = emerge.unmerge(["media-video/mpv"]).argv
+    assert "--unmerge" in argv
+    assert "--depclean" not in argv
+
+
+def test_the_display_string_is_what_somebody_would_type() -> None:
+    spec = emerge.pretend(["media-video/mpv"])
+    assert spec.display == "emerge --color=n --nospinner --pretend --verbose media-video/mpv"
+
+
+# -- running one ------------------------------------------------------------
+
+
+def settle(seconds: float = 5.0) -> None:
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        QApplication.processEvents()
+
+
+def _pkexec() -> privilege.Escalation:
+    return privilege.Escalation("pkexec", "/usr/bin/pkexec")
+
+
+@pytest.fixture
+def runner(app):  # noqa: ANN001, ANN201 - conftest fixture
+    """A Command that is always shut down, however the test ended.
+
+    Letting one be garbage-collected with a process still attached is how the
+    suite learned that Command needed a close() at all: the finished signal
+    arrived at an object Python had already reclaimed, and the process aborted.
+    """
+    command = Command()
+    yield command
+    command.close()
+
+
+def run_and_wait(runner: Command, spec: CommandSpec, seconds: float = 10.0) -> list:
+    lines: list[str] = []
+    codes: list[int] = []
+    runner.output.connect(lines.append)
+    runner.finished.connect(codes.append)
+    runner.start(spec)
+
+    deadline = time.monotonic() + seconds
+    while runner.is_running() and time.monotonic() < deadline:
+        QApplication.processEvents()
+    settle(0.2)
+    return [lines, codes]
+
+
+def test_output_arrives_as_whole_lines(runner: Command) -> None:
+    spec = CommandSpec(
+        argv=(sys.executable, "-c", "print('first'); print('second')"),
+    )
+    lines, codes = run_and_wait(runner, spec)
+    assert lines == ["first", "second"]
+    assert codes == [0]
+
+
+def test_a_non_zero_exit_is_reported_rather_than_treated_as_an_error(runner: Command) -> None:
+    """A failing emerge is a normal outcome the user needs to read."""
+    spec = CommandSpec(argv=(sys.executable, "-c", "raise SystemExit(7)"))
+    _lines, codes = run_and_wait(runner, spec)
+    assert codes == [7]
+
+
+def test_only_one_command_runs_at_a_time(runner: Command) -> None:
+    runner.start(CommandSpec(argv=(sys.executable, "-c", "import time; time.sleep(2)")))
+    try:
+        with pytest.raises(CommandError, match="still running"):
+            runner.start(CommandSpec(argv=(sys.executable, "-c", "pass")))
+    finally:
+        runner.close()
+
+
+def test_a_running_command_can_be_stopped(runner: Command) -> None:
+    failures: list[str] = []
+    runner.failed.connect(failures.append)
+    runner.start(CommandSpec(argv=(sys.executable, "-c", "import time; time.sleep(30)")))
+    settle(0.4)
+
+    runner.abort()
+    deadline = time.monotonic() + 10
+    while runner.is_running() and time.monotonic() < deadline:
+        QApplication.processEvents()
+
+    assert not runner.is_running(), "SIGINT should have stopped it"
+    assert failures, "stopping should be reported, not silently treated as success"
+
+
+def test_a_privileged_command_needs_the_launcher(runner: Command, monkeypatch) -> None:
+    monkeypatch.setattr(privilege, "launcher_command", lambda: None)
+    monkeypatch.setattr(privilege, "detect", _pkexec)
+    with pytest.raises(CommandError, match="launcher"):
+        runner.start(emerge.install(["media-video/mpv"]))
+
+
+def test_a_privileged_command_is_wrapped_in_both_layers(runner: Command, monkeypatch) -> None:
+    monkeypatch.setattr(privilege, "detect", _pkexec)
+    argv = runner._resolve(emerge.install(["media-video/mpv"]))
+    assert argv[0] == "/usr/bin/pkexec"
+    assert "emerge" in argv
+    assert argv.index("/usr/bin/pkexec") < argv.index("emerge")
+
+
+# -- the client and the helper, over a real subprocess ----------------------
+
+
+WRAPPER = """
+import json, sys
+from pathlib import Path
+from gentstore.helper import gentstore_helper as helper
+helper.CONFIG_ROOT = Path(sys.argv[1])
+helper.BACKUP_PARENT = Path(sys.argv[1]).parent
+sys.exit(helper.main())
+"""
+
+
+@pytest.fixture
+def local_helper(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Run the helper as an ordinary process against a throwaway /etc/portage.
+
+    The privilege wrapper is replaced with nothing, so this exercises the real
+    JSON protocol over a real subprocess without needing root — the one part of
+    the privileged path that can be checked in a test.
+    """
+    root = tmp_path / "portage"
+    root.mkdir()
+    wrapper = tmp_path / "wrapper.py"
+    wrapper.write_text(WRAPPER, encoding="utf-8")
+
+    monkeypatch.setattr(
+        privilege,
+        "helper_command",
+        lambda: privilege.PrivilegedProgram(
+            (sys.executable, str(wrapper), str(root)), installed=False
+        ),
+    )
+    monkeypatch.setattr(privilege, "detect", lambda: privilege.Escalation("direct", None))
+    monkeypatch.setenv("PYTHONPATH", str(Path(__file__).resolve().parent.parent))
+    return root
+
+
+def test_the_client_and_the_helper_speak_the_same_protocol(local_helper: Path) -> None:
+    from gentstore.runner import helper_client
+
+    target = local_helper / "package.use"
+    result = helper_client.request("append_line", path=str(target), line="media-video/mpv vulkan")
+
+    assert result.ok, result.error
+    assert result.changed
+    assert target.read_text(encoding="utf-8") == "media-video/mpv vulkan\n"
+
+
+def test_a_refusal_comes_back_as_a_code_the_interface_can_act_on(local_helper: Path) -> None:
+    from gentstore.runner import helper_client
+
+    result = helper_client.request("append_line", path="/etc/passwd", line="x")
+
+    assert not result.ok
+    assert result.code == "outside_root"
+    assert result.error
+
+
+def test_the_client_reports_a_missing_way_to_become_root(monkeypatch) -> None:
+    from gentstore.runner import helper_client
+
+    monkeypatch.setattr(
+        privilege, "detect", lambda: privilege.Escalation("none", None, "nothing here")
+    )
+    result = helper_client.request("backup")
+    assert result.code == "no_privilege"
+
+
+# -- the log ----------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("line", "expected"),
+    [
+        ("!!! ERROR: media-video/mpv failed", "error"),
+        (" * Warning: something", "warning"),
+        ("*** deprecated", "warning"),
+        (">>> Emerging (1 of 3) media-video/mpv-0.41.0", "step"),
+        ("[ebuild  N     ] media-video/mpv-0.41.0", "plain"),
+    ],
+)
+def test_log_lines_are_classified_by_portages_own_markers(line: str, expected: str) -> None:
+    assert classify(line) == expected
+
+
+# -- backups ----------------------------------------------------------------
+
+
+def test_backups_are_listed_newest_first(tmp_path: Path) -> None:
+    for stamp in ("2026-01-01T0900", "2026-03-04T1130", "2026-02-02T1000"):
+        (tmp_path / f"portage.bak-{stamp}").mkdir()
+    (tmp_path / "portage").mkdir()  # not a backup
+    (tmp_path / "portage.bak-nonsense").mkdir()
+
+    names = [b.label for b in backup_core.list_backups(tmp_path)]
+    assert names == ["2026-03-04T1130", "2026-02-02T1000", "2026-01-01T0900"]
+
+
+def test_an_unreadable_etc_is_simply_empty(tmp_path: Path) -> None:
+    assert backup_core.list_backups(tmp_path / "absent") == ()
+
+
+def test_one_backup_per_run_not_per_change() -> None:
+    tracker = backup_core.BackupTracker()
+    assert tracker.needs_backup()
+    tracker.note("/etc/portage.bak-2026-01-01T0900")
+    assert not tracker.needs_backup()
+    assert tracker.taken.endswith("0900")
+    tracker.reset()
+    assert tracker.needs_backup()
+
+
+def test_the_helper_and_the_core_agree_on_where_backups_live() -> None:
+    """The constant is duplicated across the privilege boundary on purpose."""
+    assert backup_core.BACKUP_PARENT == helper.BACKUP_PARENT
+    assert backup_core.BACKUP_PREFIX == helper.BACKUP_PREFIX
+    assert backup_core.BACKUP_KEEP == helper.BACKUP_KEEP

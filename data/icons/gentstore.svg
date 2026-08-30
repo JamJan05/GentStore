@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- A package seen from above, opened: the shape Portage works on, and the
+       one thing this application is about. Colours from the nocturne canvas
+       (Docs/02-ui-design.md) so the icon belongs to the window it opens. -->
+  <rect width="128" height="128" rx="26" fill="#161826"/>
+  <g transform="translate(64 66)">
+    <path d="M0 -34 34 -15 0 4 -34 -15Z" fill="#9184d9"/>
+    <path d="M-34 -15 0 4 0 38 -34 19Z" fill="#5d5294"/>
+    <path d="M34 -15 0 4 0 38 34 19Z" fill="#423a6a"/>
+    <path d="M-17 -24.5 17 -5.5" stroke="#e7e5fe" stroke-width="3"
+          stroke-linecap="round" opacity="0.85"/>
+  </g>
+</svg>

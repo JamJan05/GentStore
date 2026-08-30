@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC
+ "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+
+<!--
+  Gentstore asks for exactly two privileges, both of them named so that the
+  authentication dialog says what is about to happen rather than "an
+  application wants to run a program as root".
+
+  auth_admin_keep, not auth_admin: a system update runs six steps in a row, and
+  being asked for the password six times teaches people to type it without
+  reading the dialog.
+-->
+<policyconfig>
+
+  <vendor>Gentstore</vendor>
+  <vendor_url>https://github.com/JamJan05/Gentstore-alpha</vendor_url>
+
+  <action id="org.gentoo.gentstore.modify-config">
+    <description>Change the Portage configuration</description>
+    <description xml:lang="pl">Zmiana konfiguracji Portage</description>
+    <!--
+      The message names /etc as well as /etc/portage on purpose. Resolving a
+      ._cfg file is part of this action, and Portage leaves those wherever
+      CONFIG_PROTECT points — /etc by default. A dialog that said only
+      "/etc/portage" would be asking for consent to less than it grants.
+    -->
+    <message>Authentication is required to change files in /etc/portage, and to apply configuration files a package update left waiting in /etc</message>
+    <message xml:lang="pl">Zmiana plików w /etc/portage oraz zatwierdzanie plików konfiguracyjnych pozostawionych przez aktualizację w /etc wymaga uwierzytelnienia</message>
+    <icon_name>preferences-system</icon_name>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/gentstore/gentstore-helper</annotate>
+    <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
+  </action>
+
+  <action id="org.gentoo.gentstore.run-emerge">
+    <description>Install and update packages</description>
+    <description xml:lang="pl">Instalacja i aktualizacja pakietów</description>
+    <message>Authentication is required to install, update or remove packages</message>
+    <message xml:lang="pl">Instalacja, aktualizacja i usuwanie pakietów wymaga uwierzytelnienia</message>
+    <icon_name>system-software-install</icon_name>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin_keep</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/gentstore/gentstore-launcher</annotate>
+    <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
+  </action>
+
+</policyconfig>
