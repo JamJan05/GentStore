@@ -18,6 +18,32 @@ sudo packaging/make-overlay.sh
 emerge --ask app-portage/gentstore
 ```
 
+### Without a clone
+
+The script runs on its own, which is what the README's one-liner relies on:
+
+```bash
+curl -fsSL -O https://raw.githubusercontent.com/JamJan05/GentStore/main/packaging/make-overlay.sh
+less make-overlay.sh
+sudo bash make-overlay.sh
+```
+
+Nothing about the result differs. The ebuild is live, so `git-r3` does the cloning either way;
+the only thing a clone was ever needed for is the two files the script cannot generate — the
+ebuild and its `metadata.xml`. Without one it downloads them from `raw.githubusercontent.com`
+into a `mktemp -d` that a trap removes on exit, and refuses to go on unless what came back
+contains an `EGIT_REPO_URI` line. A captive portal's login page is a 200 as far as the shell is
+concerned, and it should not be able to become an ebuild.
+
+`GENTSTORE_REF` selects the branch or tag to fetch from (default `main`). `--local` is the one
+option that needs a clone, and it says so rather than quietly building from the remote instead.
+
+The piped form — `curl … | sudo bash` — works and is documented, but the two-step version above
+is the one to prefer. Everything else in this project refuses to let something reach root
+unread; the installer should not be the exception.
+
+### What it writes
+
 The script creates a local overlay in `/var/db/repos/gentstore`, puts the ebuild in it,
 registers the repository in `/etc/portage/repos.conf/gentstore.conf` and appends
 `=app-portage/gentstore-9999 **` to `/etc/portage/package.accept_keywords/gentstore`. It prints

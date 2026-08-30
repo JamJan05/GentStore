@@ -164,3 +164,81 @@ def test_the_overlay_needs_no_manifest(script: str, ebuild: str) -> None:
     """Thin manifests plus no SRC_URI: nothing to checksum, nothing to sign."""
     assert "thin-manifests = true" in script
     assert not re.search(r"^SRC_URI=", ebuild, re.M)
+
+
+# -- installing without a clone ---------------------------------------------
+
+
+def test_the_raw_url_and_the_ebuild_name_the_same_repository(
+    script: str, ebuild: str
+) -> None:
+    """Fetched on its own, the script downloads from where the ebuild builds from.
+
+    These are two independent strings for one repository, and they are edited at
+    different times — the day they disagree, the one-liner quietly installs an
+    ebuild pointing somewhere else.
+    """
+    raw = re.search(r'RAW_BASE="https://raw\.githubusercontent\.com/([^/]+/[^/"]+)', script)
+    assert raw, "the script no longer has a raw.githubusercontent.com base"
+    upstream = re.search(r'EGIT_REPO_URI="https://github\.com/([^/]+/[^/".]+)', ebuild)
+    assert upstream, "the ebuild no longer clones from github.com"
+    assert raw.group(1) == upstream.group(1), (
+        f"the script fetches from {raw.group(1)} but the ebuild builds "
+        f"{upstream.group(1)}"
+    )
+
+
+def test_running_without_a_clone_is_recognised_rather_than_crashing() -> None:
+    """Piped into bash there is no BASH_SOURCE, so there is no tree to read.
+
+    ``--help`` is the one path that reaches the decision without needing root or
+    the network, which makes it the way to check the decision was reached.
+    """
+    piped = subprocess.run(
+        ["bash", "-s", "--", "--help"],
+        input=SCRIPT.read_text(),
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert "curl" in piped.stdout, "the piped help does not say how it was invoked"
+    # The URL ends in that path too, so it is the *local invocation* that must
+    # be absent — a reader who piped the script has no such file to run.
+    assert "sudo packaging/make-overlay.sh" not in piped.stdout, (
+        "the piped help offers a path that the reader does not have"
+    )
+
+    from_a_clone = subprocess.run(
+        ["bash", str(SCRIPT), "--help"], capture_output=True, text=True, check=True
+    )
+    assert "sudo packaging/make-overlay.sh" in from_a_clone.stdout
+
+
+def test_local_mode_refuses_to_run_without_a_clone() -> None:
+    """--local builds from a working tree; fetched on its own there is none.
+
+    Left unguarded it would fall through to the ordinary path and build from the
+    remote, which is the one thing --local exists to avoid.
+    """
+    result = subprocess.run(
+        ["bash", "-s", "--", "--local"],
+        input=SCRIPT.read_text(),
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode != 0
+    assert "no clone" in result.stderr
+
+
+def test_nothing_is_written_before_the_download_is_checked(script: str) -> None:
+    """A 404 page is still a 200 to the shell, so the ebuild is inspected first.
+
+    The guard has to sit between the download and the copy into the overlay; a
+    captive portal's login page installed as an ebuild is a poor way to find out.
+    """
+    body = script[script.index("fetch_sources()") : script.index("remove()")]
+    assert "mktemp -d" in body, "the download no longer lands somewhere disposable"
+    assert "trap " in body, "the temporary directory is not cleaned up"
+    assert re.search(r"grep -q '\^EGIT_REPO_URI=' \"\$\{EBUILD\}\"", body), (
+        "what came back from the network is no longer checked for being an ebuild"
+    )

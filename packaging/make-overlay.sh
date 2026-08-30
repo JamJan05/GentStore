@@ -4,6 +4,12 @@
 #     sudo packaging/make-overlay.sh            build from EGIT_REPO_URI
 #     sudo packaging/make-overlay.sh --local     build from this working tree
 #
+# It also runs without a clone at all, which is the point of the one-liner in
+# the README: fetched on its own it downloads the two files it cannot generate
+# (the ebuild and its metadata.xml) straight from the repository and carries on.
+# Nothing else changes — the ebuild is a live one, so git-r3 does the cloning
+# either way, and the overlay ends up identical.
+#
 # --local exists for two situations: an upstream root cannot reach (a private
 # repository, no credentials for the portage user) and testing a change before
 # pushing it. It rewrites EGIT_REPO_URI in the copy that goes into the overlay,
@@ -26,12 +32,23 @@ ACCEPT_DIR="/etc/portage/package.accept_keywords"
 ACCEPT="${ACCEPT_DIR}/${REPO_NAME}"
 ATOM="app-portage/gentstore"
 
-SOURCE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-EBUILD="${SOURCE}/packaging/${ATOM}/gentstore-9999.ebuild"
-# Read from the ebuild, not from `git remote`: the local remote is very likely
-# an ssh:// URL that works for you and not for the root-owned clone emerge makes.
-UPSTREAM="$(sed -n 's/^EGIT_REPO_URI="\(.*\)"$/\1/p' "${EBUILD}" 2>/dev/null || true)"
-UPSTREAM="${UPSTREAM:-the URL in EGIT_REPO_URI}"
+#: Where to fetch the ebuild from when there is no clone to read it out of.
+#: GENTSTORE_REF picks a branch or tag; the default is whatever main holds.
+GENTSTORE_REF="${GENTSTORE_REF:-main}"
+RAW_BASE="https://raw.githubusercontent.com/JamJan05/GentStore/${GENTSTORE_REF}"
+SELF_URL="${RAW_BASE}/packaging/make-overlay.sh"
+
+# Piped into bash, BASH_SOURCE is "bash" or empty and there is no tree above it.
+# Both cases mean the same thing: fetch what we need instead of reading it.
+SELF="${BASH_SOURCE[0]:-}"
+if [[ -f ${SELF} ]]; then
+	SOURCE="$(cd -- "$(dirname -- "${SELF}")/.." && pwd)"
+else
+	SOURCE=""
+fi
+EBUILD="${SOURCE:+${SOURCE}/packaging/${ATOM}/gentstore-9999.ebuild}"
+FETCHED=false
+[[ -n ${EBUILD} && -f ${EBUILD} ]] || FETCHED=true
 
 LOCAL=false
 
@@ -39,12 +56,54 @@ say()  { printf '  %s\n' "$*"; }
 step() { printf '\n\033[1m%s\033[0m\n' "$*"; }
 skip() { printf '  \033[2m%s\033[0m\n' "$*"; }
 
+# How to tell the reader to re-run us. Piped from the network there is no path
+# to name, so name the command that got them here instead.
+rerun_as() {
+	if [[ -f ${SELF} ]]; then echo "sudo ${SELF}${*:+ $*}"
+	else echo "curl -fsSL ${SELF_URL} | sudo bash${*:+ -s -- $*}"; fi
+}
+
 need_root() {
 	if [[ ${EUID} -ne 0 ]]; then
 		echo "This writes to /var/db/repos and /etc/portage, so it needs root:" >&2
-		echo "    sudo $0${*:+ $*}" >&2
+		echo "    $(rerun_as "$@")" >&2
 		exit 1
 	fi
+}
+
+download() { # url destination
+	if command -v curl >/dev/null; then
+		curl -fsSL --proto '=https' --tlsv1.2 -o "$2" "$1"
+	elif command -v wget >/dev/null; then
+		wget -q --https-only -O "$2" "$1"
+	else
+		echo "Neither curl nor wget is installed, so there is no way to fetch" >&2
+		echo "${1}. Install one of them, or clone the repository and run" >&2
+		echo "packaging/make-overlay.sh out of it." >&2
+		exit 1
+	fi
+}
+
+# Without a clone the only things missing are the two files this script cannot
+# generate. Fetch them into a temporary directory that goes away on exit, so a
+# half-finished download can never be what lands in the overlay.
+fetch_sources() {
+	step "0/4  No clone here — fetching the ebuild from ${GENTSTORE_REF}"
+	SOURCE="$(mktemp -d)"
+	trap 'rm -rf -- "${SOURCE}"' EXIT
+	local dir="${SOURCE}/packaging/${ATOM}"
+	mkdir -p "${dir}"
+	EBUILD="${dir}/gentstore-9999.ebuild"
+	download "${RAW_BASE}/packaging/${ATOM}/gentstore-9999.ebuild" "${EBUILD}"
+	download "${RAW_BASE}/packaging/${ATOM}/metadata.xml" "${dir}/metadata.xml"
+	# A 404 page or a captive portal is still a 200 to the shell. The ebuild has
+	# to look like one before it is allowed anywhere near /var/db/repos.
+	if ! grep -q '^EGIT_REPO_URI=' "${EBUILD}"; then
+		echo "  What came back from ${RAW_BASE} is not an ebuild." >&2
+		echo "  Check the URL and the network, then try again." >&2
+		exit 1
+	fi
+	say "fetched gentstore-9999.ebuild and metadata.xml"
 }
 
 # git-r3 fetches as the portage user, with none of your credentials. A private
@@ -104,6 +163,15 @@ remove() {
 
 install_overlay() {
 	need_root
+	${FETCHED} && fetch_sources
+
+	# Read from the ebuild, not from `git remote`: a local remote is very likely
+	# an ssh:// URL that works for you and not for the root-owned clone emerge
+	# makes. Done here rather than at the top because without a clone there is
+	# no ebuild to read until fetch_sources has run.
+	UPSTREAM="$(sed -n 's/^EGIT_REPO_URI="\(.*\)"$/\1/p' "${EBUILD}" 2>/dev/null || true)"
+	UPSTREAM="${UPSTREAM:-the URL in EGIT_REPO_URI}"
+
 	step "1/4  The overlay itself — ${REPO_PATH}"
 	install -d -m 0755 "${REPO_PATH}/metadata" "${REPO_PATH}/profiles"
 
@@ -185,10 +253,36 @@ install_overlay() {
 	EOF
 }
 
+usage() {
+	if [[ -f ${SELF} ]]; then
+		sed -n '2,26p' "${SELF}" | sed 's/^# \?//'
+	else
+		cat <<-EOF
+		Put Gentstore into a local overlay so Portage can install and remove it.
+
+		    curl -fsSL ${SELF_URL} | sudo bash
+		    curl -fsSL ${SELF_URL} | sudo bash -s -- --remove
+
+		Fetched this way it downloads the ebuild it needs and registers the
+		overlay; it never runs emerge, and prints the command to run instead.
+		--local needs a clone, so it is not available here. For the full
+		commentary, read the script rather than piping it:
+
+		    curl -fsSL -O ${SELF_URL}
+		EOF
+	fi
+}
+
 case "${1:-}" in
 	--remove|-r) remove ;;
-	--help|-h)   sed -n '2,20p' "$0" | sed 's/^# \?//' ;;
-	--local|-l)  LOCAL=true; install_overlay ;;
+	--help|-h)   usage ;;
+	--local|-l)
+		if ${FETCHED}; then
+			echo "--local builds from a working tree, and there is no clone here." >&2
+			echo "Clone the repository and run packaging/make-overlay.sh out of it." >&2
+			exit 1
+		fi
+		LOCAL=true; install_overlay ;;
 	"")          install_overlay ;;
 	*)           echo "Unknown option: $1 (try --help)" >&2; exit 1 ;;
 esac

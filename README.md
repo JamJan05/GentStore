@@ -62,17 +62,44 @@ Two routes. The choice comes down to whether Portage should know about Gentstore
 
 ### Through Portage — a local overlay
 
-```bash
-git clone https://github.com/JamJan05/GentStore.git
-cd GentStore
+No clone needed. Fetch the overlay script, read it, run it:
 
-sudo packaging/make-overlay.sh          # or: sudo make overlay
+```bash
+curl -fsSL -O https://raw.githubusercontent.com/JamJan05/GentStore/main/packaging/make-overlay.sh
+less make-overlay.sh          # 200 lines, and it is about to run as root
+sudo bash make-overlay.sh
+
 emerge --ask app-portage/gentstore
 ```
 
+Reading it first is the version this project recommends, and not out of ceremony: the whole
+application is built on the idea that nothing touching root should happen unread. If you would
+rather have the one-liner anyway, it is the same script:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/JamJan05/GentStore/main/packaging/make-overlay.sh | sudo bash
+```
+
+Either way, run `emerge --ask app-portage/gentstore` afterwards — the script deliberately stops
+short of installing anything and prints the command instead.
+
+From a clone it works exactly the same, and that is the form to use when you are changing the
+code:
+
+```bash
+git clone https://github.com/JamJan05/GentStore.git
+cd GentStore
+sudo packaging/make-overlay.sh          # or: sudo make overlay
+```
+
 The script creates an overlay in `/var/db/repos/gentstore`, registers it in `repos.conf` and
-accepts the ebuild (it is **live**, with no keywords). It prints every file it writes and
-overwrites nobody else's. You run `emerge` yourself — the script only prints the command.
+accepts the ebuild (it is **live**, with no keywords). Fetched on its own it first downloads the
+two files it cannot generate — the ebuild and its `metadata.xml` — into a temporary directory,
+and checks that what came back really is an ebuild before letting it near `/var/db/repos`. It
+prints every file it writes and overwrites nobody else's. You run `emerge` yourself — the script
+only prints the command.
+
+`GENTSTORE_REF=<branch-or-tag>` installs from somewhere other than `main`.
 
 After that `gentstore` behaves like any other program: it is in `@world`, it updates with
 `emerge --update app-portage/gentstore`, and it goes away with
@@ -91,7 +118,8 @@ sudo packaging/make-overlay.sh --local
 The script checks by itself whether the address is readable without credentials, and warns you
 in advance. Either way what gets built is the **last commit**, not the working tree.
 
-To take the overlay back out: `sudo packaging/make-overlay.sh --remove`.
+To take the overlay back out: `sudo bash make-overlay.sh --remove` (or, without the file,
+`curl -fsSL <the URL above> | sudo bash -s -- --remove`).
 
 ### From the working directory — for working on the code
 
