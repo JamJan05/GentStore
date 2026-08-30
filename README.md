@@ -96,31 +96,48 @@ cd GentStore
 sudo packaging/make-overlay.sh          # or: sudo make overlay
 ```
 
-The script creates an overlay in `/var/db/repos/gentstore`, registers it in `repos.conf` and
-accepts the ebuild (it is **live**, with no keywords). Fetched on its own it first downloads the
-two files it cannot generate — the ebuild and its `metadata.xml` — into a temporary directory,
-and checks that what came back really is an ebuild before letting it near `/var/db/repos`. It
-prints every file it writes and overwrites nobody else's. You run `emerge` yourself — the script
-only prints the command.
+The script registers `/var/db/repos/gentstore` as a **synced** overlay: Portage clones the
+`overlay` branch, so later ebuilds arrive with an ordinary `emerge --sync` and you never come
+back here. It prints every file it writes and overwrites nobody else's. You run `emerge`
+yourself — the script only prints the command.
 
-`GENTSTORE_REF=<branch-or-tag>` installs from somewhere other than `main`.
+### Choosing a version, and keeping it current
 
-After that `gentstore` behaves like any other program: it is in `@world`, it updates with
-`emerge --update app-portage/gentstore`, and it goes away with
-`emerge --deselect --unmerge app-portage/gentstore`. The ebuild builds from GitHub, not from
-your working directory — the details, and the way to build from a local copy, are in
-[`packaging/`](packaging/README.md).
-
-The ebuild clones with `git-r3`, as the `portage` user and without your credentials — so if
-the repository is **private**, the `unpack` phase will fail with `could not read Username`.
-Either make the repository public, or build from a local clone:
+The overlay carries two ebuilds, and the accept-keywords file the script writes lets you take
+either:
 
 ```bash
-sudo packaging/make-overlay.sh --local
+emerge --ask app-portage/gentstore          # the release — 1.0.0
+emerge --ask =app-portage/gentstore-9999    # the git tip instead
 ```
 
-The script checks by itself whether the address is readable without credentials, and warns you
-in advance. Either way what gets built is the **last commit**, not the working tree.
+A **release** install updates like any other package, once the overlay has synced:
+
+```bash
+emerge --ask --sync                         # or the Sync step inside Gentstore
+emerge --ask --update @world
+```
+
+A **live** (`9999`) install has a version number that never changes, so `--update` has nothing
+to notice. Rebuilding it from the newest commit is a set of its own — this is Portage's, not
+ours, and it covers every live package you have:
+
+```bash
+emerge --ask @live-rebuild
+```
+
+That rebuilds unconditionally. `app-portage/smart-live-rebuild` checks upstream first and
+rebuilds only what actually moved, which is worth having if you run more than one live package.
+
+Other options: `--no-sync` pins a copy of the ebuild that never changes under you,
+`GENTSTORE_REF=<branch-or-tag>` fetches the script's own sources from elsewhere, and
+`--local` builds from a working tree.
+
+Either way `gentstore` is an ordinary package from here on: it is in `@world`, it shows up in
+`qlist`, and it goes away with `emerge --deselect --unmerge app-portage/gentstore`. Both ebuilds
+build from GitHub rather than from your working directory; `--local` points the live one at a
+clone instead, which is the thing to use when you are testing a change before pushing it. The
+details are in [`packaging/`](packaging/README.md).
 
 To take the overlay back out: `sudo bash make-overlay.sh --remove` (or, without the file,
 `curl -fsSL <the URL above> | sudo bash -s -- --remove`).

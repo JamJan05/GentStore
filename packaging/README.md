@@ -42,11 +42,49 @@ The piped form — `curl … | sudo bash` — works and is documented, but the t
 is the one to prefer. Everything else in this project refuses to let something reach root
 unread; the installer should not be the exception.
 
+### Synced or pinned
+
+By default the overlay is **synced**: `repos.conf` gets `sync-type = git` pointing at the
+`overlay` branch, and the first `emaint sync -r gentstore` clones it. Every later ebuild then
+arrives with an ordinary `emerge --sync`, and nobody has to come back to this script.
+
+That branch is generated, never hand-edited — `packaging/publish-overlay.sh` rebuilds it from
+`packaging/app-portage/` and force-pushes. Portage syncing a git repository treats its root as
+the repository root, and the root of this one is the application, so the ebuild tree needs a
+branch of its own. Generating it is what stops the two copies drifting; an overlay serving an
+ebuild that no longer matches the source is a bug nobody notices until a build fails.
+
+`--no-sync` is the older behaviour: the ebuild is copied in once and `auto-sync = no` tells
+Portage to leave it alone. The right choice if you want a package that cannot change under you
+until you say so.
+
+### Which version, and how it updates
+
+The accept-keywords file carries two lines — `=app-portage/gentstore-9999 **` for the live
+ebuild, which has no keywords at all, and `app-portage/gentstore ~amd64` for the releases, which
+a stable system would otherwise refuse. Either works:
+
+```bash
+emerge --ask app-portage/gentstore          # the release
+emerge --ask =app-portage/gentstore-9999    # the git tip
+```
+
+A release updates through `--sync` and then `--update @world`, like anything else. A live
+install does not: `9999` never changes, so `--update` sees nothing to do. `git-r3` sets
+`PROPERTIES="live"`, which puts the package in Portage's own `@live-rebuild` set:
+
+```bash
+emerge --ask @live-rebuild
+```
+
+That rebuilds every live package unconditionally. `app-portage/smart-live-rebuild` asks upstream
+first and rebuilds only what actually moved.
+
 ### What it writes
 
-The script creates a local overlay in `/var/db/repos/gentstore`, puts the ebuild in it,
-registers the repository in `/etc/portage/repos.conf/gentstore.conf` and appends
-`=app-portage/gentstore-9999 **` to `/etc/portage/package.accept_keywords/gentstore`. It prints
+The script registers the repository in `/etc/portage/repos.conf/gentstore.conf` and writes
+`/etc/portage/package.accept_keywords/gentstore`; in `--no-sync` mode it also creates
+`/var/db/repos/gentstore` and puts the ebuild there itself. It prints
 every file it writes, does not quietly overwrite somebody else's `gentstore.conf` (it stops and
 says where to look), and a second run changes nothing. It leaves `emerge` to you — it does not
 run it itself.
@@ -104,11 +142,19 @@ emerge --ask --update app-portage/gentstore
 `git-r3` detects on its own that the branch has moved. The overlay has `auto-sync = no`, so
 `emaint sync -a` skips it — rightly, because there is nothing there to sync.
 
-### There is no Manifest, and none is needed
+### The Manifest
 
-There is no `SRC_URI` anywhere in the overlay, so there are no files to checksum.
-`thin-manifests = true` in `layout.conf` settles the matter: `ebuild ... manifest` is not needed
-for anything. Should a release ebuild with a tarball ever appear — then it will be.
+`thin-manifests = true` in `layout.conf` drops the checksums for ebuilds and auxiliary files,
+but **not** the `DIST` lines: a release ebuild carries `SRC_URI`, and Portage refuses a distfile
+it cannot verify. So `packaging/app-portage/gentstore/Manifest` holds one `DIST` entry per
+release tarball, and `publish-overlay.sh` refuses to publish an ebuild whose entry is missing
+rather than shipping an overlay that fails at fetch time.
+
+The entry is generated from the asset **as GitHub serves it** — downloaded back and compared
+byte for byte against what was uploaded — because the Manifest has to describe the file a user
+receives, not the one on the maintainer's disk.
+
+The live ebuild has no `SRC_URI` at all, so nothing about it appears there.
 
 ## What the ebuild installs besides the Python package
 

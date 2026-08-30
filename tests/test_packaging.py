@@ -160,10 +160,16 @@ def test_local_mode_repoints_the_ebuild_it_copies(script: str, ebuild: str) -> N
         "the pattern --local substitutes on does not match the ebuild"
 
 
-def test_the_overlay_needs_no_manifest(script: str, ebuild: str) -> None:
-    """Thin manifests plus no SRC_URI: nothing to checksum, nothing to sign."""
+def test_the_overlay_uses_thin_manifests(script: str, ebuild: str) -> None:
+    """Thin manifests drop the ebuild checksums — not the DIST lines.
+
+    The live ebuild has no ``SRC_URI`` and so needs no Manifest entry at all;
+    the release ebuilds do, which
+    :func:`test_every_release_ebuild_has_its_dist_entry` checks separately.
+    """
     assert "thin-manifests = true" in script
-    assert not re.search(r"^SRC_URI=", ebuild, re.M)
+    assert not re.search(r"^SRC_URI=", ebuild, re.M), \
+        "the live ebuild grew a SRC_URI; it is supposed to clone, not fetch"
 
 
 # -- installing without a clone ---------------------------------------------
@@ -242,3 +248,77 @@ def test_nothing_is_written_before_the_download_is_checked(script: str) -> None:
     assert re.search(r"grep -q '\^EGIT_REPO_URI=' \"\$\{EBUILD\}\"", body), (
         "what came back from the network is no longer checked for being an ebuild"
     )
+
+
+# -- the synced overlay ------------------------------------------------------
+
+PUBLISH = PACKAGING / "publish-overlay.sh"
+
+
+@pytest.fixture(scope="module")
+def publish() -> str:
+    return PUBLISH.read_text()
+
+
+def test_the_synced_overlay_and_the_publisher_agree_on_the_branch(
+    script: str, publish: str
+) -> None:
+    """One writes the branch, the other tells Portage to clone it.
+
+    Two independent strings for one branch name: the day they disagree, the
+    first sync clones something that is not there.
+    """
+    told = re.search(r'OVERLAY_BRANCH="([^"]+)"', script)
+    written = re.search(r'BRANCH="([^"]+)"', publish)
+    assert told and written, "the branch name is no longer a constant in both"
+    assert told.group(1) == written.group(1)
+
+
+def test_the_accept_file_covers_both_the_live_and_the_release_ebuild(
+    script: str,
+) -> None:
+    """A live ebuild needs ``**``; a keyworded release needs ``~arch``.
+
+    Writing only one of them leaves half the overlay uninstallable, and which
+    half depends on the user's ACCEPT_KEYWORDS rather than on anything visible.
+    """
+    body = script[script.index("install_synced()") : script.index("install_overlay()")]
+    assert "=${ATOM}-9999 **" in body, "the live ebuild is no longer accepted"
+    assert "${ATOM} ~amd64" in body, "the release ebuild is no longer accepted"
+
+
+def test_every_release_ebuild_has_its_dist_entry(ebuild: str) -> None:
+    """SRC_URI without a Manifest line is a fetch failure for everybody.
+
+    Thin manifests drop the ebuild checksums, never the DIST lines.
+    """
+    manifest_path = PACKAGING / "app-portage" / "gentstore" / "Manifest"
+    manifest = manifest_path.read_text() if manifest_path.exists() else ""
+    for path in sorted((PACKAGING / "app-portage" / "gentstore").glob("*.ebuild")):
+        text = path.read_text()
+        if not re.search(r"^SRC_URI=", text, re.M):
+            continue
+        version = path.stem.removeprefix("gentstore-")
+        assert f"gentstore-{version}.tar.gz" in manifest, (
+            f"{path.name} has SRC_URI but no DIST entry in the Manifest"
+        )
+
+
+def test_the_release_ebuild_does_not_inherit_git_r3(script: str) -> None:
+    """A tarball build must not also try to clone: git-r3 would win and the
+    version number would stop meaning anything."""
+    for path in (PACKAGING / "app-portage" / "gentstore").glob("*.ebuild"):
+        text = path.read_text()
+        has_src = bool(re.search(r"^SRC_URI=", text, re.M))
+        has_git = "git-r3" in text
+        assert not (has_src and has_git), f"{path.name} has both SRC_URI and git-r3"
+        assert has_src or has_git, f"{path.name} fetches from nowhere"
+
+
+def test_the_live_ebuild_lands_in_portages_live_rebuild_set(ebuild: str) -> None:
+    """``@live-rebuild`` selects on PROPERTIES=live, which git-r3 appends.
+
+    Dropping the inherit to hand-roll the checkout would silently take the
+    package out of the one set that rebuilds it.
+    """
+    assert "git-r3" in ebuild, "the live ebuild no longer inherits git-r3"

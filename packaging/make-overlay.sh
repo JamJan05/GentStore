@@ -1,14 +1,20 @@
 #!/usr/bin/env bash
-# Put Gentstore into a local overlay so Portage can install and remove it.
+# Put Gentstore into an overlay so Portage can install, update and remove it.
 #
-#     sudo packaging/make-overlay.sh            build from EGIT_REPO_URI
+#     sudo packaging/make-overlay.sh             a synced overlay (the default)
+#     sudo packaging/make-overlay.sh --no-sync   a pinned copy, never updated
 #     sudo packaging/make-overlay.sh --local     build from this working tree
 #
-# It also runs without a clone at all, which is the point of the one-liner in
-# the README: fetched on its own it downloads the two files it cannot generate
-# (the ebuild and its metadata.xml) straight from the repository and carries on.
-# Nothing else changes — the ebuild is a live one, so git-r3 does the cloning
-# either way, and the overlay ends up identical.
+# By default Portage clones the `overlay` branch of the repository, so the
+# overlay is a synced one: later ebuilds arrive with an ordinary "emerge --sync"
+# and no second visit here. This needs no clone of your own, which is what the
+# README's one-liner relies on — the configuration is all this writes, and the
+# ebuilds come down with the first sync.
+#
+# --no-sync is the older behaviour: the ebuild is copied in once and Portage is
+# told to leave the overlay alone. Choose it if you want a package that cannot
+# change under you until you say so. Without a clone to copy from, it downloads
+# the two files it cannot generate and checks they look like an ebuild first.
 #
 # --local exists for two situations: an upstream root cannot reach (a private
 # repository, no credentials for the portage user) and testing a change before
@@ -35,6 +41,8 @@ ATOM="app-portage/gentstore"
 #: Where to fetch the ebuild from when there is no clone to read it out of.
 #: GENTSTORE_REF picks a branch or tag; the default is whatever main holds.
 GENTSTORE_REF="${GENTSTORE_REF:-main}"
+GITHUB_REPO="https://github.com/JamJan05/GentStore.git"
+OVERLAY_BRANCH="overlay"
 RAW_BASE="https://raw.githubusercontent.com/JamJan05/GentStore/${GENTSTORE_REF}"
 SELF_URL="${RAW_BASE}/packaging/make-overlay.sh"
 
@@ -161,6 +169,79 @@ remove() {
 	printf '\nGone. If Gentstore is still installed, remove it with:\n    emerge --deselect --unmerge %s\n' "${ATOM}"
 }
 
+# The synced overlay: Portage clones the `overlay` branch and every later
+# ebuild arrives with an ordinary `emerge --sync`. Nothing is copied here, so
+# this path needs neither a clone nor the two files fetch_sources downloads.
+install_synced() {
+	need_root
+
+	if [[ -d ${REPO_PATH} && ! -d ${REPO_PATH}/.git ]]; then
+		echo "  ${REPO_PATH} exists and is not a git checkout — an older" >&2
+		echo "  copy-mode install. Remove it first:" >&2
+		echo "      $(rerun_as --remove)" >&2
+		exit 1
+	fi
+
+	step "1/3  Telling Portage where to sync from — ${CONF}"
+	install -d -m 0755 /etc/portage/repos.conf
+	if [[ -e ${CONF} ]] && ! grep -q "location = ${REPO_PATH}" "${CONF}"; then
+		echo "  ${CONF} already exists and points somewhere else. Leaving it alone." >&2
+		echo "  Check it by hand, then re-run." >&2
+		exit 1
+	fi
+	cat > "${CONF}" <<-EOF
+		[${REPO_NAME}]
+		location = ${REPO_PATH}
+		sync-type = git
+		sync-uri = ${GITHUB_REPO}
+		# The ebuilds live on their own branch, because the root of this
+		# repository is the application, not an overlay.
+		sync-git-clone-extra-opts = --branch ${OVERLAY_BRANCH} --single-branch
+		auto-sync = yes
+		masters = gentoo
+	EOF
+	say "wrote ${CONF}"
+	say "syncs from ${GITHUB_REPO} (branch ${OVERLAY_BRANCH})"
+
+	step "2/3  Accepting the ebuilds — ${ACCEPT}"
+	install -d -m 0755 "${ACCEPT_DIR}"
+	cat > "${ACCEPT}" <<-EOF
+		# 9999 is the live ebuild and carries no keywords at all, so it needs the
+		# "**" that accepts anything. The release ebuilds are keyworded ~amd64,
+		# which a stable system would otherwise refuse; the second line is what
+		# lets you choose either.
+		=${ATOM}-9999 **
+		${ATOM} ~amd64
+	EOF
+	say "accepted =${ATOM}-9999 ** and ${ATOM} ~amd64"
+
+	step "3/3  First sync"
+	say "running: emaint sync -r ${REPO_NAME}"
+	if emaint sync -r "${REPO_NAME}"; then
+		say "synced"
+	else
+		echo "  The sync failed. The configuration above is written and correct;" >&2
+		echo "  re-run 'emaint sync -r ${REPO_NAME}' once the network is back." >&2
+		exit 1
+	fi
+
+	cat <<-EOF
+
+	Done. The overlay is registered, synced and accepted.
+
+	Install the release:
+	    emerge --ask ${ATOM}
+
+	Or track the git tip instead:
+	    emerge --ask =${ATOM}-9999
+
+	The overlay is a synced repository now, so "emerge --sync" (or the Sync
+	step in Gentstore itself) brings in later ebuilds on its own. A live
+	install is rebuilt from the newest commit by:
+	    emerge --ask @live-rebuild
+	EOF
+}
+
 install_overlay() {
 	need_root
 	${FETCHED} && fetch_sources
@@ -255,7 +336,7 @@ install_overlay() {
 
 usage() {
 	if [[ -f ${SELF} ]]; then
-		sed -n '2,26p' "${SELF}" | sed 's/^# \?//'
+		sed -n '2,31p' "${SELF}" | sed 's/^# \?//'
 	else
 		cat <<-EOF
 		Put Gentstore into a local overlay so Portage can install and remove it.
@@ -283,6 +364,10 @@ case "${1:-}" in
 			exit 1
 		fi
 		LOCAL=true; install_overlay ;;
-	"")          install_overlay ;;
+	# A pinned overlay that never changes under you: the ebuild is copied in
+	# once and Portage is told not to sync it. What the installer did before
+	# syncing existed, kept for anyone who wants exactly that.
+	--no-sync|-n) install_overlay ;;
+	"")          install_synced ;;
 	*)           echo "Unknown option: $1 (try --help)" >&2; exit 1 ;;
 esac
