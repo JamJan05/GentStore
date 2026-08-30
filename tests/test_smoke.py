@@ -118,3 +118,30 @@ def test_a_worker_reports_progress_back_to_the_gui_thread(app: GentstoreApplicat
 
     assert done == ["finished"]
     assert seen == [(1, 3), (2, 3), (3, 3)]
+
+
+def test_the_masks_screen_says_it_is_still_working(window: MainWindow) -> None:
+    """The conditional-licence section reads every LICENSE in every repository.
+
+    That is seconds, so it runs on a worker and the section has to say so
+    rather than sitting there looking empty — an empty section here means
+    "nothing to worry about", which is the opposite of "not looked yet".
+    """
+    from PyQt6.QtWidgets import QLabel
+
+    from gentstore.ui.pages.masks import MasksPage
+
+    window.set_page("mask")
+    page = window.stack.currentWidget()
+    assert isinstance(page, MasksPage)
+
+    page._conditional = None
+    page._rebuild_conditional()
+    texts = [label.text() for label in page._conditional_entries.findChildren(QLabel)]
+    assert texts and "…" in texts[0]
+
+    # An answer of "none" is a different sentence, and not the waiting one.
+    page._conditional = ()
+    page._rebuild_conditional()
+    settled = [label.text() for label in page._conditional_entries.findChildren(QLabel)]
+    assert settled and settled != texts

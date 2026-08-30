@@ -583,3 +583,23 @@ def test_a_flat_licence_has_no_conditions_to_report() -> None:
     env_ = _ConditionEnv("")
     env_.EXPRESSION = "MIT"
     assert licenses.conditions_for("x/y-1", "gentoo", env_) is None
+
+
+def test_every_reported_licence_really_is_hidden_behind_its_flag(portage_env) -> None:
+    """Checked against the real tree: the scan must not cry wolf.
+
+    Every licence named under a flag has to be one that is *not* owed as things
+    stand — otherwise the section is telling people that turning a flag on will
+    cost them something they have already agreed to, or already refused.
+    """
+    entries = licenses.conditional_licences(portage_env)
+    if not entries:  # pragma: no cover - a system accepting everything
+        pytest.skip("nothing in this tree hides a licence behind a flag")
+
+    for entry in entries[:20]:
+        owed_now = set(licenses.missing_for(entry.cpv, entry.repo, portage_env))
+        assert set(entry.missing_now) == owed_now
+        for condition in entry.conditions:
+            assert condition.licences, "a condition with nothing to add is not one"
+            assert not set(condition.licences) & owed_now
+            assert "?" not in " ".join(condition.licences)
