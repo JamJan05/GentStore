@@ -18,6 +18,7 @@ from __future__ import annotations
 import logging
 import os
 import threading
+from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:  # pragma: no cover - typing only, never imported at runtime
@@ -42,7 +43,16 @@ class PortageEnv:
     new instance via :func:`reload`.
     """
 
-    __slots__ = ("_bindb", "_portdb", "_root", "_settings", "_trees", "_vardb")
+    __slots__ = (
+        "_bindb",
+        "_clone",
+        "_clone_lock",
+        "_portdb",
+        "_root",
+        "_settings",
+        "_trees",
+        "_vardb",
+    )
 
     def __init__(self, trees: dict[str, Any], root: str) -> None:
         self._trees = trees
@@ -52,6 +62,8 @@ class PortageEnv:
         self._portdb = node["porttree"].dbapi
         self._vardb = node["vartree"].dbapi
         self._bindb = node["bintree"].dbapi
+        self._clone: Any = None
+        self._clone_lock = threading.RLock()
 
     # -- handles -----------------------------------------------------------
 
@@ -74,6 +86,48 @@ class PortageEnv:
     def bindb(self) -> Any:
         """Binary packages (``bindbapi``): ``$PKGDIR`` plus configured binhosts."""
         return self._bindb
+
+    # -- the per-package view ----------------------------------------------
+
+    @contextmanager
+    def configured(self, cpv: str) -> Iterator[Any]:
+        """The configuration as it looks *for one package*, borrowed under a lock.
+
+        Several of Portage's own entry points call ``config.setcpv()`` on
+        whatever settings object they are handed — ``getmaskingstatus()`` does
+        it for any package whose ``LICENSE`` carries a USE conditional, because
+        until USE is resolved there is no telling which licences even apply.
+        :attr:`settings` is locked exactly so that nothing rewrites the
+        system-wide view underneath its readers, so passing it to those entry
+        points raises ``Configuration is locked.``. A clone is what they want.
+
+        Yielded rather than returned, and deliberately so. ``setcpv()`` leaves
+        the last package's ``PORTAGE_USE`` and ``configdict["pkg"]`` behind in
+        the object it was called on, which makes the clone a description of one
+        package rather than of the system; code that mistook it for
+        :attr:`settings` would read one package's answers for another's. Inside
+        the ``with`` block it is also the caller's alone, so hold it for the
+        read and no longer. Re-entrant, because these questions nest naturally
+        — one package's blocks are also a question about its licences — and a
+        plain lock would turn that into a deadlock rather than an answer.
+
+        *cpv* alone identifies the package: ``setcpv()`` reads its metadata
+        through ``dbapi.aux_get()``, which takes no repository hint, so a
+        package carried by two repositories is described by whichever of them
+        Portage ranks higher. Callers that need a specific repository pass it
+        to the query itself, not here.
+        """
+        import portage  # noqa: PLC0415 — slow import, deferred
+
+        with self._clone_lock:
+            if self._clone is None:
+                # Built on demand and kept: cloning is cheap next to reading the
+                # profile stack, but not free, and this runs per selected
+                # package. It never needs invalidating, because the only way to
+                # get a newer configuration is a new PortageEnv.
+                self._clone = portage.config(clone=self._settings)
+            self._clone.setcpv(cpv, mydb=self._portdb)
+            yield self._clone
 
     # -- frequently needed scalars ----------------------------------------
 
