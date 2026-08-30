@@ -58,6 +58,13 @@ _MISSING = re.compile(r"^missing keyword$")
 _UNSUPPORTED = re.compile(r"^(-\S+) keyword$")
 _LICENCE = re.compile(r"^(.+) license\(s\)$")
 _MASKS = frozenset({"package.mask", "profile"})
+#: ``getmaskingstatus`` keeps the shape of the ``LICENSE`` expression in its
+#: message — ``|| ( MIT GPL-2 ) license(s)`` says the two are alternatives, and
+#: a USE conditional whose flag is off leaves an empty ``( )`` behind. Useful to
+#: read, and the raw line keeps it, but these are not licences: left in, they
+#: become chips the user is invited to click and tokens written into
+#: package.license.
+_STRUCTURE = frozenset({"||", "(", ")"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -149,7 +156,8 @@ def _classify(raw: str) -> Block:
 
     match = _LICENCE.match(text)
     if match:
-        return Block(BlockKind.LICENCE, text, licences=tuple(match.group(1).split()))
+        names = tuple(t for t in match.group(1).split() if t not in _STRUCTURE)
+        return Block(BlockKind.LICENCE, text, licences=names)
 
     if text in _MASKS:
         return Block(BlockKind.PACKAGE_MASK, text)

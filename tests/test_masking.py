@@ -56,6 +56,22 @@ def test_licence_names_are_pulled_out_of_the_message() -> None:
     assert block.licences == ("BUSL-1.1", "Microsoft-vscode")
 
 
+def test_the_shape_of_a_licence_expression_is_not_mistaken_for_a_licence() -> None:
+    """``getmaskingstatus`` keeps ``||``, ``(`` and ``)`` in its message.
+
+    They tell the reader that two licences are alternatives, or that a USE
+    conditional evaluated to nothing — worth showing, never worth offering as a
+    chip to click or writing into ``package.license``.
+    """
+    alternatives = _classify("|| ( MIT GPL-2 ) license(s)")
+    assert alternatives.licences == ("MIT", "GPL-2")
+
+    # cuda? ( NVIDIA-CUDA ) with cuda off leaves the brackets behind, empty.
+    conditional = _classify("LM-Studio-EULA ( ) license(s)")
+    assert conditional.licences == ("LM-Studio-EULA",)
+    assert conditional.raw == "LM-Studio-EULA ( ) license(s)", "the shape still shows"
+
+
 def test_a_check_that_failed_does_not_read_as_a_package_that_is_fine() -> None:
     """The distinction the whole ``unknown`` kind exists for."""
     unchecked = Blockage(
