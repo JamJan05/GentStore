@@ -60,7 +60,7 @@ jobs:
 
     steps:
       - name: Check out the whole history
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           # publish-overlay.sh describes the branch it writes with `git describe
           # --tags`, and the release tarball is cut from a tag: a shallow clone
