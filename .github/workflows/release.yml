@@ -1,0 +1,301 @@
+# Cutting a release, minus the parts nobody should have to remember.
+#
+# Six things state a version number and four more are derived from it, and until
+# now all ten were separate manual steps. 1.1.0 is what that costs: the README
+# still announced 1.0.0, and the release notes said "No functional changes" over
+# twenty-one commits, because they were written from a session's diff rather than
+# from the record.
+#
+#   Actions -> Release -> Run workflow -> 1.2.0
+#
+# is now the whole procedure. Write CHANGELOG.md's [Unreleased] section as the
+# work happens — the workflow refuses to release an empty one — and it does the
+# rest: rewrites the four files that state the version, commits, tags, builds the
+# tarball, publishes the release with the changelog section as its notes, takes
+# the bytes back from GitHub to hash them, writes the ebuild and its Manifest
+# entry, and republishes the overlay branch Portage syncs from.
+#
+# A tag pushed by hand is picked up too, and then the tree at that tag has to
+# already state that version — `tools/release.py check` refuses otherwise rather
+# than publishing a tarball whose --version contradicts its own file name.
+#
+# Ordering is deliberate and load-bearing: the ebuild and the Manifest entry are
+# committed *after* the tag, so they are not inside their own tarball. An ebuild
+# with SRC_URI and no DIST line fails `emerge` for everybody, and the tarball
+# cannot contain the entry that describes it.
+
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, e.g. 1.2.0"
+        required: true
+      dry_run:
+        description: "Show what would happen and write nothing"
+        type: boolean
+        default: false
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+
+# Commits to main, a tag, a release, and a force-push of the overlay branch.
+permissions:
+  contents: write
+
+# Two releases at once would race over main and over the overlay branch. Never
+# cancel one in flight: a run killed between the tag and the Manifest leaves a
+# published release with no ebuild.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  ATOM_DIR: packaging/app-portage/gentstore
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out the whole history
+        uses: actions/checkout@v4
+        with:
+          # publish-overlay.sh describes the branch it writes with `git describe
+          # --tags`, and the release tarball is cut from a tag: a shallow clone
+          # has neither.
+          fetch-depth: 0
+          ref: ${{ github.event_name == 'workflow_dispatch' && 'main' || github.ref }}
+
+      - name: Identity for the commits this makes
+        run: |
+          git config user.name  "${{ vars.RELEASE_GIT_NAME  || 'JamJan05' }}"
+          git config user.email "${{ vars.RELEASE_GIT_EMAIL || 'janek2ko@gmail.com' }}"
+
+      - name: Work out which version this is
+        env:
+          # Through the environment rather than interpolated into the script:
+          # ${{ }} is substituted before bash ever sees the line, so a value
+          # with a quote in it would not be a bad version, it would be code.
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [[ ${GITHUB_EVENT_NAME} == workflow_dispatch ]]; then
+            version="${INPUT_VERSION}"
+          else
+            version="${GITHUB_REF_NAME}"
+          fi
+          version="${version#v}"
+          [[ ${version} =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+            echo "::error::'${version}' is not an X.Y.Z release number"; exit 1; }
+          {
+            echo "VERSION=${version}"
+            echo "TAG=v${version}"
+            echo "DRY=${{ github.event.inputs.dry_run || 'false' }}"
+          } >> "${GITHUB_ENV}"
+
+      - name: Rewrite the version, commit and tag
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          set -euo pipefail
+          # Refuses on an empty [Unreleased] section, on a version that does not
+          # come after the current one, and on a tag that already exists — all
+          # three before anything is written.
+          git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null && {
+            echo "::error::${TAG} already exists"; exit 1; }
+          python3 tools/release.py bump "${VERSION}"
+          git diff --stat
+          if [[ ${DRY} == true ]]; then
+            echo "::notice::dry run — nothing committed"
+          else
+            git commit -a -m "Release ${VERSION}"
+            git tag -a "${TAG}" -m "Gentstore ${VERSION}"
+            git push origin main "refs/tags/${TAG}"
+          fi
+
+      - name: The tag and the tree agree on the version
+        run: python3 tools/release.py check "${VERSION}"
+
+      - name: The changelog section that becomes the release notes
+        run: |
+          set -euo pipefail
+          python3 tools/release.py notes "${VERSION}" > notes.md
+          cat notes.md
+
+      - name: Build the tarball
+        run: |
+          set -euo pipefail
+          # The same recipe by hand, so the bytes are reproducible from the tag
+          # alone: git archive --format=tar.gz --prefix=gentstore-X/ vX
+          if [[ ${DRY} == true ]] && ! git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null; then
+            echo "::notice::dry run with no tag yet — archiving HEAD instead"
+            source="HEAD"
+          else
+            source="${TAG}"
+          fi
+          git archive --format=tar.gz --prefix="gentstore-${VERSION}/" \
+            "${source}" -o "gentstore-${VERSION}.tar.gz"
+          ls -l "gentstore-${VERSION}.tar.gz"
+
+      - name: Stop here on a dry run
+        if: env.DRY == 'true'
+        run: |
+          {
+            echo "### Dry run for ${VERSION}"
+            echo "Nothing was written. The notes would have been:"
+            echo
+            cat notes.md
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Publish the release
+        if: env.DRY != 'true'
+        run: |
+          set -euo pipefail
+          tarball="gentstore-${VERSION}.tar.gz"
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            # A re-run after a failure further down: the release is already
+            # there and only wants its notes and its asset refreshing.
+            gh release edit "${TAG}" --title "Gentstore ${VERSION}" --notes-file notes.md
+            gh release upload "${TAG}" "${tarball}" --clobber
+          else
+            gh release create "${TAG}" --verify-tag \
+              --title "Gentstore ${VERSION}" --notes-file notes.md "${tarball}"
+          fi
+
+      - name: Take the bytes back from GitHub before hashing them
+        if: env.DRY != 'true'
+        run: |
+          set -euo pipefail
+          # The Manifest has to describe the file a user receives, not the one
+          # this runner built. So it is hashed from the asset as GitHub serves
+          # it, fetched from the exact URL SRC_URI names, and refused if those
+          # two are not the same bytes.
+          url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}/gentstore-${VERSION}.tar.gz"
+          for attempt in 1 2 3 4 5; do
+            if curl -fsSL --retry 2 -o served.tar.gz "${url}"; then break; fi
+            echo "not downloadable yet (${attempt}/5)"; sleep 10
+          done
+          # Said here rather than leaving cmp to report a missing file: an asset
+          # that never became downloadable is a different problem from one whose
+          # bytes came back wrong, and only one of them is worth retrying.
+          [[ -s served.tar.gz ]] || { echo "::error::${url} never answered"; exit 1; }
+          cmp "gentstore-${VERSION}.tar.gz" served.tar.gz
+          echo "served bytes are identical to the uploaded ones"
+
+      - name: Move onto main, which the tag may already be behind
+        if: env.DRY != 'true'
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          git checkout -B main origin/main
+
+      - name: Write the ebuild and its Manifest entry
+        if: env.DRY != 'true'
+        run: |
+          set -euo pipefail
+          # Listed here and not after the cd: git ls-tree run from inside a
+          # subdirectory lists that subdirectory, relative to itself. Asking it
+          # there for CHANGELOG.md is a check that can only ever answer no.
+          git ls-tree -r --name-only "${TAG}" > tagged.txt
+          cd "${ATOM_DIR}"
+
+          # A release ebuild holds no version number of its own: SRC_URI is built
+          # from ${PV} and ${P}, which come from the file name. So the new one is
+          # a copy of the last release's, not a rewrite of anything.
+          # The last one that *fetches*, not the last one by name: 9999 sorts
+          # above every release there will ever be, so picking by version alone
+          # copies the live ebuild and produces a release that clones from git.
+          previous=""
+          for candidate in $(ls gentstore-*.ebuild | sort -V); do
+            grep -q '^SRC_URI=' "${candidate}" && previous="${candidate}"
+          done
+          [[ -n ${previous} ]] || { echo "::error::no release ebuild to copy"; exit 1; }
+          new="gentstore-${VERSION}.ebuild"
+          cp "${previous}" "${new}"
+          echo "${new} copied from ${previous}"
+
+          # The one line that is not simply inherited. 1.0.0 and 1.1.0 predate
+          # CHANGELOG.md, so their ebuilds cannot install a file their tarballs
+          # do not hold and dodoc dies on one that is not there; every tarball
+          # from here on carries it. Fires once — after that the copy has it.
+          if grep -qx 'CHANGELOG.md' "${GITHUB_WORKSPACE}/tagged.txt" \
+             && ! grep -q 'dodoc CHANGELOG.md' "${new}"; then
+            sed -i 's|^\tdodoc README.md$|&\n\tdodoc CHANGELOG.md|' "${new}"
+            echo "added dodoc CHANGELOG.md — it is in the ${TAG} tarball"
+          fi
+
+          # Thin manifests drop the ebuild checksums but never the DIST lines:
+          # Portage refuses a distfile it cannot verify.
+          tarball="${GITHUB_WORKSPACE}/served.tar.gz"
+          entry="DIST gentstore-${VERSION}.tar.gz $(stat -c%s "${tarball}")"
+          entry="${entry} BLAKE2B $(b2sum "${tarball}" | cut -d' ' -f1)"
+          entry="${entry} SHA512 $(sha512sum "${tarball}" | cut -d' ' -f1)"
+          grep -v "^DIST gentstore-${VERSION}\.tar\.gz " Manifest > Manifest.new || true
+          echo "${entry}" >> Manifest.new
+          sort -V Manifest.new > Manifest
+          rm -f Manifest.new
+          cat Manifest
+
+      - name: Check what was generated
+        if: env.DRY != 'true'
+        run: |
+          set -euo pipefail
+          # The repository's own tests cannot run here — they import PyQt6 and
+          # read a real Portage tree — so the handful that this step could break
+          # are repeated by hand. tests/test_packaging.py is where they live in
+          # full, and it runs on the maintainer's machine and in the ebuild.
+          new="${ATOM_DIR}/gentstore-${VERSION}.ebuild"
+          bash -n "${new}"
+          grep -q '^SRC_URI=' "${new}" || { echo "::error::no SRC_URI"; exit 1; }
+          ! grep -q 'git-r3' "${new}" || {
+            echo "::error::a release ebuild must not also clone"; exit 1; }
+          grep -q "gentstore-${VERSION}\.tar\.gz" "${ATOM_DIR}/Manifest" || {
+            echo "::error::no DIST entry"; exit 1; }
+
+          # dodoc on a path the tarball does not hold is a die, not a warning,
+          # and the tarball is the tag rather than whatever main has grown since.
+          # The last field, so that "dodoc -r Docs" names Docs and not -r. Read
+          # into an array first: an exit inside a pipeline's while loop leaves
+          # the subshell, not the step.
+          mapfile -t docs < <(awk '/^[[:space:]]*dodoc([[:space:]]+-r)?[[:space:]]/ {print $NF}' "${new}")
+          [[ ${#docs[@]} -gt 0 ]] || { echo "::error::the ebuild documents nothing"; exit 1; }
+          for doc in "${docs[@]}"; do
+            grep -qx "${doc}" tagged.txt || grep -q "^${doc}/" tagged.txt || {
+              echo "::error::the ebuild installs ${doc}, which is not in the ${TAG} tarball"
+              exit 1; }
+            echo "  ${doc} is in the tarball"
+          done
+
+      - name: Commit the ebuild and the Manifest to main
+        if: env.DRY != 'true'
+        run: |
+          set -euo pipefail
+          git add "${ATOM_DIR}"
+          if git diff --cached --quiet; then
+            echo "::notice::nothing to commit — a re-run over an existing release"
+          else
+            git commit -m "packaging: the ${VERSION} ebuild and its Manifest entry"
+            git push origin main
+          fi
+
+      - name: Republish the overlay branch
+        if: env.DRY != 'true'
+        env:
+          # The script pushes from a generated tree, which has none of this
+          # checkout's credentials, so it is handed a remote that carries them.
+          GENTSTORE_OVERLAY_REMOTE: https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git
+        run: packaging/publish-overlay.sh --push
+
+      - name: Say what happened
+        if: env.DRY != 'true'
+        run: |
+          {
+            echo "### Gentstore ${VERSION}"
+            echo
+            echo "- release: ${{ github.server_url }}/${GITHUB_REPOSITORY}/releases/tag/${TAG}"
+            echo "- ebuild: \`${ATOM_DIR}/gentstore-${VERSION}.ebuild\`, committed to main"
+            echo "- overlay branch republished — \`emerge --sync\` reaches it"
+            echo
+            echo "On a machine with the overlay: \`sudo emaint sync -r gentstore && sudo emerge --ask --update app-portage/gentstore\`"
+          } >> "${GITHUB_STEP_SUMMARY}"

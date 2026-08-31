@@ -158,3 +158,34 @@ README says so; nothing in the code has to.
 from Portage's family for no gain); buying Riverbank's commercial licence (costs money and would
 make the project non-free); swapping PyQt6 for PySide6, which is LGPL (a rewrite of every import,
 signal and `tr()` call, to fix a problem one clause fixes).
+
+---
+
+### D-12 · The release workflow owns the version number
+
+**Decision:** a release is `Actions -> Release -> Run workflow -> 1.2.0`. `tools/release.py`
+rewrites the four files that state a version — `pyproject.toml`, `gentstore/__init__.py`, the
+README's version line and `CHANGELOG.md` — in one operation, and
+`.github/workflows/release.yml` does everything downstream from the tag: the tarball, the
+GitHub release with the changelog section as its notes, the ebuild, its `Manifest` entry, and
+the republished `overlay` branch. A tag pushed by hand is picked up too, and then the tree at
+that tag has to already state that version or the run refuses.
+
+**Reason:** 1.1.0 is what the manual procedure costs. Ten steps, and two of them went wrong in
+ways nothing was watching for: the README still announced 1.0.0 after the release went out, and
+the release notes claimed “No functional changes” across twenty-one commits, because they were
+written from a session's diff rather than from the record. Both are invisible from inside the
+release — you have to go and look at the published page to find them. Neither is possible now:
+the numbers are one edit, and the notes are read out of `CHANGELOG.md`, which the workflow
+refuses to release empty.
+
+**Consequence:** `CHANGELOG.md`'s `[Unreleased]` section becomes the thing to keep current as the
+work happens, because it *is* the release notes. The version number stops being editable by hand
+without a test noticing — `tests/test_release.py` fails the moment the four files disagree.
+
+**Alternatives:** a `make release` target (same script, but it still runs on one machine with one
+person's credentials, and nothing checks it ran); tagging by hand and letting the workflow react
+(kept, as the second trigger, but it cannot rewrite the version because the tag is already cut);
+generating the release ebuild from the live one (the two differ by four comment blocks, and a
+transformation that pattern-matches prose breaks the first time somebody rewords one — copying
+the previous release ebuild is exact, because a release ebuild carries no version of its own).

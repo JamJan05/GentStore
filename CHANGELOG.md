@@ -11,9 +11,17 @@ tag was made.
 
 ### Added
 
+- **A release is a button.** `Actions -> Release -> Run workflow -> 1.2.0` rewrites the four
+  files that state a version, commits, tags, builds the tarball, publishes the release with this
+  file's section as its notes, writes the ebuild and its `Manifest` entry, and republishes the
+  overlay branch. `tools/release.py` is the part that owns the numbers and can be run by hand;
+  `tests/test_release.py` fails the moment the four disagree. 1.1.0 went out with the README
+  still announcing 1.0.0 and notes claiming "No functional changes" over twenty-one commits —
+  both are what this removes. See D-12.
 - The live ebuild installs `CHANGELOG.md` alongside the README, so `/usr/share/doc/${PF}/` says
-  what changed. The release ebuilds cannot: the file postdates both their tarballs, and `dodoc`
-  dies on a file that is not there. From 1.2.0 their ebuilds can take the line too.
+  what changed. The 1.0.0 and 1.1.0 ebuilds cannot: the file postdates both their tarballs, and
+  `dodoc` dies on a file that is not there. Every release from here on carries it, and the
+  workflow adds the line to the ebuild it generates.
 - `tests/test_packaging.py` checks `dodoc` targets too, against the tree each ebuild actually
   builds from: the live one against this checkout, a release one against its own tag. The
   existing check stopped at `newexe`/`doins`/`domenu`/`doicon`, so a `dodoc` line naming a file

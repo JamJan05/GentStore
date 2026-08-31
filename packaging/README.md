@@ -177,6 +177,35 @@ receives, not the one on the maintainer's disk.
 
 The live ebuild has no `SRC_URI` at all, so nothing about it appears there.
 
+## Cutting a release
+
+**Actions -> Release -> Run workflow -> `1.2.0`.** That is the whole procedure. Write
+`CHANGELOG.md`'s `[Unreleased]` section as the work happens — the workflow refuses to release an
+empty one — and `.github/workflows/release.yml` does the rest:
+
+| | |
+|---|---|
+| `tools/release.py bump` | rewrites `pyproject.toml`, `gentstore/__init__.py`, the README's version line and `CHANGELOG.md`, then commits and tags |
+| `git archive` | the tarball, from the tag, with the same recipe as by hand |
+| `gh release create` | the release, with the changelog section as its notes |
+| download, `cmp` | the asset as GitHub serves it, against the bytes just uploaded |
+| `b2sum`, `sha512sum` | the `DIST` line, from the downloaded copy |
+| copy the last release ebuild | a release ebuild holds no version of its own — `SRC_URI` is built from `${PV}` — so there is nothing in it to substitute |
+| `publish-overlay.sh --push` | the `overlay` branch, so `emerge --sync` reaches the new ebuild |
+
+Tick **dry run** to see the rewritten files, the notes and the tarball without publishing
+anything.
+
+The ebuild and its `Manifest` entry are committed *after* the tag, deliberately: a release ebuild
+carries `SRC_URI`, the `DIST` line that describes its tarball cannot exist until the tarball
+does, and an ebuild with the first and not the second fails `emerge` for everybody. So the
+tarball must not contain its own ebuild.
+
+A tag pushed by hand runs the same workflow, minus the rewrite — the tree at that tag has to
+already state that version, and `tools/release.py check` refuses if it does not. That check is
+also a test (`tests/test_release.py`), so a version that only got written in three of the four
+places fails long before a release.
+
 ## What the ebuild installs besides the Python package
 
 | Path | What it is |

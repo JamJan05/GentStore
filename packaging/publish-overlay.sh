@@ -92,9 +92,16 @@ git -C "${WORK}" -c user.name="$(git -C "${ROOT}" config user.name)" \
 	commit -q -m "overlay: $(git -C "${ROOT}" describe --tags --always)
 
 Generated from packaging/ by publish-overlay.sh. Do not edit by hand."
-origin="$(git -C "${ROOT}" remote get-url origin)"
+# The push happens from the generated tree, which is a fresh repository with
+# none of this checkout's credentials. Locally that does not matter — origin is
+# an ssh URL and the agent answers for it — but a CI checkout keeps its token in
+# .git/config, where a repository somewhere under /tmp cannot reach it. So the
+# workflow hands the remote over instead, credentials and all.
+origin="${GENTSTORE_OVERLAY_REMOTE:-$(git -C "${ROOT}" remote get-url origin)}"
 git -C "${WORK}" push -q --force "${origin}" "${BRANCH}:${BRANCH}"
-say "pushed ${BRANCH} to ${origin}"
+# Printed without whatever sits before the @: that is a password or a token.
+shown="$(printf '%s' "${origin}" | sed 's|//[^@]*@|//|')"
+say "pushed ${BRANCH} to ${shown}"
 rm -rf -- "${TMPGIT}"
 
 cat <<-EOF
