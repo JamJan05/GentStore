@@ -9,15 +9,19 @@ tag was made.
 
 ## [Unreleased]
 
+Nothing in the application changed — hence a patch number. What changed is how a release is made,
+which until now was ten steps carried in somebody's head, and 1.1.0 is the release that shows
+what that costs: it went out with the README still announcing 1.0.0 and notes claiming "No
+functional changes" across twenty-one commits.
+
 ### Added
 
-- **A release is a button.** `Actions -> Release -> Run workflow -> 1.2.0` rewrites the four
+- **A release is a button.** `Actions -> Release -> Run workflow -> the version` rewrites the four
   files that state a version, commits, tags, builds the tarball, publishes the release with this
   file's section as its notes, writes the ebuild and its `Manifest` entry, and republishes the
   overlay branch. `tools/release.py` is the part that owns the numbers and can be run by hand;
-  `tests/test_release.py` fails the moment the four disagree. 1.1.0 went out with the README
-  still announcing 1.0.0 and notes claiming "No functional changes" over twenty-one commits —
-  both are what this removes. See D-12.
+  `tests/test_release.py` fails the moment the four disagree. A tag pushed by hand runs the same
+  thing minus the rewrite, and refuses a tag whose tree still states the old version. See D-12.
 - **The overlay branch republishes itself.** Any push to `main` touching
   `packaging/app-portage/` regenerates it, rather than waiting for somebody to remember
   `publish-overlay.sh`. A release already republished at the end; what that missed was the live
