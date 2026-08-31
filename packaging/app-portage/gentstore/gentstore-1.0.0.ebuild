@@ -15,7 +15,7 @@ HOMEPAGE="https://github.com/JamJan05/GentStore"
 # into a fetch failure for everybody at once.
 SRC_URI="https://github.com/JamJan05/GentStore/releases/download/v${PV}/${P}.tar.gz"
 
-LICENSE="GPL-2"
+LICENSE="GPL-2+"
 SLOT="0"
 # Developed and exercised on one amd64 machine, so that is the only thing
 # this claims. Other arches want a report before a keyword.

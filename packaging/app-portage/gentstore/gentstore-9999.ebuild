@@ -11,7 +11,7 @@ DESCRIPTION="A graphical front-end for Portage"
 HOMEPAGE="https://github.com/JamJan05/GentStore"
 EGIT_REPO_URI="https://github.com/JamJan05/GentStore.git"
 
-LICENSE="GPL-2"
+LICENSE="GPL-2+"
 SLOT="0"
 # A live ebuild: there is no release to point a tarball at yet, so this stays
 # unkeyworded and needs "=app-portage/gentstore-9999 **" to be accepted.

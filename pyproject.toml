@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "gentstore"
-version = "1.0.0"
+version = "1.1.0"
 description = "Graphical front-end for Portage on Gentoo Linux"
 readme = "README.md"
 requires-python = ">=3.12"
