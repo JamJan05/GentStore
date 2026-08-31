@@ -6,7 +6,7 @@ system update cycle.
 
 Written in Python 3 with PyQt6. Bilingual: **Polish and English**.
 
-> **Version 1.1.0.** All nine screens work, and both halves have been exercised on a live
+> **Version 1.1.1.** All nine screens work, and both halves have been exercised on a live
 > system: the read-only side — search, USE flags, masks, repositories, the update preview,
 > configuration files, `make.conf`, elog and `@world` — and the privileged one, which has
 > written real `package.use`, `package.license` and `package.accept_keywords` entries through

@@ -9,6 +9,8 @@ tag was made.
 
 ## [Unreleased]
 
+## [1.1.1] — 2026-08-31
+
 Nothing in the application changed — hence a patch number. What changed is how a release is made,
 which until now was ten steps carried in somebody's head, and 1.1.0 is the release that shows
 what that costs: it went out with the README still announcing 1.0.0 and notes claiming "No
@@ -137,7 +139,8 @@ comes from the `portage` API rather than from parsing ebuilds. Everything privil
 Bilingual (Polish and English) through Qt's own translation system; the documentation and the
 source strings are English.
 
-[Unreleased]: https://github.com/JamJan05/GentStore/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/JamJan05/GentStore/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/JamJan05/GentStore/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/JamJan05/GentStore/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/JamJan05/GentStore/compare/77bafbc...v1.0.0
 [0.1.0]: https://github.com/JamJan05/GentStore/commit/77bafbc
