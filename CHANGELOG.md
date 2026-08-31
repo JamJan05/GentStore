@@ -9,6 +9,16 @@ tag was made.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The 1.1.1 tarball failed its own test suite**, and so failed to build under `USE=test`. Two
+  tests in `tests/test_release.py` read the tree's real `[Unreleased]` section and needed
+  something in it — but releasing is precisely what empties that section, so they were red in
+  exactly the state every release tarball is cut in, which is also where the ebuild runs the
+  suite. The fixture now writes the section it needs instead of borrowing whatever the tree
+  happens to hold, so where in the release cycle a checkout sits no longer decides whether the
+  tests pass.
+
 ## [1.1.1] — 2026-08-31
 
 Nothing in the application changed — hence a patch number. What changed is how a release is made,

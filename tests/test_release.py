@@ -59,12 +59,33 @@ def workflow() -> str:
     return WORKFLOW.read_text()
 
 
+#: Written into the copy rather than read out of the tree. Releasing empties
+#: [Unreleased] — that is what releasing *is* — so a test that borrowed the real
+#: section would be red in precisely the state every release tarball is cut in,
+#: which is also where the ebuild runs this suite. 1.1.1 shipped exactly that: a
+#: tarball that failed its own tests, and so failed to build under USE=test.
+UNRELEASED_BODY = """### Added
+
+- Something worth releasing, so that the bump has notes to move.
+"""
+
+
+def with_unreleased_work(changelog: Path, body: str = UNRELEASED_BODY) -> None:
+    """Put *body* in the [Unreleased] section, whatever was there before."""
+    text = changelog.read_text()
+    start = text.index("## [Unreleased]")
+    end = text.index("## [", start + len("## [Unreleased]"))
+    changelog.write_text(f"{text[:start]}## [Unreleased]\n\n{body}\n{text[end:]}")
+
+
 @pytest.fixture
 def tree(tmp_path: Path) -> Path:
     """A copy of just the files a bump touches, plus the script that touches them.
 
-    Enough for the rewrite to run for real rather than against a mock, and
-    cheap enough that a failing case can be built by editing one file.
+    Enough for the rewrite to run for real rather than against a mock, and cheap
+    enough that a failing case can be built by editing one file. The [Unreleased]
+    section is set here rather than inherited, so that where the real tree
+    happens to sit in the release cycle cannot decide whether these tests pass.
     """
     for name in STATED_IN:
         target = tmp_path / name
@@ -72,6 +93,7 @@ def tree(tmp_path: Path) -> Path:
         shutil.copy(ROOT / name, target)
     (tmp_path / "tools").mkdir()
     shutil.copy(SCRIPT, tmp_path / "tools" / "release.py")
+    with_unreleased_work(tmp_path / "CHANGELOG.md")
     return tmp_path
 
 
@@ -88,8 +110,11 @@ def test_every_file_states_the_same_version() -> None:
 
 
 def test_the_changelog_has_somewhere_to_write_the_next_release() -> None:
-    """``bump`` moves [Unreleased] into a dated section; without it there is
-    nothing to move, and the notes would have to be reconstructed afterwards."""
+    """``bump`` moves [Unreleased] into a dated section; without the heading
+    there is nothing to move, and the notes would have to be reconstructed
+    afterwards. Whether anything is *under* it is deliberately not checked: the
+    section is empty for as long as a release is the newest thing that happened,
+    and that is the state a release tarball is cut in."""
     assert "## [Unreleased]" in (ROOT / "CHANGELOG.md").read_text()
 
 
@@ -120,18 +145,14 @@ def test_the_new_section_takes_the_unreleased_notes_unaltered(tree: Path) -> Non
     "No functional changes" across twenty-one commits.
     """
     before = release("notes", "Unreleased", cwd=tree).stdout
-    assert before.strip(), "this test needs an [Unreleased] section with something in it"
+    assert before.strip() == UNRELEASED_BODY.strip(), "the fixture no longer sets the section"
     release("bump", "9.9.9", "--date", "2026-01-01", cwd=tree)
     assert release("notes", "9.9.9", cwd=tree).stdout == before
 
 
 def test_a_release_with_no_notes_is_refused(tree: Path) -> None:
     """An empty [Unreleased] section means nobody wrote down what changed."""
-    changelog = tree / "CHANGELOG.md"
-    text = changelog.read_text()
-    start = text.index("## [Unreleased]")
-    end = text.index("## [", start + 5)
-    changelog.write_text(text[:start] + "## [Unreleased]\n\n" + text[end:])
+    with_unreleased_work(tree / "CHANGELOG.md", body="")
 
     done = release("bump", "9.9.9", cwd=tree)
     assert done.returncode != 0
