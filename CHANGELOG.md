@@ -9,7 +9,11 @@ tag was made.
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- The live ebuild installs `CHANGELOG.md` alongside the README, so `/usr/share/doc/${PF}/` says
+  what changed. The release ebuilds cannot: the file postdates both their tarballs, and `dodoc`
+  dies on a file that is not there. From 1.2.0 their ebuilds can take the line too.
 
 ## [1.1.0] — 2026-08-31
 

@@ -65,6 +65,10 @@ python_install_all() {
 	doicon -s scalable data/icons/gentstore.svg
 
 	dodoc README.md
+	# Only the live ebuild: CHANGELOG.md postdates both release tarballs,
+	# and dodoc dies on a file that is not there. Releases from 1.2.0 on
+	# will carry it, and their ebuilds can take this line then.
+	dodoc CHANGELOG.md
 	dodoc -r Docs
 }
 
