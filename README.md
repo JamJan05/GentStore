@@ -357,6 +357,8 @@ The application log: `~/.local/state/gentstore/gentstore.log`.
 Architecture, the theme, the bilingualism rules, the privilege model and the work plan:
 [`Docs/`](Docs/README.md).
 
+What changed between one release and the next: [`CHANGELOG.md`](CHANGELOG.md).
+
 ## Licence
 
 Licensed under the GNU General Public License, version 2 or (at your option) any later
