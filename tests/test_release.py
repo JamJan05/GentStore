@@ -303,3 +303,31 @@ def test_nothing_offers_to_install_a_yanked_release() -> None:
             f"{version} is marked [YANKED] but its ebuild is still in the overlay"
         assert f"gentstore-{version}.tar.gz" not in manifest, \
             f"{version} is marked [YANKED] but the Manifest still describes its tarball"
+
+
+def test_every_ref_the_changelog_links_to_still_exists() -> None:
+    """Deleting a tag breaks every link that compares against it.
+
+    Withdrawing 1.1.1 took its tag with it, and left two dead links behind: its
+    own, and 1.1.2's, which compared *from* it. One was noticed and the other
+    was not, which is the argument for asking git rather than reading.
+    """
+    if shutil.which("git") is None or not (ROOT / ".git").exists():
+        pytest.skip("no repository to resolve the refs against")
+
+    text = (ROOT / "CHANGELOG.md").read_text()
+    definitions = re.findall(r"^\[[^\]]+\]: \S+$", text, re.M)
+    refs = re.findall(r"^\[[^\]]+\]: \S+/(?:compare|commit)/(\S+)$", text, re.M)
+    # Every definition has to be understood, or this checks whatever it happened
+    # to parse and passes. The first draft matched only the two links with no
+    # dots in their ref, and was green with a dead tag in front of it.
+    assert definitions and len(refs) == len(definitions), \
+        f"{len(definitions) - len(refs)} link definitions the pattern does not understand"
+    # "a...b" is two refs; "HEAD" always resolves and so says nothing.
+    named = {part for ref in refs for part in ref.split("...")} - {"HEAD"}
+    for ref in sorted(named):
+        resolved = subprocess.run(
+            ["git", "-C", str(ROOT), "rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}"],
+            capture_output=True, text=True, check=False,
+        )
+        assert resolved.returncode == 0, f"CHANGELOG.md links to {ref}, which is not in this repo"

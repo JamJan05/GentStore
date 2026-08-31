@@ -15,7 +15,13 @@ tag was made.
   `gentstore-1.1.1.ebuild` and its `DIST` entry are out of the overlay, so Portage cannot resolve
   to a version that cannot be built. `CHANGELOG.md` keeps the section, marked `[YANKED]` the way
   Keep a Changelog asks — a withdrawn release is a fact about the project, and deleting the record
-  of it would only make the version numbers skip for no stated reason.
+  of it would only make the version numbers skip for no stated reason. Two tests hold the two
+  halves apart: that the marker is a section boundary the parser sees, since an unrecognised
+  heading would fold the withdrawn notes into the release above, and that nothing marked
+  `[YANKED]` still has an ebuild or a `DIST` entry, since a record is not a mechanism.
+- Deleting the tag broke every link comparing against it — `[1.1.1]`'s own, and `[1.1.2]`'s, which
+  compared *from* it. One was noticed and one was not, so `tests/test_release.py` now asks git
+  whether every ref the changelog links to still resolves.
 
 ## [1.1.2] — 2026-08-31
 
@@ -167,7 +173,7 @@ Bilingual (Polish and English) through Qt's own translation system; the document
 source strings are English.
 
 [Unreleased]: https://github.com/JamJan05/GentStore/compare/v1.1.2...HEAD
-[1.1.2]: https://github.com/JamJan05/GentStore/compare/v1.1.1...v1.1.2
+[1.1.2]: https://github.com/JamJan05/GentStore/compare/6dd751f...v1.1.2
 [1.1.1]: https://github.com/JamJan05/GentStore/compare/v1.1.0...6dd751f
 [1.1.0]: https://github.com/JamJan05/GentStore/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/JamJan05/GentStore/compare/77bafbc...v1.0.0
