@@ -48,14 +48,23 @@ INIT = ROOT / "gentstore" / "__init__.py"
 README = ROOT / "README.md"
 CHANGELOG = ROOT / "CHANGELOG.md"
 
-#: One pattern per file, each with the number as its only group. Written so that
-#: a substitution can reuse the same expression: group 1 is what changes, and the
-#: surrounding text is matched literally so a near-miss fails rather than
-#: rewriting the wrong line.
+#: The patterns that find the number, each with it as their only group. Written
+#: so that a substitution can reuse the same expression: group 1 is what changes,
+#: and the surrounding text is matched literally, so a near-miss fails rather
+#: than rewriting the wrong line. A file may state the version more than once —
+#: the README does, once as a claim and once inside the installer transcript it
+#: quotes — and every one of them has to move together or the file contradicts
+#: itself in public.
 VERSION_IN = {
-    PYPROJECT: re.compile(r'^version = "(\d+\.\d+\.\d+)"$', re.M),
-    INIT: re.compile(r'^__version__ = "(\d+\.\d+\.\d+)"$', re.M),
-    README: re.compile(r"^> \*\*Version (\d+\.\d+\.\d+)\.\*\*", re.M),
+    PYPROJECT: [re.compile(r'^version = "(\d+\.\d+\.\d+)"$', re.M)],
+    INIT: [re.compile(r'^__version__ = "(\d+\.\d+\.\d+)"$', re.M)],
+    README: [
+        re.compile(r"^> \*\*Version (\d+\.\d+\.\d+)\.\*\*", re.M),
+        # The transcript of what the installer prints, which offers the release
+        # by number. Quoting a version nobody can install any more is exactly as
+        # wrong as the claim above being stale.
+        re.compile(r"^  1\) (\d+\.\d+\.\d+) — the release\.", re.M),
+    ],
 }
 
 #: ``## [1.1.0] — 2026-08-31``, ``## [Unreleased]`` with no date, and a
@@ -86,15 +95,15 @@ def read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def stated(path: Path) -> str | None:
-    """The version *path* claims, or None when the line it should be on is gone."""
-    found = VERSION_IN[path].search(read(path))
-    return found.group(1) if found else None
+def stated(path: Path) -> list[str | None]:
+    """Every version *path* claims — None where the line it should be on is gone."""
+    body = read(path)
+    return [(m.group(1) if (m := pattern.search(body)) else None) for pattern in VERSION_IN[path]]
 
 
 def current() -> str:
     """pyproject.toml is the one that the build back end reads, so it decides."""
-    version = stated(PYPROJECT)
+    version = stated(PYPROJECT)[0]
     if version is None:
         fail(f"no version line in {PYPROJECT.name}")
     return version
@@ -139,11 +148,14 @@ def do_check(args: argparse.Namespace) -> None:
 
     wrong = []
     for path in VERSION_IN:
-        says = stated(path)
-        if says is None:
-            wrong.append(f"{path.relative_to(ROOT)}: the version line is gone")
-        elif says != expected:
-            wrong.append(f"{path.relative_to(ROOT)}: says {says}, expected {expected}")
+        for number, says in enumerate(stated(path), start=1):
+            where = f"{path.relative_to(ROOT)}"
+            if len(VERSION_IN[path]) > 1:
+                where += f" (mention {number})"
+            if says is None:
+                wrong.append(f"{where}: the version line is gone")
+            elif says != expected:
+                wrong.append(f"{where}: says {says}, expected {expected}")
 
     found = sections(read(CHANGELOG))
     if expected not in found:
@@ -212,14 +224,15 @@ def do_bump(args: argparse.Namespace) -> None:
     ) + text[link.end() :]
     CHANGELOG.write_text(text, encoding="utf-8")
 
-    for path, pattern in VERSION_IN.items():
+    for path, patterns in VERSION_IN.items():
         body = read(path)
-        replaced, count = pattern.subn(
-            lambda m: m.group(0).replace(m.group(1), new, 1), body, count=1
-        )
-        if count != 1:
-            fail(f"{path.relative_to(ROOT)}: found no version line to rewrite")
-        path.write_text(replaced, encoding="utf-8")
+        for pattern in patterns:
+            body, count = pattern.subn(
+                lambda m: m.group(0).replace(m.group(1), new, 1), body, count=1
+            )
+            if count != 1:
+                fail(f"{path.relative_to(ROOT)}: found no version line to rewrite")
+        path.write_text(body, encoding="utf-8")
 
     for path in (*VERSION_IN, CHANGELOG):
         print(f"  {path.relative_to(ROOT)}")

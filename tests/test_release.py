@@ -109,6 +109,32 @@ def test_every_file_states_the_same_version() -> None:
     assert done.returncode == 0, done.stderr
 
 
+def test_every_version_a_file_states_is_one_the_script_rewrites() -> None:
+    """A second mention added by hand is one the next release will not move.
+
+    The README grew exactly that: the installer transcript quoted 1.0.0 long
+    after 1.0.0 stopped being the release, because only the claim above it was
+    ever rewritten. Any X.Y.Z in a file the script owns has to be one of the
+    mentions it knows about.
+    """
+    sys.path.insert(0, str(ROOT / "tools"))
+    import release as release_module
+
+    for path, patterns in release_module.VERSION_IN.items():
+        body = path.read_text()
+        # The spans the patterns cover, so the check is exact rather than "near".
+        owned = [m.span() for pattern in patterns for m in pattern.finditer(body)]
+        for match in re.finditer(r"\b\d+\.\d+\.\d+\b", body):
+            # Only today's number: an older one quoted on purpose, in a note
+            # about what changed when, is not a mention that should move.
+            if match.group() != release_module.current():
+                continue
+            assert any(start <= match.start() < end for start, end in owned), (
+                f"{path.relative_to(ROOT)}:{body[:match.start()].count(chr(10)) + 1} "
+                f"states {match.group()} where nothing rewrites it"
+            )
+
+
 def test_the_changelog_has_somewhere_to_write_the_next_release() -> None:
     """``bump`` moves [Unreleased] into a dated section; without the heading
     there is nothing to move, and the notes would have to be reconstructed
@@ -128,7 +154,14 @@ def test_a_bump_rewrites_every_place_at_once(tree: Path) -> None:
     assert release("check", "9.9.9", cwd=tree).returncode == 0
     assert 'version = "9.9.9"' in (tree / "pyproject.toml").read_text()
     assert '__version__ = "9.9.9"' in (tree / "gentstore" / "__init__.py").read_text()
-    assert "> **Version 9.9.9.**" in (tree / "README.md").read_text()
+
+    # The README states it twice — once as a claim, once inside the installer
+    # transcript it quotes — and a file that moves one and not the other
+    # contradicts itself in public.
+    readme = (tree / "README.md").read_text()
+    assert "> **Version 9.9.9.**" in readme
+    assert "  1) 9.9.9 — the release." in readme
+    assert not re.search(r"\b1\.1\.\d\b", readme), "a version this bump replaced is still quoted"
 
     changelog = (tree / "CHANGELOG.md").read_text()
     assert "## [9.9.9] — 2026-01-01" in changelog

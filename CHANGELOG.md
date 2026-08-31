@@ -22,6 +22,12 @@ tag was made.
 - Deleting the tag broke every link comparing against it — `[1.1.1]`'s own, and `[1.1.2]`'s, which
   compared *from* it. One was noticed and one was not, so `tests/test_release.py` now asks git
   whether every ref the changelog links to still resolves.
+- The README states the version **twice** — once as a claim, once inside the installer transcript
+  it quotes — and only the first was ever rewritten, so the transcript had been offering 1.0.0 as
+  "the release" since 1.1.0. `tools/release.py` now moves every mention in a file together, and a
+  test refuses any occurrence of the current version that sits where nothing would rewrite it.
+- The README's test count, which said 514 against 554. That one stays hand-maintained: counting
+  the suite means running it, and the release runner has neither Portage nor a Qt platform.
 
 ## [1.1.2] — 2026-08-31
 

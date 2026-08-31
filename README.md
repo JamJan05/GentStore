@@ -10,7 +10,7 @@ Written in Python 3 with PyQt6. Bilingual: **Polish and English**.
 > system: the read-only side — search, USE flags, masks, repositories, the update preview,
 > configuration files, `make.conf`, elog and `@world` — and the privileged one, which has
 > written real `package.use`, `package.license` and `package.accept_keywords` entries through
-> `pkexec` and run `emerge`, `emaint sync` and `eselect` through the launcher. 514 tests pass.
+> `pkexec` and run `emerge`, `emaint sync` and `eselect` through the launcher. 554 tests pass.
 >
 > What that number does not claim: this has run on **one** machine, amd64 only, so the ebuild
 > is keyworded `~amd64`. Bug reports from other setups are the fastest way to make the next
@@ -108,7 +108,7 @@ yourself — the script only prints the command.
 ```
 Which one should Portage install?
 
-  1) 1.0.0 — the release. Tagged, and replaced by the next one on an
+  1) 1.1.2 — the release. Tagged, and replaced by the next one on an
      ordinary "emerge --sync && emerge --update @world". Recommended.
   2) 9999 — the live ebuild. Rebuilt from the newest commit whenever you
      run "emerge @live-rebuild". Newer, and occasionally broken.
