@@ -14,6 +14,10 @@ tag was made.
 - The live ebuild installs `CHANGELOG.md` alongside the README, so `/usr/share/doc/${PF}/` says
   what changed. The release ebuilds cannot: the file postdates both their tarballs, and `dodoc`
   dies on a file that is not there. From 1.2.0 their ebuilds can take the line too.
+- `tests/test_packaging.py` checks `dodoc` targets too, against the tree each ebuild actually
+  builds from: the live one against this checkout, a release one against its own tag. The
+  existing check stopped at `newexe`/`doins`/`domenu`/`doicon`, so a `dodoc` line naming a file
+  that is not there — a `die`, not a warning — had nothing watching it.
 
 ## [1.1.0] — 2026-08-31
 

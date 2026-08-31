@@ -107,6 +107,74 @@ def test_every_file_the_ebuild_installs_exists(ebuild: str) -> None:
         assert (ROOT / name).is_file(), f"the ebuild installs {name}, which is not in the tree"
 
 
+#: ``dodoc README.md`` and ``dodoc -r Docs`` — the ``-r`` names a directory.
+_DODOC = re.compile(r"^\s*dodoc(?:\s+-r)?\s+(\S+)", re.M)
+
+
+def _holds(tree: set[str], name: str) -> bool:
+    """Whether *name* is a file in *tree*, or a directory something in it sits under."""
+    return name in tree or any(entry.startswith(f"{name}/") for entry in tree)
+
+
+def _tree_at(tag: str) -> set[str] | None:
+    """Every path at *tag*, or ``None`` when git cannot answer.
+
+    Returns None rather than failing: inside an unpacked release tarball there
+    is no repository to ask, and the ebuild's own test run is exactly where
+    that happens.
+    """
+    if shutil.which("git") is None or not (ROOT / ".git").exists():
+        return None
+    result = subprocess.run(
+        ["git", "-C", str(ROOT), "ls-tree", "-r", "--name-only", tag],
+        capture_output=True, text=True, check=False,
+    )
+    return set(result.stdout.splitlines()) if result.returncode == 0 else None
+
+
+def test_every_document_the_live_ebuild_installs_exists(ebuild: str) -> None:
+    """``dodoc`` on a path that is not there is a die, not a warning.
+
+    The sibling check above stops at newexe/doins/domenu/doicon, so a dodoc
+    line was installing nothing anybody verified. The live ebuild builds from
+    the tip, which in a checkout is this tree; in a release tarball it is the
+    snapshot that tarball was cut from, and either way the files have to be
+    here.
+    """
+    referenced = _DODOC.findall(ebuild)
+    assert referenced, "the ebuild documents nothing — the pattern stopped matching"
+    for name in referenced:
+        target = ROOT / name
+        assert target.is_file() or target.is_dir(), (
+            f"the ebuild installs {name}, which is not in the tree"
+        )
+
+
+def test_a_release_ebuild_documents_only_what_its_own_tarball_holds() -> None:
+    """A release builds from its tag, not from whatever main has grown since.
+
+    CHANGELOG.md was written after 1.0.0 and 1.1.0 were tagged, so it is in
+    neither tarball; giving their ebuilds a dodoc line for it would have broken
+    the build for everyone installing a release, with nothing to catch it.
+    """
+    checked = 0
+    for path in sorted((PACKAGING / "app-portage" / "gentstore").glob("*.ebuild")):
+        text = path.read_text()
+        if not re.search(r"^SRC_URI=", text, re.M):
+            continue
+        tag = "v" + path.stem.removeprefix("gentstore-")
+        tree = _tree_at(tag)
+        if tree is None:
+            continue
+        checked += 1
+        for name in _DODOC.findall(text):
+            assert _holds(tree, name), (
+                f"{path.name} installs {name}, which is not in the {tag} tarball"
+            )
+    if not checked:
+        pytest.skip("no repository to read the release tags from")
+
+
 def test_the_ebuild_installs_the_helpers_where_the_code_looks(ebuild: str) -> None:
     """``exeinto`` and ``privilege.INSTALL_DIR`` are one decision in two files."""
     assert f"exeinto {privilege.INSTALL_DIR}" in ebuild
