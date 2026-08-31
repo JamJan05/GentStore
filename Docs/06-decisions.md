@@ -102,6 +102,8 @@ in Settings requires recomputing the sheet on the fly.
 **Reason:** The application is tightly bound to the Gentoo ecosystem and imports the `portage`
 module (GPL-2). The same licence removes any doubt and makes an eventual path into GURU easier.
 
+**Superseded by D-11**, which keeps the licence family and adds “or later”.
+
 ---
 
 ### D-09 · The documentation directory is named `Docs/`, capitalised
@@ -132,3 +134,27 @@ user's decision.
 **Deliberately out of scope:** “Add to @world” and uninstalling still use bare `cat/pkg`. Writing
 `::repo` into `world` would pin the package to a repository permanently, and that is a stronger
 statement than a filter on a screen.
+
+---
+
+### D-11 · GPL-2-or-later, because PyQt6 is GPL-3 · supersedes D-08
+
+**Decision:** `GPL-2.0-or-later` — the GNU GPL, version 2 or, at the user's option, any later
+version. The per-file headers carry the “or later” permission, `LICENSE` keeps the GPL-2 text
+unchanged, and `pyproject.toml` declares the SPDX identifier.
+
+**Reason:** D-08 chose GPL-2 *without* “or later”, which put the project in a licence conflict it
+could not distribute out of. PyQt6 is published by Riverbank under the GPL v3 or a commercial
+licence — there is no LGPL or GPL-2 variant — and GPL-2-only and GPL-3 are mutually incompatible.
+Adding “or later” is the smallest change that resolves this: `portage` (GPL-2) stays compatible,
+GURU stays reachable, and the file the repository ships as `LICENSE` is still the right text,
+because the “or later” permission lives in the file headers rather than in the licence body.
+
+**Consequence:** the *sources* are GPL-2-or-later, but any build distributed with PyQt6 linked in
+is effectively GPL-3, since that is the only version both halves can be conveyed under. The
+README says so; nothing in the code has to.
+
+**Alternatives:** relicensing to GPL-3-only (loses compatibility with GPL-2-only code and drifts
+from Portage's family for no gain); buying Riverbank's commercial licence (costs money and would
+make the project non-free); swapping PyQt6 for PySide6, which is LGPL (a rewrite of every import,
+signal and `tr()` call, to fix a problem one clause fixes).

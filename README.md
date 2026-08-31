@@ -359,4 +359,7 @@ Architecture, the theme, the bilingualism rules, the privilege model and the wor
 
 ## Licence
 
-The GNU GPL, version 2 — the same as Portage. The full text is in [`LICENSE`](LICENSE).
+Licensed under the GNU General Public License, version 2 or (at your option) any later
+version — the same family as Portage. Because GentStore links PyQt6, which Riverbank
+distributes under the GPL v3, distributed builds are effectively covered by the GPL v3.
+Full text in LICENSE.

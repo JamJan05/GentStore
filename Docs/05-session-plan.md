@@ -31,8 +31,8 @@ with a `PYTHON_COMPAT` covering `python3_14` (not installed yet), `pkexec`, `ese
 
 The project skeleton and an empty but working application.
 
-- `pyproject.toml`, the `gentstore/` package layout, `.gitignore`, the licence (GPL-2, like
-  Portage), `README.md`.
+- `pyproject.toml`, the `gentstore/` package layout, `.gitignore`, the licence
+  (GPL-2-or-later, the same family as Portage — see D-11), `README.md`.
 - `app.py`: `QApplication`, the Fusion style, the palette, loading the QSS, CLI arguments
   (`--lang`, `--debug`).
 - `ui/theme/tokens.py` plus a QSS generator built from the tokens in
