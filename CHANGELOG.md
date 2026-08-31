@@ -9,6 +9,8 @@ tag was made.
 
 ## [Unreleased]
 
+## [1.1.2] — 2026-08-31
+
 ### Fixed
 
 - **The 1.1.1 tarball failed its own test suite**, and so failed to build under `USE=test`. Two
@@ -149,7 +151,8 @@ comes from the `portage` API rather than from parsing ebuilds. Everything privil
 Bilingual (Polish and English) through Qt's own translation system; the documentation and the
 source strings are English.
 
-[Unreleased]: https://github.com/JamJan05/GentStore/compare/v1.1.1...HEAD
+[Unreleased]: https://github.com/JamJan05/GentStore/compare/v1.1.2...HEAD
+[1.1.2]: https://github.com/JamJan05/GentStore/compare/v1.1.1...v1.1.2
 [1.1.1]: https://github.com/JamJan05/GentStore/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/JamJan05/GentStore/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/JamJan05/GentStore/compare/77bafbc...v1.0.0
