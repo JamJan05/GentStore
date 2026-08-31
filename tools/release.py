@@ -58,8 +58,14 @@ VERSION_IN = {
     README: re.compile(r"^> \*\*Version (\d+\.\d+\.\d+)\.\*\*", re.M),
 }
 
-#: ``## [1.1.0] — 2026-08-31``, and ``## [Unreleased]`` with no date.
-HEADING = re.compile(r"^## \[([^\]]+)\](?: — (\d{4}-\d{2}-\d{2}))?$", re.M)
+#: ``## [1.1.0] — 2026-08-31``, ``## [Unreleased]`` with no date, and a
+#: withdrawn release, which Keep a Changelog marks in the heading rather than
+#: deleting: ``## [1.1.1] — 2026-08-31 [YANKED]``. The marker has to be matched
+#: here rather than ignored — an unrecognised heading is not a section boundary,
+#: so a yanked release's notes would silently become part of the release above.
+HEADING = re.compile(
+    r"^## \[([^\]]+)\](?: — (\d{4}-\d{2}-\d{2}))?(?P<yanked> \[YANKED\])?$", re.M
+)
 
 #: ``[Unreleased]: https://…/compare/v1.1.0...HEAD``
 UNRELEASED_LINK = re.compile(
@@ -106,6 +112,11 @@ def sections(text: str) -> dict[str, tuple[str, str | None]]:
         body = re.sub(r"\n\[[^\]]+\]: \S+$", "", body.rstrip(), flags=re.M)
         found[match.group(1)] = (body.strip("\n"), match.group(2))
     return found
+
+
+def yanked(text: str) -> set[str]:
+    """The releases marked withdrawn, which nothing should offer to install."""
+    return {m.group(1) for m in HEADING.finditer(text) if m.group("yanked")}
 
 
 # -- the subcommands ---------------------------------------------------------

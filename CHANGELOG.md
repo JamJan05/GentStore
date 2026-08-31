@@ -9,6 +9,14 @@ tag was made.
 
 ## [Unreleased]
 
+### Removed
+
+- **1.1.1 is withdrawn**: the release, its asset and its tag are deleted, and
+  `gentstore-1.1.1.ebuild` and its `DIST` entry are out of the overlay, so Portage cannot resolve
+  to a version that cannot be built. `CHANGELOG.md` keeps the section, marked `[YANKED]` the way
+  Keep a Changelog asks — a withdrawn release is a fact about the project, and deleting the record
+  of it would only make the version numbers skip for no stated reason.
+
 ## [1.1.2] — 2026-08-31
 
 ### Fixed
@@ -21,7 +29,14 @@ tag was made.
   happens to hold, so where in the release cycle a checkout sits no longer decides whether the
   tests pass.
 
-## [1.1.1] — 2026-08-31
+## [1.1.1] — 2026-08-31 [YANKED]
+
+**Withdrawn**, and not installable — the tarball failed its own test suite, so the ebuild died in
+`src_test` for anybody building with `USE=test`. The release, its asset and its tag are gone, and
+the overlay no longer carries the ebuild. Everything below shipped again in 1.1.2, which is the
+first release that actually builds. Kept here rather than deleted, because it is still the honest
+answer to when any of it arrived.
+
 
 Nothing in the application changed — hence a patch number. What changed is how a release is made,
 which until now was ten steps carried in somebody's head, and 1.1.0 is the release that shows
@@ -153,7 +168,7 @@ source strings are English.
 
 [Unreleased]: https://github.com/JamJan05/GentStore/compare/v1.1.2...HEAD
 [1.1.2]: https://github.com/JamJan05/GentStore/compare/v1.1.1...v1.1.2
-[1.1.1]: https://github.com/JamJan05/GentStore/compare/v1.1.0...v1.1.1
+[1.1.1]: https://github.com/JamJan05/GentStore/compare/v1.1.0...6dd751f
 [1.1.0]: https://github.com/JamJan05/GentStore/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/JamJan05/GentStore/compare/77bafbc...v1.0.0
 [0.1.0]: https://github.com/JamJan05/GentStore/commit/77bafbc

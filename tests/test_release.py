@@ -257,3 +257,49 @@ def test_both_workflows_republish_through_the_one_script(workflow: str) -> None:
         assert "packaging/publish-overlay.sh --push" in text
         assert "GENTSTORE_OVERLAY_REMOTE" in text, \
             "the push would have no credentials to use"
+
+
+def test_a_yanked_heading_is_still_a_section_boundary() -> None:
+    """Without this the withdrawal is worse than not marking it at all.
+
+    An unrecognised heading is not a boundary, so the release *above* a yanked
+    one would quietly absorb its notes — and those notes are what the workflow
+    publishes as the next release's description. Checked on a sample rather than
+    on the real file, so it keeps testing the parser once 1.1.1 is old news.
+    """
+    sys.path.insert(0, str(ROOT / "tools"))
+    import release as release_module
+
+    sample = (
+        "## [Unreleased]\n\n"
+        "## [2.0.0] — 2026-01-02\n\n- what 2.0.0 changed\n\n"
+        "## [1.9.9] — 2026-01-01 [YANKED]\n\n- what the withdrawn one changed\n"
+    )
+    found = release_module.sections(sample)
+    assert set(found) == {"Unreleased", "2.0.0", "1.9.9"}
+    assert found["2.0.0"][0] == "- what 2.0.0 changed", \
+        "the withdrawn release's notes leaked into the release above it"
+    assert found["1.9.9"][1] == "2026-01-01", "a yanked release still has its date"
+    assert release_module.yanked(sample) == {"1.9.9"}
+
+
+def test_nothing_offers_to_install_a_yanked_release() -> None:
+    """A withdrawn release has to be withdrawn from the overlay too.
+
+    Marking it in CHANGELOG.md is the record; it is not the mechanism. As long
+    as the ebuild is there Portage can still be asked for that exact version by
+    atom, and it would fetch an asset that has been deleted — or, worse, build
+    the thing that was withdrawn for being unbuildable. 1.1.1 is the first, and
+    the reason this exists.
+    """
+    sys.path.insert(0, str(ROOT / "tools"))
+    import release as release_module
+
+    withdrawn = release_module.yanked((ROOT / "CHANGELOG.md").read_text())
+    manifest_path = EBUILDS / "Manifest"
+    manifest = manifest_path.read_text() if manifest_path.exists() else ""
+    for version in withdrawn:
+        assert not (EBUILDS / f"gentstore-{version}.ebuild").exists(), \
+            f"{version} is marked [YANKED] but its ebuild is still in the overlay"
+        assert f"gentstore-{version}.tar.gz" not in manifest, \
+            f"{version} is marked [YANKED] but the Manifest still describes its tarball"
