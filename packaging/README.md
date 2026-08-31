@@ -52,7 +52,11 @@ By default the overlay is **synced**: `repos.conf` gets `sync-type = git` pointi
 arrives with an ordinary `emerge --sync`, and nobody has to come back to this script.
 
 That branch is generated, never hand-edited — `packaging/publish-overlay.sh` rebuilds it from
-`packaging/app-portage/` and force-pushes. Portage syncing a git repository treats its root as
+`packaging/app-portage/` and force-pushes. Running it is not something anybody has to remember:
+any push to `main` that touches the ebuild directory republishes the branch
+(`.github/workflows/overlay.yml`), and a release republishes it at the end of the run. The
+guarantee that the two copies cannot drift is only worth as much as how reliably the script
+runs, and before those two it ran when somebody thought of it. Portage syncing a git repository treats its root as
 the repository root, and the root of this one is the application, so the ebuild tree needs a
 branch of its own. Generating it is what stops the two copies drifting; an overlay serving an
 ebuild that no longer matches the source is a bug nobody notices until a build fails.

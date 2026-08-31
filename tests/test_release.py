@@ -36,6 +36,8 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = ROOT / "tools" / "release.py"
 WORKFLOW = ROOT / ".github" / "workflows" / "release.yml"
+OVERLAY_WORKFLOW = ROOT / ".github" / "workflows" / "overlay.yml"
+PUBLISHER = ROOT / "packaging" / "publish-overlay.sh"
 EBUILDS = ROOT / "packaging" / "app-portage" / "gentstore"
 
 #: The files the script owns, relative to the tree, and where each one has to be
@@ -198,3 +200,39 @@ def test_the_workflow_commits_the_ebuild_after_the_tag(workflow: str) -> None:
         workflow.index('git commit -m "packaging: the ${VERSION} ebuild'),
     ]
     assert steps == sorted(steps), "the ebuild is no longer written after the tarball is cut"
+
+
+def test_the_overlay_workflow_watches_where_the_ebuilds_live() -> None:
+    """The overlay branch is generated, and drifts the moment nothing regenerates it.
+
+    A release republishes it at the end, which covers the release ebuilds. The
+    live one changes between releases and on its own, so a push that touches the
+    ebuild directory has to republish too — and a path filter that stops covering
+    that directory is a mechanism that stops without saying so. This is not
+    hypothetical: the branch had already drifted by a comment in
+    gentstore-9999.ebuild before this workflow existed.
+    """
+    text = OVERLAY_WORKFLOW.read_text()
+    block = re.search(r"^    paths:\n((?:      - .*\n)+)", text, re.M)
+    assert block, "the overlay workflow no longer filters on paths"
+    watched = re.findall(r'- "([^"]+)"', block.group(1))
+
+    ebuilds = EBUILDS.relative_to(ROOT).as_posix()
+    assert any(ebuilds.startswith(pattern.removesuffix("/**")) for pattern in watched), \
+        f"none of {watched} covers {ebuilds}, where the ebuilds actually are"
+
+    assert PUBLISHER.relative_to(ROOT).as_posix() in watched, \
+        "changing the generator no longer republishes what it generates"
+
+
+def test_both_workflows_republish_through_the_one_script(workflow: str) -> None:
+    """Two places force-push the overlay branch; neither writes it itself.
+
+    The branch cannot be assembled twice by two slightly different pieces of
+    shell — that is the drift the script exists to prevent, reintroduced one
+    level up.
+    """
+    for text in (workflow, OVERLAY_WORKFLOW.read_text()):
+        assert "packaging/publish-overlay.sh --push" in text
+        assert "GENTSTORE_OVERLAY_REMOTE" in text, \
+            "the push would have no credentials to use"

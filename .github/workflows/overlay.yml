@@ -1,0 +1,76 @@
+# Keeping the overlay branch from drifting away from packaging/.
+#
+# `overlay` is generated, never edited: publish-overlay.sh rebuilds it from
+# packaging/app-portage/ and force-pushes, and that is what stops the ebuild
+# Portage serves and the ebuild in this tree from becoming two different files.
+# The guarantee only holds if the script actually runs, though, and until now it
+# ran when somebody remembered to run it.
+#
+# The release workflow republishes at the end of every release, which covers the
+# release ebuilds. It does not cover the live one: 9999 changes between releases
+# and by itself, and a live install rebuilds from whatever the branch says. A
+# comment fixed in gentstore-9999.ebuild and never published is a small drift,
+# but a small drift is how you find out the mechanism was not running.
+#
+# So: any push to main that touches the ebuild directory republishes the branch.
+# Nothing to remember, and nothing to remember *not* to do either — the branch is
+# regenerated wholesale each time, so it cannot accumulate anything.
+
+name: Overlay
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packaging/app-portage/**"
+      - "packaging/publish-overlay.sh"
+  # For a republish after something was fixed by hand, or to prove the mechanism
+  # still works without waiting for an ebuild to change.
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# The release workflow force-pushes this same branch at the end of a release.
+# One group for both, and never cancel: a half-written overlay is one Portage
+# would sync.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out the whole history
+        uses: actions/checkout@v5
+        with:
+          # publish-overlay.sh names the branch it writes after `git describe
+          # --tags`, which a shallow clone cannot answer.
+          fetch-depth: 0
+
+      - name: Identity for the generated commit
+        run: |
+          git config user.name  "${{ vars.RELEASE_GIT_NAME  || 'JamJan05' }}"
+          git config user.email "${{ vars.RELEASE_GIT_EMAIL || 'janek2ko@gmail.com' }}"
+
+      - name: Show what the branch would become
+        run: packaging/publish-overlay.sh
+
+      - name: Publish it
+        env:
+          # The script pushes from the generated tree, which is a fresh
+          # repository with none of this checkout's credentials.
+          GENTSTORE_OVERLAY_REMOTE: https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git
+        run: packaging/publish-overlay.sh --push
+
+      - name: Say what happened
+        run: |
+          {
+            echo "### Overlay republished"
+            echo
+            echo "From \`packaging/app-portage/\` at \`$(git describe --tags --always)\`."
+            echo
+            echo "Reaches a machine with the overlay on the next \`sudo emaint sync -r gentstore\`."
+          } >> "${GITHUB_STEP_SUMMARY}"

@@ -18,6 +18,11 @@ tag was made.
   `tests/test_release.py` fails the moment the four disagree. 1.1.0 went out with the README
   still announcing 1.0.0 and notes claiming "No functional changes" over twenty-one commits —
   both are what this removes. See D-12.
+- **The overlay branch republishes itself.** Any push to `main` touching
+  `packaging/app-portage/` regenerates it, rather than waiting for somebody to remember
+  `publish-overlay.sh`. A release already republished at the end; what that missed was the live
+  ebuild, which changes between releases and on its own — and the branch had already drifted from
+  the tree by a comment before this existed.
 - The live ebuild installs `CHANGELOG.md` alongside the README, so `/usr/share/doc/${PF}/` says
   what changed. The 1.0.0 and 1.1.0 ebuilds cannot: the file postdates both their tarballs, and
   `dodoc` dies on a file that is not there. Every release from here on carries it, and the

@@ -180,7 +180,10 @@ the numbers are one edit, and the notes are read out of `CHANGELOG.md`, which th
 refuses to release empty.
 
 **Consequence:** `CHANGELOG.md`'s `[Unreleased]` section becomes the thing to keep current as the
-work happens, because it *is* the release notes. The version number stops being editable by hand
+work happens, because it *is* the release notes. The same reasoning covers the overlay branch,
+which is generated and therefore drifts the moment nothing regenerates it: a push touching
+`packaging/app-portage/` republishes it, since a release alone would only ever catch up the
+release ebuilds and the live one changes on its own. The version number stops being editable by hand
 without a test noticing — `tests/test_release.py` fails the moment the four files disagree.
 
 **Alternatives:** a `make release` target (same script, but it still runs on one machine with one
