@@ -391,7 +391,7 @@ QFrame#repoRow, QFrame#catalogueRow {{
     border-bottom: 1px solid {t.NEUTRAL_900};
 }}
 QFrame#repoRow:hover, QFrame#catalogueRow:hover {{ background: {t.NEUTRAL_900}; }}
-QFrame#repoRow[selected="yes"] {{
+QFrame#repoRow[selected="yes"], QFrame#catalogueRow[selected="yes"] {{
     background: {t.ACCENT_900};
     border-left-color: {t.ACCENT};
 }}

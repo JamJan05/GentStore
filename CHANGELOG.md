@@ -131,6 +131,20 @@ tag was made.
   something that is not a `cat/pkg` named a directory rather than a file; and a size in plain
   bytes parsed as no size at all.
 
+### Changed
+
+- **The Repositories screen is one list with two tabs, not a list and a panel underneath it.**
+  "Configured" and "Available" are the same question asked at different times, and they now have
+  the same shape: one search box serves whichever tab is open, and picking a row fills the right
+  side. Picking a configured repository additionally shows **what it brings** — the packages that
+  come from it and nowhere else, read out of the search index, forty of them with a way through to
+  the package screen for the rest and a click on any one of them opening it there. Picking an
+  available one shows who runs it, where it syncs from, the two commands enabling it would run,
+  and — for a repository Gentoo does not run — what trusting it means, in place of the bare
+  "Enable" button the old rows carried. The catalogue browser that used to sit below the details,
+  off the bottom of the screen for any repository with a long `repos.conf` section, is gone: it is
+  the "Available" tab now, and the list pane scrolls, which it did not before.
+
 ## [1.1.2] — 2026-08-31
 
 ### Fixed

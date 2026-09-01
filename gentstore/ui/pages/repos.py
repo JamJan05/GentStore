@@ -14,13 +14,16 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-"""The "Repositories" screen: what is configured, and what else exists.
+"""The "Repositories" screen: what is configured, and what could be.
 
-Two halves that answer two different questions. On the left, the repositories
-this system actually uses — with the ``repos.conf`` section that defines each
-one, shown as it is written rather than summarised, because that file is what
-somebody would go and read. On the right, Gentoo's published catalogue of four
-hundred-odd others, searchable, one click to enable.
+One list on the left with two tabs, because the two questions are asked at
+different times and want the same shape of answer. **Configured** is what this
+system uses; picking one shows the ``repos.conf`` section that defines it — as
+written, rather than summarised, since that file is what somebody would go and
+read — and what it brings with it, the packages that come from that repository
+and nowhere else. **Available** is the rest of Gentoo's published catalogue,
+four hundred-odd of them; picking one shows who runs it and what enabling it
+would run. One search box serves whichever tab is open.
 
 Everything that changes the system goes out as a visible command in the log
 (``eselect repository …``, ``emaint sync -r …``) except masking a repository,
@@ -40,6 +43,8 @@ from PyQt6.QtWidgets import (
     QLineEdit,
     QMessageBox,
     QPushButton,
+    QScrollArea,
+    QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -47,13 +52,16 @@ from PyQt6.QtWidgets import (
 from ...core import overlays, repos
 from ...core.confedit import WritePlan
 from ...core.overlays import Catalogue, CatalogueEntry
+from ...core.packages import SearchIndex
 from ...core.repos import RepositoryInfo
 from ...runner import eselect, helper_client
 from ..context import AppContext
 from ..i18n import untranslated
 from ..tasks import run_async
+from ..theme import icons
 from ..theme import tokens as t
 from ..widgets.add_overlay_dialog import AddOverlayDialog
+from ..widgets.chips import Pill
 from ..widgets.clickable_label import ClickableLabel
 from ..widgets.write_preview import WritePreview
 from .registry import PageSpec
@@ -65,10 +73,14 @@ log = logging.getLogger(__name__)
 #: their sync dates do not shorten (Docs/02-ui-design.md §4).
 LIST_WIDTH = 512
 
-#: Catalogue rows shown at once, browsing or searching. Enough that a short
-#: catalogue is simply the list and nothing has to be typed at all; four
-#: hundred-odd of them is what the search box is for.
+#: Catalogue rows built at once. Enough that a short catalogue is simply the
+#: list and nothing has to be typed at all; four hundred-odd of them is what the
+#: search box is for.
 _RESULT_LIMIT = 50
+
+#: Packages listed under a repository before the screen stops and points at the
+#: package screen, which is built for exactly this and has the filters for it.
+_PACKAGE_LIMIT = 40
 
 
 class _ConfiguredRow(QFrame):
@@ -149,12 +161,11 @@ class _ConfiguredRow(QFrame):
 class _CatalogueRow(QFrame):
     """One repository from the published list that is not configured here."""
 
-    def __init__(self, page: ReposPage, entry: CatalogueEntry, configured: bool) -> None:
+    def __init__(self, page: ReposPage, entry: CatalogueEntry) -> None:
         super().__init__(page)
         self.setObjectName("catalogueRow")
         self._page = page
         self.entry = entry
-        self._configured = configured
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(t.SPACE_4, t.SPACE_3, t.SPACE_4, t.SPACE_3)
@@ -171,11 +182,6 @@ class _CatalogueRow(QFrame):
         self._quality.setProperty("official", "yes" if entry.is_official else "no")
         top.addWidget(self._quality)
         top.addStretch(1)
-
-        self._action = QPushButton()
-        self._action.clicked.connect(lambda: page.enable(entry))
-        self._action.setEnabled(not configured)
-        top.addWidget(self._action)
         layout.addLayout(top)
 
         description = QLabel(entry.description)
@@ -183,25 +189,32 @@ class _CatalogueRow(QFrame):
         description.setWordWrap(True)
         layout.addWidget(description)
 
-        source = entry.preferred_source
-        uri = QLabel(source[1] if source else "")
-        uri.setProperty("role", "mono")
-        uri.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        layout.addWidget(uri)
-
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.retranslate_ui()
+
+    def mouseReleaseEvent(self, event) -> None:  # noqa: N802, ANN001 - Qt API
+        self._page.select_offer(self.entry)
+        super().mouseReleaseEvent(event)
+
+    def set_selected(self, selected: bool) -> None:
+        self.setProperty("selected", "yes" if selected else "no")
+        style = self.style()
+        if style is not None:
+            style.unpolish(self)
+            style.polish(self)
 
     def retranslate_ui(self) -> None:
         entry = self.entry
         official = self.tr("official") if entry.is_official else self.tr("unofficial")
         self._quality.setText(f"{official} · {entry.quality}" if entry.quality else official)
-        self._action.setText(
-            self.tr("already configured") if self._configured else self.tr("Enable")
-        )
 
 
 class ReposPage(SplitPage):
-    """Configured repositories on the left, the whole catalogue on the right."""
+    """Configured repositories and the catalogue, as two tabs of one list."""
+
+    #: The two tabs, as they are stored in :attr:`_tab`.
+    CONFIGURED = "configured"
+    AVAILABLE = "available"
 
     def __init__(
         self, spec: PageSpec, context: AppContext, parent: QWidget | None = None
@@ -212,7 +225,11 @@ class ReposPage(SplitPage):
         self._configured: tuple[RepositoryInfo, ...] = ()
         self._catalogue = Catalogue()
         self._rows: dict[str, _ConfiguredRow] = {}
+        self._masked: frozenset[str] = frozenset()
+        self._offer_rows: dict[str, _CatalogueRow] = {}
         self._selected: str | None = None
+        self._offered: CatalogueEntry | None = None
+        self._tab = self.CONFIGURED
         self._plan: WritePlan | None = None
         self._after_command = None
 
@@ -221,6 +238,7 @@ class ReposPage(SplitPage):
 
         context.command.finished.connect(self._on_command_finished)
         context.command.running_changed.connect(self._on_running_changed)
+        context.index_ready.connect(self._on_index_ready)
         self.retranslate_ui()
 
     # ------------------------------------------------------------ building --
@@ -228,24 +246,76 @@ class ReposPage(SplitPage):
     def _build_list_pane(self) -> None:
         header = QFrame()
         header.setObjectName("searchHeader")
-        header_layout = QHBoxLayout(header)
+        header_layout = QVBoxLayout(header)
         header_layout.setContentsMargins(t.SPACE_4, t.SPACE_4, t.SPACE_4, t.SPACE_4)
         header_layout.setSpacing(t.SPACE_3)
-        self._list_title = QLabel()
-        self._list_title.setProperty("role", "subheading")
-        header_layout.addWidget(self._list_title)
-        header_layout.addStretch(1)
+
+        tabs = QHBoxLayout()
+        tabs.setSpacing(t.SPACE_2)
+        self._tab_configured = Pill()
+        self._tab_configured.set_checked(True)
+        self._tab_configured.clicked.connect(lambda: self.set_tab(self.CONFIGURED))
+        tabs.addWidget(self._tab_configured)
+        self._tab_available = Pill()
+        self._tab_available.clicked.connect(lambda: self.set_tab(self.AVAILABLE))
+        tabs.addWidget(self._tab_available)
+        tabs.addStretch(1)
+        header_layout.addLayout(tabs)
+
+        # The same search box as the package screen, down to the icon: it is
+        # the one control on both screens that means "type here".
+        box = QFrame()
+        box.setObjectName("searchBox")
+        box_layout = QHBoxLayout(box)
+        box_layout.setContentsMargins(t.SPACE_3, t.SPACE_2, t.SPACE_3, t.SPACE_2)
+        box_layout.setSpacing(t.SPACE_2)
+        self._search_icon = QLabel()
+        box_layout.addWidget(self._search_icon)
+        self._search = QLineEdit()
+        self._search.setObjectName("searchInput")
+        self._search.textChanged.connect(lambda _text: self._rebuild_visible_tab())
+        box_layout.addWidget(self._search, 1)
+        header_layout.addWidget(box)
+
+        actions = QHBoxLayout()
+        actions.setSpacing(t.SPACE_2)
         self._sync_all = QPushButton()
         self._sync_all.clicked.connect(lambda: self._run(eselect.sync_all()))
-        header_layout.addWidget(self._sync_all)
+        actions.addWidget(self._sync_all)
+        self._refresh = QPushButton()
+        self._refresh.clicked.connect(lambda: self._run(eselect.list_repositories()))
+        actions.addWidget(self._refresh)
+        self._add = QPushButton()
+        self._add.setProperty("variant", "danger")
+        self._add.clicked.connect(self._on_add)
+        actions.addWidget(self._add)
+        actions.addStretch(1)
+        header_layout.addLayout(actions)
         self.list_layout.addWidget(header)
 
-        self._rows_holder = QWidget()
-        self._rows_layout = QVBoxLayout(self._rows_holder)
-        self._rows_layout.setContentsMargins(0, 0, 0, 0)
-        self._rows_layout.setSpacing(0)
-        self._rows_layout.addStretch(1)
-        self.list_layout.addWidget(self._rows_holder, 1)
+        # Four configured repositories fit; four hundred and fifty-nine do not,
+        # and the list pane of a SplitPage does not scroll on its own.
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setObjectName("repoList")
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
+        self._lists = QStackedWidget()
+        self._rows_holder, self._rows_layout = self._list_holder()
+        self._lists.addWidget(self._rows_holder)
+        self._offers_holder, self._offers_layout = self._list_holder()
+        self._lists.addWidget(self._offers_holder)
+        scroll.setWidget(self._lists)
+        self.list_layout.addWidget(scroll, 1)
+
+    @staticmethod
+    def _list_holder() -> tuple[QWidget, QVBoxLayout]:
+        holder = QWidget()
+        layout = QVBoxLayout(holder)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        layout.addStretch(1)
+        return holder, layout
 
     def _build_detail_pane(self) -> None:
         self._details = QFrame()
@@ -295,54 +365,101 @@ class ReposPage(SplitPage):
         details.addWidget(self._preview)
         self.detail_layout.addWidget(self._details)
 
-        browser = QFrame()
-        browser.setObjectName("useFlagsPanel")
-        browser_layout = QVBoxLayout(browser)
-        browser_layout.setContentsMargins(0, 0, 0, 0)
-        browser_layout.setSpacing(0)
+        self._build_packages_panel()
+        self._build_offer_panel()
+        # Without this the panels stretch to fill the pane and a short one
+        # floats in the middle of its own empty half.
+        self.detail_layout.addStretch(1)
+
+    def _build_packages_panel(self) -> None:
+        """What the selected repository brings with it."""
+        self._packages_panel = QFrame()
+        self._packages_panel.setObjectName("useFlagsPanel")
+        layout = QVBoxLayout(self._packages_panel)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
 
         top = QFrame()
         top.setObjectName("useFlagsHeader")
         top_layout = QHBoxLayout(top)
         top_layout.setContentsMargins(t.SPACE_4, t.SPACE_3, t.SPACE_4, t.SPACE_3)
         top_layout.setSpacing(t.SPACE_3)
-        self._browser_title = QLabel()
-        self._browser_title.setProperty("role", "subheading")
-        top_layout.addWidget(self._browser_title)
+        self._packages_title = QLabel()
+        self._packages_title.setProperty("role", "subheading")
+        top_layout.addWidget(self._packages_title)
+        top_layout.addStretch(1)
+        self._packages_state = QLabel()
+        self._packages_state.setProperty("role", "mono")
+        top_layout.addWidget(self._packages_state)
+        self._packages_all = ClickableLabel()
+        self._packages_all.setProperty("role", "mono-accent")
+        self._packages_all.clicked.connect(self._open_package_screen)
+        top_layout.addWidget(self._packages_all)
+        layout.addWidget(top)
 
-        self._search = QLineEdit()
-        self._search.setObjectName("searchInput")
-        self._search.textChanged.connect(self._on_search)
-        top_layout.addWidget(self._search, 1)
+        self._packages_holder = QWidget()
+        self._packages_layout = QVBoxLayout(self._packages_holder)
+        self._packages_layout.setContentsMargins(0, 0, 0, 0)
+        self._packages_layout.setSpacing(0)
+        layout.addWidget(self._packages_holder)
+        self.detail_layout.addWidget(self._packages_panel)
 
-        self._catalogue_state = QLabel()
-        self._catalogue_state.setProperty("role", "mono")
-        top_layout.addWidget(self._catalogue_state)
+    def _build_offer_panel(self) -> None:
+        """A repository from the catalogue that is not configured here."""
+        self._offer_panel = QFrame()
+        self._offer_panel.setObjectName("useFlagsPanel")
+        layout = QVBoxLayout(self._offer_panel)
+        layout.setContentsMargins(t.SPACE_4, t.SPACE_4, t.SPACE_4, t.SPACE_4)
+        layout.setSpacing(t.SPACE_3)
 
-        self._refresh = ClickableLabel()
-        self._refresh.setProperty("role", "mono-accent")
-        self._refresh.clicked.connect(lambda: self._run(eselect.list_repositories()))
-        top_layout.addWidget(self._refresh)
+        self._offer_name = QLabel()
+        self._offer_name.setObjectName("packageAtom")
+        layout.addWidget(self._offer_name)
 
-        self._add = QPushButton()
-        self._add.setProperty("variant", "danger")
-        self._add.clicked.connect(self._on_add)
-        top_layout.addWidget(self._add)
-        browser_layout.addWidget(top)
+        self._offer_quality = QLabel()
+        self._offer_quality.setObjectName("repoQuality")
+        row = QHBoxLayout()
+        row.addWidget(self._offer_quality)
+        row.addStretch(1)
+        layout.addLayout(row)
 
-        self._results = QWidget()
-        self._results_layout = QVBoxLayout(self._results)
-        self._results_layout.setContentsMargins(0, 0, 0, 0)
-        self._results_layout.setSpacing(0)
-        browser_layout.addWidget(self._results)
-        self.detail_layout.addWidget(browser)
-        # Without this the two panels stretch to fill the pane and the browser
-        # header floats in the middle of its own empty half.
-        self.detail_layout.addStretch(1)
+        self._offer_description = QLabel()
+        self._offer_description.setWordWrap(True)
+        layout.addWidget(self._offer_description)
+
+        self._offer_meta = QLabel()
+        self._offer_meta.setProperty("role", "mono")
+        self._offer_meta.setWordWrap(True)
+        self._offer_meta.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        layout.addWidget(self._offer_meta)
+
+        self._offer_warning = QLabel()
+        self._offer_warning.setObjectName("addOverlayWarning")
+        self._offer_warning.setWordWrap(True)
+        layout.addWidget(self._offer_warning)
+
+        self._offer_command = QLabel()
+        self._offer_command.setProperty("role", "mono")
+        self._offer_command.setWordWrap(True)
+        self._offer_command.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        layout.addWidget(self._offer_command)
+
+        buttons = QHBoxLayout()
+        buttons.setSpacing(t.SPACE_2)
+        self._btn_enable = QPushButton()
+        self._btn_enable.setProperty("variant", "primary")
+        self._btn_enable.clicked.connect(self._on_enable)
+        buttons.addWidget(self._btn_enable)
+        buttons.addStretch(1)
+        layout.addLayout(buttons)
+        self.detail_layout.addWidget(self._offer_panel)
 
     # -------------------------------------------------------------- data --
 
     def activated(self) -> None:
+        # The package list under a repository comes out of the search index,
+        # which is shared and built once.
+        self.context.ensure_index()
         self.reload()
 
     def reload(self) -> None:
@@ -357,103 +474,165 @@ class ReposPage(SplitPage):
         if not isinstance(result, tuple):
             return
         self._configured, self._catalogue, masked = result
+        self._masked = masked
         self._rebuild_rows(masked)
         if self._selected is None and self._configured:
             self.select(self._configured[0].name)
-        else:
-            self._refresh_details()
-        self._on_search(self._search.text())
+        self._rebuild_offers()
+        self._refresh_details()
         self.retranslate_ui()
 
     def _on_read_failed(self, error: Exception) -> None:
         log.error("Reading the repository list failed: %s", error)
 
-    def _rebuild_rows(self, masked: frozenset[str]) -> None:
-        while self._rows_layout.count() > 1:
-            item = self._rows_layout.takeAt(0)
+    def _on_index_ready(self, _index: object) -> None:
+        self._refresh_packages()
+
+    # --------------------------------------------------------- the two tabs --
+
+    def set_tab(self, tab: str) -> None:
+        """Switch between what is configured and what could be."""
+        self._tab = tab
+        self._tab_configured.set_checked(tab == self.CONFIGURED)
+        self._tab_available.set_checked(tab == self.AVAILABLE)
+        self._lists.setCurrentWidget(
+            self._rows_holder if tab == self.CONFIGURED else self._offers_holder
+        )
+        # A search typed in one tab means nothing in the other, and leaving it
+        # behind would show a list filtered by something invisible.
+        self._search.clear()
+        self._rebuild_visible_tab()
+        self._refresh_details()
+        self.retranslate_ui()
+
+    def _rebuild_visible_tab(self) -> None:
+        if self._tab == self.CONFIGURED:
+            self._rebuild_rows(self._masked)
+        else:
+            self._rebuild_offers()
+
+    @staticmethod
+    def _clear(layout: QVBoxLayout) -> None:
+        """Empty a list, keeping the trailing stretch."""
+        while layout.count() > 1:
+            item = layout.takeAt(0)
             widget = item.widget() if item is not None else None
             if widget is not None:
                 widget.setParent(None)
                 widget.deleteLater()
+
+    def _rebuild_rows(self, masked: frozenset[str]) -> None:
+        self._clear(self._rows_layout)
         self._rows.clear()
 
-        for index, info in enumerate(self._configured):
+        needle = self._search.text().strip().lower() if self._tab == self.CONFIGURED else ""
+        shown = [
+            info
+            for info in self._configured
+            if not needle or needle in info.name.lower()
+        ]
+        for index, info in enumerate(shown):
             row = _ConfiguredRow(self, info, info.name in masked)
+            row.set_selected(info.name == self._selected)
             self._rows[info.name] = row
             self._rows_layout.insertWidget(index, row)
+        if not shown:
+            self._rows_layout.insertWidget(0, self._hint(self._no_rows_text()))
+
+    def _rebuild_offers(self) -> None:
+        self._clear(self._offers_layout)
+        self._offer_rows.clear()
+        if self._tab != self.AVAILABLE:
+            return
+
+        if self._catalogue.is_empty:
+            self._offers_layout.insertWidget(
+                0,
+                self._hint(
+                    self.tr(
+                        "No catalogue yet. Press Refresh to fetch Gentoo's list of "
+                        "repositories."
+                    )
+                ),
+            )
+            return
+
+        query = self._search.text().strip()
+        # Nothing typed is not nothing to show: a repository nobody has heard of
+        # is exactly the one that cannot be searched for by name.
+        found = (
+            self._catalogue.search(query, None) if query else self._catalogue.browse(None)
+        )
+        configured = {info.name for info in self._configured}
+        found = [entry for entry in found if entry.name not in configured]
+        if not found:
+            self._offers_layout.insertWidget(
+                0,
+                self._hint(
+                    self.tr("Nothing matches “{query}”.").format(query=query)
+                    if query
+                    else self.tr("Every repository in the catalogue is already configured.")
+                ),
+            )
+            return
+
+        for index, entry in enumerate(found[:_RESULT_LIMIT]):
+            row = _CatalogueRow(self, entry)
+            row.set_selected(self._offered is not None and entry.name == self._offered.name)
+            self._offer_rows[entry.name] = row
+            self._offers_layout.insertWidget(index, row)
+        if len(found) > _RESULT_LIMIT:
+            self._offers_layout.insertWidget(
+                _RESULT_LIMIT,
+                self._hint(
+                    self.tr("Showing {shown} of {total}. Type to narrow the list.").format(
+                        shown=_RESULT_LIMIT, total=len(found)
+                    )
+                ),
+            )
+
+    def _no_rows_text(self) -> str:
+        return (
+            self.tr("Nothing matches “{query}”.").format(query=self._search.text().strip())
+            if self._search.text().strip()
+            else self.tr("No repository is configured.")
+        )
+
+    def _hint(self, text: str) -> QLabel:
+        """A line of explanation where the rows would be."""
+        hint = QLabel(text)
+        hint.setProperty("role", "caption")
+        hint.setWordWrap(True)
+        hint.setContentsMargins(t.SPACE_4, t.SPACE_3, t.SPACE_4, t.SPACE_3)
+        return hint
+
+    # --------------------------------------------------------- selecting --
 
     def select(self, name: str) -> None:
+        """Show a configured repository."""
         self._selected = name
+        self._offered = None
         for row_name, row in self._rows.items():
             row.set_selected(row_name == name)
+        for row in self._offer_rows.values():
+            row.set_selected(False)
         self._disarm()
+        self._refresh_details()
+
+    def select_offer(self, entry: CatalogueEntry) -> None:
+        """Show a repository from the catalogue that is not configured."""
+        self._offered = entry
+        for row_name, row in self._offer_rows.items():
+            row.set_selected(row_name == entry.name)
         self._refresh_details()
 
     @property
     def _current(self) -> RepositoryInfo | None:
         return next((r for r in self._configured if r.name == self._selected), None)
 
-    # ---------------------------------------------------------- searching --
-
-    def _on_search(self, text: str) -> None:
-        while self._results_layout.count():
-            item = self._results_layout.takeAt(0)
-            widget = item.widget() if item is not None else None
-            if widget is not None:
-                widget.setParent(None)
-                widget.deleteLater()
-
-        query = text.strip()
-        if self._catalogue.is_empty:
-            self._results_layout.addWidget(
-                self._hint(
-                    self.tr(
-                        "No catalogue yet. Press Refresh to fetch Gentoo's list of "
-                        "repositories."
-                    )
-                )
-            )
-            return
-
-        # Nothing typed is not nothing to show. Four hundred repositories the
-        # user has never heard of cannot be searched by name, so the panel opens
-        # on the list itself and the search box narrows it.
-        found = (
-            self._catalogue.search(query, None) if query else self._catalogue.browse(None)
-        )
-        if not found:
-            self._results_layout.addWidget(
-                self._hint(self.tr("Nothing matches “{query}”.").format(query=query))
-            )
-            return
-
-        configured = {info.name for info in self._configured}
-        if not query:
-            # A repository already on the left is not an offer. It stays in the
-            # list — its absence would read as the catalogue being wrong — but
-            # it goes to the end rather than heading the page as ::gentoo,
-            # official and core, otherwise would.
-            found.sort(key=lambda entry: entry.name in configured)
-        for entry in found[:_RESULT_LIMIT]:
-            self._results_layout.addWidget(
-                _CatalogueRow(self, entry, entry.name in configured)
-            )
-        if len(found) > _RESULT_LIMIT:
-            self._results_layout.addWidget(
-                self._hint(
-                    self.tr("Showing {shown} of {total}. Type to narrow the list.").format(
-                        shown=_RESULT_LIMIT, total=len(found)
-                    )
-                )
-            )
-
-    def _hint(self, text: str) -> QLabel:
-        """A line of explanation where the result rows would be."""
-        hint = QLabel(text)
-        hint.setProperty("role", "caption")
-        hint.setWordWrap(True)
-        hint.setContentsMargins(t.SPACE_4, t.SPACE_3, t.SPACE_4, t.SPACE_3)
-        return hint
+    @property
+    def _showing_offer(self) -> bool:
+        return self._tab == self.AVAILABLE and self._offered is not None
 
     # ----------------------------------------------------------- actions --
 
@@ -463,7 +642,14 @@ class ReposPage(SplitPage):
             self._after_command = None
 
     def _on_running_changed(self, running: bool) -> None:
-        for button in (self._btn_sync, self._btn_remove, self._add, self._sync_all):
+        for button in (
+            self._btn_sync,
+            self._btn_remove,
+            self._btn_enable,
+            self._add,
+            self._sync_all,
+            self._refresh,
+        ):
             button.setEnabled(not running)
 
     def _on_command_finished(self, code: int) -> None:
@@ -476,6 +662,11 @@ class ReposPage(SplitPage):
             self.context.reload_portage()
             self.context.reload_index()
             self.reload()
+
+    def _on_enable(self) -> None:
+        entry = self._offered
+        if entry is not None:
+            self.enable(entry)
 
     def enable(self, entry: CatalogueEntry) -> None:
         """Enable a catalogued repository and sync it in one go."""
@@ -491,7 +682,16 @@ class ReposPage(SplitPage):
             )
         if not self._confirm(self.tr("Enable repository"), detail):
             return
-        self._run(eselect.enable(entry.name), lambda: self._run(eselect.sync(entry.name)))
+        name = entry.name
+
+        def then() -> None:
+            self._run(eselect.sync(name))
+            # It is configured from here on, so it belongs to the other tab.
+            self._selected = name
+            self._offered = None
+            self._tab = self.CONFIGURED
+
+        self._run(eselect.enable(name), then)
 
     def _on_sync(self) -> None:
         info = self._current
@@ -527,6 +727,7 @@ class ReposPage(SplitPage):
             if len(installed) > 10:
                 detail += "\n…"
         if self._confirm(self.tr("Remove repository"), detail):
+            self._selected = None
             self._run(eselect.remove(info.name))
 
     def _on_add(self) -> None:
@@ -535,6 +736,17 @@ class ReposPage(SplitPage):
             return
         name, sync_type, uri = dialog.repository
         self._run(eselect.add(name, sync_type, uri), lambda: self._run(eselect.sync(name)))
+
+    def _open_package_screen(self) -> None:
+        """Hand the repository to the screen that is built for packages."""
+        info = self._current
+        window = self.window()
+        if info is None or not hasattr(window, "set_page"):  # pragma: no cover - defensive
+            return
+        window.set_page("search")
+        page = window.stack.currentWidget()
+        if hasattr(page, "set_query"):
+            page.set_query(f"::{info.name}")
 
     # -------------------------------------------- hiding a whole repository --
 
@@ -616,11 +828,19 @@ class ReposPage(SplitPage):
         )
         return answer == QMessageBox.StandardButton.Yes
 
-    # -------------------------------------------------------------- i18n --
+    # ------------------------------------------------------ the right side --
 
     def _refresh_details(self) -> None:
+        offer = self._showing_offer
         info = self._current
-        self._details.setVisible(info is not None)
+
+        self._offer_panel.setVisible(offer)
+        self._details.setVisible(not offer and info is not None)
+        self._packages_panel.setVisible(not offer and info is not None)
+
+        if offer:
+            self._refresh_offer()
+            return
         if info is None:
             return
 
@@ -650,22 +870,171 @@ class ReposPage(SplitPage):
         self._btn_mask.setToolTip(repos.mask_atom(info.name))
         self._btn_remove.setVisible(not info.is_official)
         self._btn_sync.setToolTip(f"emaint sync -r {info.name}")
+        self._refresh_packages()
+
+    def _refresh_offer(self) -> None:
+        entry = self._offered
+        if entry is None:
+            return
+        self._offer_name.setText(f"::{entry.name}")
+        self._offer_quality.setProperty("official", "yes" if entry.is_official else "no")
+        official = self.tr("official") if entry.is_official else self.tr("unofficial")
+        self._offer_quality.setText(
+            f"{official} · {entry.quality}" if entry.quality else official
+        )
+        style = self._offer_quality.style()
+        if style is not None:
+            style.unpolish(self._offer_quality)
+            style.polish(self._offer_quality)
+
+        self._offer_description.setText(entry.description)
+        source = entry.preferred_source
+        parts = []
+        if entry.homepage:
+            parts.append(entry.homepage)
+        if entry.owners:
+            parts.append(self.tr("maintained by {owners}").format(owners=", ".join(entry.owners)))
+        if source:
+            parts.append(f"{source[0]}  {source[1]}")
+        self._offer_meta.setText("\n".join(parts))
+
+        self._offer_warning.setVisible(not entry.is_official)
+        self._offer_command.setText(
+            untranslated(
+                f"eselect repository enable {entry.name}\nemaint sync -r {entry.name}"
+            )
+        )
+        self._btn_enable.setEnabled(not self.context.is_running)
+
+    def _refresh_packages(self) -> None:
+        """The packages this repository is the source of."""
+        info = self._current
+        while self._packages_layout.count():
+            item = self._packages_layout.takeAt(0)
+            widget = item.widget() if item is not None else None
+            if widget is not None:
+                widget.setParent(None)
+                widget.deleteLater()
+        if info is None or self._showing_offer:
+            return
+
+        index = self.context.index
+        if not isinstance(index, SearchIndex):
+            self._packages_state.setText("")
+            self._packages_all.setText("")
+            self._packages_layout.addWidget(
+                self._hint(self.tr("Reading the package index…"))
+            )
+            return
+
+        found = [entry for entry in index.entries if info.name in entry.repos]
+        self._packages_state.setText(
+            self.tr("%n package(s)", "", len(found)) if found else ""
+        )
+        self._packages_all.setText(self.tr("Open in Search & install") if found else "")
+        if not found:
+            self._packages_layout.addWidget(
+                self._hint(
+                    self.tr(
+                        "Nothing comes from ::{name} — every package it carries is also "
+                        "in a repository Portage prefers."
+                    ).format(name=info.name)
+                )
+            )
+            return
+
+        for entry in found[:_PACKAGE_LIMIT]:
+            self._packages_layout.addWidget(_PackageRow(self, entry.cp, entry.description))
+        if len(found) > _PACKAGE_LIMIT:
+            self._packages_layout.addWidget(
+                self._hint(
+                    self.tr(
+                        "Showing {shown} of {total}. The package screen has the search "
+                        "and the filters for the rest."
+                    ).format(shown=_PACKAGE_LIMIT, total=len(found))
+                )
+            )
+
+    # -------------------------------------------------------------- i18n --
 
     def retranslate_ui(self) -> None:
-        self._list_title.setText(self.tr("Configured"))
+        configured = len(self._configured)
+        available = max(0, len(self._catalogue) - configured)
+        self._tab_configured.set_text(self.tr("Configured"))
+        self._tab_configured.set_suffix(str(configured))
+        self._tab_available.set_text(self.tr("Available"))
+        self._tab_available.set_suffix(str(available) if available else "")
+
+        self._search_icon.setPixmap(
+            icons.tinted_pixmap(
+                "magnifying-glass",
+                t.NEUTRAL_500,
+                max(12, round(self.fontMetrics().height() * 0.85)),
+                self.devicePixelRatioF(),
+            )
+        )
+        self._search.setPlaceholderText(
+            self.tr("filter by name")
+            if self._tab == self.CONFIGURED
+            else self.tr("name or keyword, e.g. steam")
+        )
         self._sync_all.setText(self.tr("Synchronise all"))
         self._sync_all.setToolTip(untranslated("emaint sync -a"))
-        self._browser_title.setText(self.tr("All repositories"))
-        self._search.setPlaceholderText(self.tr("name or keyword, e.g. steam"))
-        self._refresh.setText(self.tr("Refresh"))
+        self._sync_all.setVisible(self._tab == self.CONFIGURED)
+        self._refresh.setText(self.tr("Refresh the catalogue"))
         self._refresh.setToolTip(untranslated("eselect repository list"))
+        self._refresh.setVisible(self._tab == self.AVAILABLE)
         self._add.setText(self.tr("Add by hand…"))
+        self._add.setVisible(self._tab == self.AVAILABLE)
+
         self._btn_sync.setText(self.tr("Synchronise"))
         self._btn_remove.setText(self.tr("Remove…"))
-        self._catalogue_state.setText(
-            self.tr("%n known", "", len(self._catalogue)) if self._catalogue else ""
+        self._btn_enable.setText(self.tr("Enable this repository"))
+        self._packages_title.setText(self.tr("Packages from here"))
+        self._offer_warning.setText(
+            self.tr(
+                "Nobody at Gentoo runs this repository. Building one of its packages "
+                "runs its ebuild as root, now and at every sync after."
+            )
         )
         for row in self._rows.values():
             row.retranslate_ui()
+        for row in self._offer_rows.values():
+            row.retranslate_ui()
         self._refresh_details()
         self._preview.retranslate_ui()
+
+
+class _PackageRow(QFrame):
+    """One package the selected repository is the source of."""
+
+    def __init__(self, page: ReposPage, cp: str, description: str) -> None:
+        super().__init__(page)
+        self.setObjectName("catalogueRow")
+        self._page = page
+        self.cp = cp
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(t.SPACE_4, t.SPACE_2, t.SPACE_4, t.SPACE_2)
+        layout.setSpacing(0)
+
+        name = QLabel(cp)
+        name.setObjectName("repoRowName")
+        layout.addWidget(name)
+
+        if description:
+            text = QLabel(description)
+            text.setProperty("role", "caption")
+            text.setWordWrap(True)
+            layout.addWidget(text)
+
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+
+    def mouseReleaseEvent(self, event) -> None:  # noqa: N802, ANN001 - Qt API
+        window = self._page.window()
+        if hasattr(window, "set_page"):
+            window.set_page("search")
+            page = window.stack.currentWidget()
+            if hasattr(page, "set_query"):
+                page.set_query(self.cp)
+        super().mouseReleaseEvent(event)

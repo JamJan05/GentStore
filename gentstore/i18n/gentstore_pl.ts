@@ -1015,22 +1015,33 @@ To długie budowanie i nie jest opcjonalne. Zostanie uruchomione:
 </context><context>
     <name>ReposPage</name>
     <message>
-        <location filename="../ui/pages/repos.py" line="410" />
+        <location filename="../ui/pages/repos.py" line="541" />
         <source>No catalogue yet. Press Refresh to fetch Gentoo's list of repositories.</source>
         <translation>Nie ma jeszcze katalogu. Naciśnij „Odśwież”, żeby pobrać listę repozytoriów Gentoo.</translation>
     </message>
     <message>
-        <location filename="../ui/pages/repos.py" line="426" />
+        <location filename="../ui/pages/repos.py" line="585" />
+        <location filename="../ui/pages/repos.py" line="561" />
         <source>Nothing matches “{query}”.</source>
         <translation>Nic nie pasuje do „{query}”.</translation>
     </message>
     <message>
-        <location filename="../ui/pages/repos.py" line="444" />
+        <location filename="../ui/pages/repos.py" line="563" />
+        <source>Every repository in the catalogue is already configured.</source>
+        <translation>Każde repozytorium z katalogu jest już skonfigurowane.</translation>
+    </message>
+    <message>
+        <location filename="../ui/pages/repos.py" line="577" />
         <source>Showing {shown} of {total}. Type to narrow the list.</source>
         <translation>Widocznych {shown} z {total}. Wpisz coś, żeby zawęzić listę.</translation>
     </message>
     <message>
-        <location filename="../ui/pages/repos.py" line="483" />
+        <location filename="../ui/pages/repos.py" line="587" />
+        <source>No repository is configured.</source>
+        <translation>Nie skonfigurowano żadnego repozytorium.</translation>
+    </message>
+    <message>
+        <location filename="../ui/pages/repos.py" line="663" />
         <source>This will run:
 
 eselect repository enable {name}
@@ -1045,28 +1056,28 @@ emaint sync -r {name}
 Źródło: {uri}</translation>
     </message>
     <message>
-        <location filename="../ui/pages/repos.py" line="488" />
+        <location filename="../ui/pages/repos.py" line="668" />
         <source>This repository is not run by Gentoo. Its ebuilds will run as root while building packages.</source>
         <translation>Tego repozytorium nie prowadzi Gentoo. Jego ebuildy będą się wykonywać jako root podczas budowania pakietów.</translation>
     </message>
     <message>
-        <location filename="../ui/pages/repos.py" line="492" />
+        <location filename="../ui/pages/repos.py" line="672" />
         <source>Enable repository</source>
         <translation>Włączenie repozytorium</translation>
     </message>
     <message>
-        <location filename="../ui/pages/repos.py" line="529" />
-        <location filename="../ui/pages/repos.py" line="509" />
+        <location filename="../ui/pages/repos.py" line="718" />
+        <location filename="../ui/pages/repos.py" line="698" />
         <source>Remove repository</source>
         <translation>Usunięcie repozytorium</translation>
     </message>
     <message>
-        <location filename="../ui/pages/repos.py" line="510" />
+        <location filename="../ui/pages/repos.py" line="699" />
         <source>The main repository cannot be removed.</source>
         <translation>Głównego repozytorium nie da się usunąć.</translation>
     </message>
     <message>
-        <location filename="../ui/pages/repos.py" line="515" />
+        <location filename="../ui/pages/repos.py" line="704" />
         <source>This will run:
 
 eselect repository remove -f {name}</source>
@@ -1075,7 +1086,7 @@ eselect repository remove -f {name}</source>
 eselect repository remove -f {name}</translation>
     </message>
     <message numerus="yes">
-        <location filename="../ui/pages/repos.py" line="519" />
+        <location filename="../ui/pages/repos.py" line="708" />
         <source>%n installed package(s) came from this repository. They stay on the system but lose their ebuild, so nothing will update or rebuild them again:</source>
         <translation>
             <numerusform>%n zainstalowany pakiet pochodzi z tego repozytorium. Zostanie w systemie, ale straci swój ebuild, więc nic go już nie zaktualizuje ani nie przebuduje:</numerusform>
@@ -1084,12 +1095,12 @@ eselect repository remove -f {name}</translation>
         </translation>
     </message>
     <message>
-        <location filename="../ui/pages/repos.py" line="553" />
+        <location filename="../ui/pages/repos.py" line="754" />
         <source>Hide repository from Portage</source>
         <translation>Ukrycie repozytorium przed Portage</translation>
     </message>
     <message numerus="yes">
-        <location filename="../ui/pages/repos.py" line="554" />
+        <location filename="../ui/pages/repos.py" line="755" />
         <source>%n installed package(s) came from ::{name}. Masking it means Portage stops offering updates for them — they are not removed, and nothing else changes.</source>
         <translation>
             <numerusform>%n zainstalowany pakiet pochodzi z ::{name}. Zamaskowanie oznacza, że Portage przestanie proponować dla niego aktualizacje — nie zostanie usunięty i nic więcej się nie zmieni.</numerusform>
@@ -1098,83 +1109,138 @@ eselect repository remove -f {name}</translation>
         </translation>
     </message>
     <message>
-        <location filename="../ui/pages/repos.py" line="591" />
+        <location filename="../ui/pages/repos.py" line="792" />
         <source>Written to {path}.</source>
         <translation>Zapisano do {path}.</translation>
     </message>
     <message>
-        <location filename="../ui/pages/repos.py" line="597" />
+        <location filename="../ui/pages/repos.py" line="798" />
         <source>Cancelled — nothing was written.</source>
         <translation>Anulowano — nic nie zostało zapisane.</translation>
     </message>
     <message>
-        <location filename="../ui/pages/repos.py" line="600" />
+        <location filename="../ui/pages/repos.py" line="801" />
         <source>Nothing was written: {error}</source>
         <translation>Nic nie zostało zapisane: {error}</translation>
     </message>
     <message>
-        <location filename="../ui/pages/repos.py" line="640" />
+        <location filename="../ui/pages/repos.py" line="849" />
         <source>Defined by the profile, not by repos.conf.</source>
         <translation>Zdefiniowane przez profil, nie przez repos.conf.</translation>
     </message>
     <message>
-        <location filename="../ui/pages/repos.py" line="648" />
+        <location filename="../ui/pages/repos.py" line="857" />
         <source>Show in Portage again</source>
         <translation>Pokaż znów w Portage</translation>
     </message>
     <message>
-        <location filename="../ui/pages/repos.py" line="648" />
+        <location filename="../ui/pages/repos.py" line="857" />
         <source>Hide from Portage</source>
         <translation>Ukryj przed Portage</translation>
     </message>
     <message>
-        <location filename="../ui/pages/repos.py" line="655" />
+        <location filename="../ui/pages/repos.py" line="870" />
+        <source>official</source>
+        <translation>oficjalne</translation>
+    </message>
+    <message>
+        <location filename="../ui/pages/repos.py" line="870" />
+        <source>unofficial</source>
+        <translation>nieoficjalne</translation>
+    </message>
+    <message>
+        <location filename="../ui/pages/repos.py" line="885" />
+        <source>maintained by {owners}</source>
+        <translation>opiekuje się {owners}</translation>
+    </message>
+    <message>
+        <location filename="../ui/pages/repos.py" line="915" />
+        <source>Reading the package index…</source>
+        <translation>Czytam indeks pakietów…</translation>
+    </message>
+    <message numerus="yes">
+        <location filename="../ui/pages/repos.py" line="921" />
+        <source>%n package(s)</source>
+        <translation>
+            <numerusform>%n pakiet</numerusform>
+            <numerusform>%n pakiety</numerusform>
+            <numerusform>%n pakietów</numerusform>
+        </translation>
+    </message>
+    <message>
+        <location filename="../ui/pages/repos.py" line="923" />
+        <source>Open in Search &amp; install</source>
+        <translation>Otwórz w „Szukaj i instaluj”</translation>
+    </message>
+    <message>
+        <location filename="../ui/pages/repos.py" line="927" />
+        <source>Nothing comes from ::{name} — every package it carries is also in a repository Portage prefers.</source>
+        <translation>Nic nie pochodzi z ::{name} — każdy pakiet stamtąd jest też w repozytorium, które Portage woli.</translation>
+    </message>
+    <message>
+        <location filename="../ui/pages/repos.py" line="940" />
+        <source>Showing {shown} of {total}. The package screen has the search and the filters for the rest.</source>
+        <translation>Widocznych {shown} z {total}. Reszta jest na ekranie pakietów, razem z wyszukiwarką i filtrami.</translation>
+    </message>
+    <message>
+        <location filename="../ui/pages/repos.py" line="952" />
         <source>Configured</source>
         <translation>Skonfigurowane</translation>
     </message>
     <message>
-        <location filename="../ui/pages/repos.py" line="656" />
-        <source>Synchronise all</source>
-        <translation>Synchronizuj wszystkie</translation>
+        <location filename="../ui/pages/repos.py" line="954" />
+        <source>Available</source>
+        <translation>Dostępne</translation>
     </message>
     <message>
-        <location filename="../ui/pages/repos.py" line="658" />
-        <source>All repositories</source>
-        <translation>Wszystkie repozytoria</translation>
+        <location filename="../ui/pages/repos.py" line="958" />
+        <source>filter by name</source>
+        <translation>filtruj po nazwie</translation>
     </message>
     <message>
-        <location filename="../ui/pages/repos.py" line="659" />
+        <location filename="../ui/pages/repos.py" line="960" />
         <source>name or keyword, e.g. steam</source>
         <translation>nazwa lub słowo kluczowe, np. steam</translation>
     </message>
     <message>
-        <location filename="../ui/pages/repos.py" line="660" />
-        <source>Refresh</source>
-        <translation>Odśwież</translation>
+        <location filename="../ui/pages/repos.py" line="962" />
+        <source>Synchronise all</source>
+        <translation>Synchronizuj wszystkie</translation>
     </message>
     <message>
-        <location filename="../ui/pages/repos.py" line="662" />
+        <location filename="../ui/pages/repos.py" line="965" />
+        <source>Refresh the catalogue</source>
+        <translation>Odśwież katalog</translation>
+    </message>
+    <message>
+        <location filename="../ui/pages/repos.py" line="968" />
         <source>Add by hand…</source>
         <translation>Dodaj ręcznie…</translation>
     </message>
     <message>
-        <location filename="../ui/pages/repos.py" line="663" />
+        <location filename="../ui/pages/repos.py" line="971" />
         <source>Synchronise</source>
         <translation>Synchronizuj</translation>
     </message>
     <message>
-        <location filename="../ui/pages/repos.py" line="664" />
+        <location filename="../ui/pages/repos.py" line="972" />
         <source>Remove…</source>
         <translation>Usuń…</translation>
     </message>
-    <message numerus="yes">
-        <location filename="../ui/pages/repos.py" line="666" />
-        <source>%n known</source>
-        <translation>
-            <numerusform>%n znane</numerusform>
-            <numerusform>%n znane</numerusform>
-            <numerusform>%n znanych</numerusform>
-        </translation>
+    <message>
+        <location filename="../ui/pages/repos.py" line="973" />
+        <source>Enable this repository</source>
+        <translation>Włącz to repozytorium</translation>
+    </message>
+    <message>
+        <location filename="../ui/pages/repos.py" line="974" />
+        <source>Packages from here</source>
+        <translation>Pakiety stąd</translation>
+    </message>
+    <message>
+        <location filename="../ui/pages/repos.py" line="976" />
+        <source>Nobody at Gentoo runs this repository. Building one of its packages runs its ebuild as root, now and at every sync after.</source>
+        <translation>Nikt z Gentoo nie prowadzi tego repozytorium. Zbudowanie któregoś z jego pakietów uruchamia jego ebuild jako root — teraz i po każdej kolejnej synchronizacji.</translation>
     </message>
 </context><context>
     <name>RequiredChanges</name>
@@ -2272,24 +2338,14 @@ Zostanie uruchomione:
 </context><context>
     <name>_CatalogueRow</name>
     <message>
-        <location filename="../ui/pages/repos.py" line="196" />
+        <location filename="../ui/pages/repos.py" line="207" />
         <source>official</source>
         <translation>oficjalne</translation>
     </message>
     <message>
-        <location filename="../ui/pages/repos.py" line="196" />
+        <location filename="../ui/pages/repos.py" line="207" />
         <source>unofficial</source>
         <translation>nieoficjalne</translation>
-    </message>
-    <message>
-        <location filename="../ui/pages/repos.py" line="199" />
-        <source>already configured</source>
-        <translation>już skonfigurowane</translation>
-    </message>
-    <message>
-        <location filename="../ui/pages/repos.py" line="199" />
-        <source>Enable</source>
-        <translation>Włącz</translation>
     </message>
 </context><context>
     <name>_ConditionalRow</name>
@@ -2301,22 +2357,22 @@ Zostanie uruchomione:
 </context><context>
     <name>_ConfiguredRow</name>
     <message>
-        <location filename="../ui/pages/repos.py" line="132" />
+        <location filename="../ui/pages/repos.py" line="143" />
         <source>main repository</source>
         <translation>repozytorium główne</translation>
     </message>
     <message>
-        <location filename="../ui/pages/repos.py" line="132" />
+        <location filename="../ui/pages/repos.py" line="143" />
         <source>overlay</source>
         <translation>overlay</translation>
     </message>
     <message>
-        <location filename="../ui/pages/repos.py" line="134" />
+        <location filename="../ui/pages/repos.py" line="145" />
         <source>hidden from Portage</source>
         <translation>ukryte przed Portage</translation>
     </message>
     <message numerus="yes">
-        <location filename="../ui/pages/repos.py" line="136" />
+        <location filename="../ui/pages/repos.py" line="147" />
         <source>%n package(s)</source>
         <translation>
             <numerusform>%n pakiet</numerusform>
@@ -2325,7 +2381,7 @@ Zostanie uruchomione:
         </translation>
     </message>
     <message>
-        <location filename="../ui/pages/repos.py" line="143" />
+        <location filename="../ui/pages/repos.py" line="154" />
         <source>never synchronised</source>
         <translation>nigdy nie synchronizowane</translation>
     </message>
