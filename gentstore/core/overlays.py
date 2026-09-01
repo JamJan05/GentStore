@@ -139,6 +139,24 @@ class Catalogue:
         found = [entry for *_ignored, entry in ranked]
         return found[:limit] if limit is not None else found
 
+    def browse(self, limit: int | None = 60) -> list[CatalogueEntry]:
+        """The catalogue with nothing typed in the search box.
+
+        :meth:`search` ranks by how well a name matches, and with no query there
+        is nothing to match — it returns an empty list, which left the screen
+        with nothing to show until somebody guessed a keyword. The order here is
+        the one a reader browsing would want instead: the best-kept first, the
+        way :meth:`search` breaks a tie, and Gentoo's own ahead of a stranger's
+        within a quality. Not status first — most of what the catalogue calls
+        official is a Gentoo developer's personal overlay marked experimental,
+        and fifty of those is not a list anybody wants to open on.
+        """
+        ordered = sorted(
+            self.entries,
+            key=lambda e: (e.quality_rank, not e.is_official, e.name.lower()),
+        )
+        return ordered[:limit] if limit is not None else ordered
+
 
 def cache_path() -> Path | None:
     """The catalogue file eselect keeps, or ``None`` when there is none yet."""

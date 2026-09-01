@@ -65,8 +65,10 @@ log = logging.getLogger(__name__)
 #: their sync dates do not shorten (Docs/02-ui-design.md §4).
 LIST_WIDTH = 512
 
-#: Catalogue hits shown at once.
-_RESULT_LIMIT = 40
+#: Catalogue rows shown at once, browsing or searching. Enough that a short
+#: catalogue is simply the list and nothing has to be typed at all; four
+#: hundred-odd of them is what the search box is for.
+_RESULT_LIMIT = 50
 
 
 class _ConfiguredRow(QFrame):
@@ -402,27 +404,56 @@ class ReposPage(SplitPage):
                 widget.deleteLater()
 
         query = text.strip()
-        if not query:
-            hint = QLabel()
-            hint.setProperty("role", "caption")
-            hint.setContentsMargins(t.SPACE_4, t.SPACE_3, t.SPACE_4, t.SPACE_3)
-            hint.setText(
-                self.tr("Type a name or a keyword to search %n repositories.", "",
-                        len(self._catalogue))
-                if not self._catalogue.is_empty
-                else self.tr(
-                    "No catalogue yet. Press Refresh to fetch Gentoo's list of "
-                    "repositories."
+        if self._catalogue.is_empty:
+            self._results_layout.addWidget(
+                self._hint(
+                    self.tr(
+                        "No catalogue yet. Press Refresh to fetch Gentoo's list of "
+                        "repositories."
+                    )
                 )
             )
-            self._results_layout.addWidget(hint)
+            return
+
+        # Nothing typed is not nothing to show. Four hundred repositories the
+        # user has never heard of cannot be searched by name, so the panel opens
+        # on the list itself and the search box narrows it.
+        found = (
+            self._catalogue.search(query, None) if query else self._catalogue.browse(None)
+        )
+        if not found:
+            self._results_layout.addWidget(
+                self._hint(self.tr("Nothing matches “{query}”.").format(query=query))
+            )
             return
 
         configured = {info.name for info in self._configured}
-        for entry in self._catalogue.search(query, _RESULT_LIMIT):
+        if not query:
+            # A repository already on the left is not an offer. It stays in the
+            # list — its absence would read as the catalogue being wrong — but
+            # it goes to the end rather than heading the page as ::gentoo,
+            # official and core, otherwise would.
+            found.sort(key=lambda entry: entry.name in configured)
+        for entry in found[:_RESULT_LIMIT]:
             self._results_layout.addWidget(
                 _CatalogueRow(self, entry, entry.name in configured)
             )
+        if len(found) > _RESULT_LIMIT:
+            self._results_layout.addWidget(
+                self._hint(
+                    self.tr("Showing {shown} of {total}. Type to narrow the list.").format(
+                        shown=_RESULT_LIMIT, total=len(found)
+                    )
+                )
+            )
+
+    def _hint(self, text: str) -> QLabel:
+        """A line of explanation where the result rows would be."""
+        hint = QLabel(text)
+        hint.setProperty("role", "caption")
+        hint.setWordWrap(True)
+        hint.setContentsMargins(t.SPACE_4, t.SPACE_3, t.SPACE_4, t.SPACE_3)
+        return hint
 
     # ----------------------------------------------------------- actions --
 

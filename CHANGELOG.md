@@ -110,6 +110,15 @@ tag was made.
   about a file that had by then been replaced. The answer is still remembered, but only for as
   long as the file it describes has not moved. Every test of that code passed `refresh=True`,
   which is why it survived: nothing in the running application does.
+- **"All repositories" showed nothing until something was typed into it.** `Catalogue.search`
+  answers an empty query with an empty list, which is right for a search and wrong for a panel:
+  the screen offered one line of instruction where four hundred and fifty-nine repositories were,
+  and a name nobody knows yet cannot be guessed at. It opens on the list now — `Catalogue.browse`,
+  ordered the way the search breaks its own ties, best-kept first and Gentoo's own ahead of a
+  stranger's within a quality — and the search box narrows it. Fifty rows at a time either way,
+  with the count and "type to narrow the list" underneath when there are more, so a catalogue
+  smaller than that never has to be searched at all. Repositories already configured go to the end
+  rather than heading the list as ::gentoo, official and core, otherwise would.
 - **A repository row on the Repositories screen only answered a click on its name.** The row
   highlights as a whole on hover, so the whole row reads as the target — but the click handler
   hung off the name label alone, and a click on the package count, the sync date or the empty

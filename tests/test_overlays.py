@@ -142,6 +142,23 @@ def test_an_empty_query_finds_nothing(catalogue: overlays.Catalogue) -> None:
     assert catalogue.search("   ") == []
 
 
+# -- browsing, which is what an empty search box asks for -------------------
+
+
+def test_browsing_returns_the_whole_catalogue(catalogue: overlays.Catalogue) -> None:
+    """What `search` cannot answer: the screen still has to show something."""
+    assert len(catalogue.browse(None)) == len(catalogue)
+
+
+def test_browsing_puts_the_best_kept_first(catalogue: overlays.Catalogue) -> None:
+    """core, then testing, then experimental — GURU is official and last."""
+    assert [e.name for e in catalogue.browse(None)] == ["gentoo", "steam-overlay", "guru"]
+
+
+def test_browsing_stops_at_the_limit(catalogue: overlays.Catalogue) -> None:
+    assert [e.name for e in catalogue.browse(2)] == ["gentoo", "steam-overlay"]
+
+
 # -- what eselect will accept ----------------------------------------------
 
 
