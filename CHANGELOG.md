@@ -9,6 +9,8 @@ tag was made.
 
 ## [Unreleased]
 
+## [1.3.0] — 2026-09-01
+
 ### Removed
 
 - **1.1.1 is withdrawn**: the release, its asset and its tag are deleted, and
@@ -294,7 +296,8 @@ comes from the `portage` API rather than from parsing ebuilds. Everything privil
 Bilingual (Polish and English) through Qt's own translation system; the documentation and the
 source strings are English.
 
-[Unreleased]: https://github.com/JamJan05/GentStore/compare/v1.1.2...HEAD
+[Unreleased]: https://github.com/JamJan05/GentStore/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/JamJan05/GentStore/compare/v1.1.2...v1.3.0
 [1.1.2]: https://github.com/JamJan05/GentStore/compare/6dd751f...v1.1.2
 [1.1.1]: https://github.com/JamJan05/GentStore/compare/v1.1.0...6dd751f
 [1.1.0]: https://github.com/JamJan05/GentStore/compare/v1.0.0...v1.1.0

@@ -6,7 +6,7 @@ system update cycle.
 
 Written in Python 3 with PyQt6. Bilingual: **Polish and English**.
 
-> **Version 1.1.2.** All nine screens work, and both halves have been exercised on a live
+> **Version 1.3.0.** All nine screens work, and both halves have been exercised on a live
 > system: the read-only side — search, USE flags, masks, repositories, the update preview,
 > configuration files, `make.conf`, elog and `@world` — and the privileged one, which has
 > written real `package.use`, `package.license` and `package.accept_keywords` entries through
@@ -108,7 +108,7 @@ yourself — the script only prints the command.
 ```
 Which one should Portage install?
 
-  1) 1.1.2 — the release. Tagged, and replaced by the next one on an
+  1) 1.3.0 — the release. Tagged, and replaced by the next one on an
      ordinary "emerge --sync && emerge --update @world". Recommended.
   2) 9999 — the live ebuild. Rebuilt from the newest commit whenever you
      run "emerge @live-rebuild". Newer, and occasionally broken.

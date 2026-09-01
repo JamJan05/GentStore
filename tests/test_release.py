@@ -258,7 +258,11 @@ def test_a_version_stated_twice_in_one_form_moves_both_times(tree: Path) -> None
     consistent.
     """
     readme = tree / "README.md"
-    quoted = "  1) 1.1.2 — the release."
+    # Read out of the tree rather than written down here: the number this test
+    # used to name was the release current when it was written, so the first
+    # bump after it turned a real check into a fixture error.
+    version = release("current", cwd=tree).stdout.strip()
+    quoted = f"  1) {version} — the release."
     body = readme.read_text()
     assert quoted in body, "the fixture no longer holds the mention this is about"
     readme.write_text(f"{body}\n\n{quoted}\n", encoding="utf-8")
@@ -266,10 +270,10 @@ def test_a_version_stated_twice_in_one_form_moves_both_times(tree: Path) -> None
     assert release("bump", "9.9.9", "--date", "2026-01-01", cwd=tree).returncode == 0
     after = readme.read_text()
     assert after.count("1) 9.9.9 — the release.") == 2
-    assert "1.1.2" not in after
+    assert version not in after
 
     # And a check run over a file where only one of them moved has to say so.
-    readme.write_text(after.replace("9.9.9 — the release.", "1.1.2 — the release.", 1))
+    readme.write_text(after.replace("9.9.9 — the release.", f"{version} — the release.", 1))
     refused = release("check", "9.9.9", cwd=tree)
     assert refused.returncode != 0
     assert "occurrence 1" in refused.stderr, refused.stderr
