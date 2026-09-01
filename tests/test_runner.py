@@ -509,7 +509,21 @@ def test_a_privileged_command_needs_the_launcher(runner: Command, monkeypatch) -
 
 
 def test_a_privileged_command_is_wrapped_in_both_layers(runner: Command, monkeypatch) -> None:
+    """pkexec outside, the launcher inside, the command last.
+
+    Both halves are supplied rather than looked up. Asking the machine for its
+    launcher made this a test of whether `sudo make install-system` had been run
+    here — green on the maintainer's machine, and a CommandError anywhere else,
+    including every CI runner. The order is a property of the code.
+    """
     monkeypatch.setattr(privilege, "detect", _pkexec)
+    monkeypatch.setattr(
+        privilege,
+        "launcher_command",
+        lambda: privilege.PrivilegedProgram(
+            argv=(str(privilege.INSTALL_DIR / privilege.LAUNCHER_NAME),), installed=True
+        ),
+    )
     argv = runner._resolve(emerge.install(["media-video/mpv"]))
     assert argv[0] == "/usr/bin/pkexec"
     assert "emerge" in argv

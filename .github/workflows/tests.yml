@@ -33,6 +33,11 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
+        with:
+          # tests/test_release.py resolves every ref CHANGELOG.md links to, and
+          # a shallow clone has none of them: the first run failed on 6dd751f,
+          # the commit 1.1.1 was withdrawn from.
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
@@ -47,9 +52,18 @@ jobs:
             libxkbcommon0 libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 \
             libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 \
             libxcb-shape0 libxcb-xinerama0
+          # lrelease, to build the .qm catalogues from the .ts files. They are
+          # generated and not committed, so without this the interface has no
+          # Polish and the two tests that switch language fail.
+          sudo apt-get install --no-install-recommends -y qt6-l10n-tools \
+            || sudo apt-get install --no-install-recommends -y qttools5-dev-tools
+          echo /usr/lib/qt6/bin >> "${GITHUB_PATH}"
 
       - name: Install
         run: python -m pip install --upgrade pip pytest ruff PyQt6 portage
+
+      - name: Compile the translation catalogues
+        run: python tools/i18n.py compile
 
       - name: Lint
         run: ruff check .
