@@ -84,9 +84,8 @@ class _ConfiguredRow(QFrame):
 
         top = QHBoxLayout()
         top.setSpacing(t.SPACE_3)
-        self._name = ClickableLabel(f"::{info.name}")
+        self._name = QLabel(f"::{info.name}")
         self._name.setObjectName("repoRowName")
-        self._name.clicked.connect(lambda: page.select(info.name))
         top.addWidget(self._name)
 
         # No repository badge here: the row already begins with "::guru", and a
@@ -109,7 +108,14 @@ class _ConfiguredRow(QFrame):
         layout.addWidget(self._meta)
 
         self._masked = masked
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.retranslate_ui()
+
+    def mouseReleaseEvent(self, event) -> None:  # noqa: N802, ANN001 - Qt API
+        # The whole row, not just the name: the row is what hover highlights,
+        # so the row is what a click has to mean.
+        self._page.select(self.info.name)
+        super().mouseReleaseEvent(event)
 
     def set_selected(self, selected: bool) -> None:
         self.setProperty("selected", "yes" if selected else "no")

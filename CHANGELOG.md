@@ -110,6 +110,11 @@ tag was made.
   about a file that had by then been replaced. The answer is still remembered, but only for as
   long as the file it describes has not moved. Every test of that code passed `refresh=True`,
   which is why it survived: nothing in the running application does.
+- **A repository row on the Repositories screen only answered a click on its name.** The row
+  highlights as a whole on hover, so the whole row reads as the target — but the click handler
+  hung off the name label alone, and a click on the package count, the sync date or the empty
+  space to their right did nothing at all. The row handles the click now, the way the rows on the
+  configuration-files and update screens already did.
 - Smaller corrections with no visible effect: a background task whose receiver vanished mid-flight
   stayed in the pending set for the life of the process; `Command.close()` tore its process down
   by hand and skipped half of what `_teardown()` does; `PortageEnv.configured()` invited nesting
