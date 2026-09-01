@@ -32,7 +32,6 @@ from gentstore.core import repos as repos_mod
 from gentstore.core import worldset
 from gentstore.core.cli import human_size
 from gentstore.core.cli import main as cli_main
-from gentstore.core.portage_env import PortageUnavailableError, env
 
 
 def entry(cp: str, description: str = "", repos: tuple[str, ...] = ("gentoo",)) -> pkgs.IndexEntry:
@@ -196,14 +195,6 @@ def test_a_missing_world_file_is_not_an_error(tmp_path) -> None:
 
 
 # -- against the real system ------------------------------------------------
-
-
-@pytest.fixture(scope="session")
-def portage_env():
-    try:
-        return env()
-    except PortageUnavailableError as exc:  # pragma: no cover - non-Gentoo host
-        pytest.skip(f"no usable Portage installation: {exc}")
 
 
 @pytest.fixture(scope="session")

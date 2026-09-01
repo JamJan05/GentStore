@@ -11,6 +11,21 @@ tag was made.
 
 ### Changed
 
+- **Nothing ran the test suite except this machine and the ebuild on a user's.** That is what
+  1.1.1 cost: a release whose own tests failed, so `emerge` with `USE=test` died in `src_test` for
+  everybody who tried it, and nothing in between had looked. Two workflows now do. `tests.yml`
+  runs `ruff` and the suite on `ubuntu-latest` for every push and pull request, in about two
+  minutes — `pip install portage` makes that possible, since Portage publishes to PyPI, so the
+  pure functions that need `portage.versions` work on a host with no Gentoo on it.
+  `tests-gentoo.yml` runs the whole suite nightly inside a `gentoo/stage3` container with a
+  repository snapshot mounted from `gentoo/portage`, which is the only place the tests that read a
+  real tree can run at all.
+- **A test could pass by skipping for the wrong reason.** The gate in front of every "against the
+  real system" test knew one way a host can fail to be Gentoo — the module missing — and four
+  modules had their own copy of it. `pip install portage` is the other way: the import succeeds
+  and then answers every question with nothing, so `assert 0 > 100` fails and reads like a broken
+  test rather than a host with no packages. One fixture in `tests/conftest.py` now, and it skips
+  on both.
 - **The README's pictures are the application as it is now.** Every one of them dated from before
   1.0.0 — the interface was Polish then, and the Repositories screen in them no longer exists.
   Retaken in English, with two for repositories rather than one, since the screen now answers two

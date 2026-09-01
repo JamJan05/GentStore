@@ -1,0 +1,60 @@
+# The fast half of the answer to "does this still work?".
+#
+# Until now nothing ran the suite except the maintainer's machine and the ebuild
+# on a user's, and 1.1.1 is what that cost: a release whose own tests failed, so
+# `emerge` with USE=test died in src_test for everybody who tried it. Nothing in
+# between had looked.
+#
+# This runs on a host with no Gentoo on it, which is most of the suite and all of
+# the linting, in about two minutes. `pip install portage` is what makes that
+# possible: Portage publishes to PyPI, so the pure functions that need
+# `portage.versions` work here, while everything that needs a real tree skips
+# through the portage_env fixture in tests/conftest.py.
+#
+# What it therefore does not cover: every test that reads /var/db/pkg or
+# /var/db/repos. tests-gentoo.yml runs those, in a container that has them.
+
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+
+      - name: The libraries a PyQt6 wheel loads even off-screen
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            libegl1 libgl1 libdbus-1-3 libglib2.0-0t64 libfontconfig1 \
+            libxkbcommon0 libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 \
+            libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 \
+            libxcb-shape0 libxcb-xinerama0
+
+      - name: Install
+        run: python -m pip install --upgrade pip pytest ruff PyQt6 portage
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Test
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: pytest -q -rs

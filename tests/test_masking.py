@@ -40,7 +40,6 @@ from gentstore.core.masking import (
     fix_for,
     inspect,
 )
-from gentstore.core.portage_env import PortageUnavailableError, env
 
 # -- reading Portage's wording ---------------------------------------------
 
@@ -289,14 +288,6 @@ def test_the_package_is_recovered_from_the_atom(atom: str, expected: str) -> Non
 
 
 # -- against the real system ------------------------------------------------
-
-
-@pytest.fixture(scope="session")
-def portage_env():
-    try:
-        return env()
-    except PortageUnavailableError as exc:  # pragma: no cover - non-Gentoo host
-        pytest.skip(f"no usable Portage installation: {exc}")
 
 
 def find_blocked(portage_env, kind: BlockKind) -> Blockage | None:

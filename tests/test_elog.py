@@ -192,14 +192,8 @@ def test_the_worst_severity_across_a_set_is_reported() -> None:
 # -- against the real system ------------------------------------------------
 
 
-def test_the_machines_own_messages_read() -> None:
-    from gentstore.core.portage_env import PortageUnavailableError, env
-
-    try:
-        environment = env()
-    except PortageUnavailableError as exc:  # pragma: no cover - non-Gentoo host
-        pytest.skip(f"no usable Portage installation: {exc}")
-
+def test_the_machines_own_messages_read(portage_env) -> None:
+    environment = portage_env
     entries = elog.load(environment)
     if not entries:  # pragma: no cover - a system that has never merged anything
         pytest.skip("no elog messages on this machine")
@@ -211,16 +205,11 @@ def test_the_machines_own_messages_read() -> None:
     assert timed == sorted(timed, reverse=True)
 
 
-def test_the_world_set_and_the_installed_list_are_different_things() -> None:
+def test_the_world_set_and_the_installed_list_are_different_things(portage_env) -> None:
     """The whole point of the @world screen, asserted."""
     from gentstore.core import worldset
-    from gentstore.core.portage_env import PortageUnavailableError, env
 
-    try:
-        environment = env()
-    except PortageUnavailableError as exc:  # pragma: no cover
-        pytest.skip(f"no usable Portage installation: {exc}")
-
+    environment = portage_env
     world = worldset.world_entries(environment)
     installed = worldset.installed_packages(environment)
     assert world, "an empty @world would make this meaningless"

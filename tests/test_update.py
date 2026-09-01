@@ -471,14 +471,8 @@ def test_colour_escapes_do_not_confuse_the_parser() -> None:
 # -- against the real system ------------------------------------------------
 
 
-def test_the_machines_own_news_reads(tmp_path: Path) -> None:
-    from gentstore.core.portage_env import PortageUnavailableError, env
-
-    try:
-        environment = env()
-    except PortageUnavailableError as exc:  # pragma: no cover - non-Gentoo host
-        pytest.skip(f"no usable Portage installation: {exc}")
-
+def test_the_machines_own_news_reads(tmp_path: Path, portage_env) -> None:
+    environment = portage_env
     items = news.load(environment)
     if not items:  # pragma: no cover - a repository without news
         pytest.skip("no news items on this machine")

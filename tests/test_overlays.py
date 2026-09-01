@@ -28,7 +28,6 @@ from pathlib import Path
 import pytest
 
 from gentstore.core import overlays, repos
-from gentstore.core.portage_env import PortageUnavailableError, env
 from gentstore.runner import eselect
 
 SAMPLE = """<?xml version="1.0" encoding="utf-8"?>
@@ -336,14 +335,6 @@ def test_syncing_one_repository_uses_emaint() -> None:
 
 
 # -- against the real system ------------------------------------------------
-
-
-@pytest.fixture(scope="session")
-def portage_env():
-    try:
-        return env()
-    except PortageUnavailableError as exc:  # pragma: no cover - non-Gentoo host
-        pytest.skip(f"no usable Portage installation: {exc}")
 
 
 def test_the_machines_own_catalogue_reads(portage_env) -> None:

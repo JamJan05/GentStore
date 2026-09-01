@@ -1,0 +1,45 @@
+# The other half: the suite on a machine that actually is Gentoo.
+#
+# tests.yml covers everything that does not need a Portage tree, which is most of
+# it and none of the interesting failures — a wrong assumption about what
+# `portdb` returns, a repository read that only breaks against a real
+# `repos.conf`, an index built from 19 000 packages instead of none. Those tests
+# skip there and run here, in the shape the ebuild's src_test runs them.
+#
+# Nightly and on demand rather than on every push, because it costs an image
+# pull and an emerge. If this is red while tests.yml is green, the difference is
+# something only Gentoo sees.
+
+name: Tests (Gentoo)
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: tests-gentoo
+  cancel-in-progress: false
+
+jobs:
+  gentoo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - uses: actions/checkout@v5
+
+      # The tree as a volume, which is how the Gentoo images are meant to be
+      # used together: no `emerge --sync` on a runner.
+      - name: A repository snapshot to mount into the stage3
+        run: docker create --name portage-tree gentoo/portage:latest /bin/true
+
+      - name: Run the suite the way the ebuild does
+        run: |
+          docker run --rm --volumes-from portage-tree \
+            -v "${PWD}:/src" -w /src \
+            gentoo/stage3:latest /src/.github/ci/gentoo-tests.sh
+
+      - name: Take the container away again
+        if: always()
+        run: docker rm -f portage-tree || true

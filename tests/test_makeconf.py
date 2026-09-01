@@ -286,14 +286,8 @@ def test_listing_profiles_needs_no_privileges_but_setting_one_does() -> None:
 # -- against the real file --------------------------------------------------
 
 
-def test_the_machines_own_make_conf_parses() -> None:
-    from gentstore.core.portage_env import PortageUnavailableError, env
-
-    try:
-        environment = env()
-    except PortageUnavailableError as exc:  # pragma: no cover - non-Gentoo host
-        pytest.skip(f"no usable Portage installation: {exc}")
-
+def test_the_machines_own_make_conf_parses(portage_env) -> None:
+    environment = portage_env
     conf = makeconf.load(environment)
     if not conf.exists:  # pragma: no cover - a system without make.conf
         pytest.skip("this machine has no make.conf")
@@ -302,15 +296,9 @@ def test_the_machines_own_make_conf_parses() -> None:
         assert assignment.raw in conf.lines, "every assignment must point at a real line"
 
 
-def test_what_portage_uses_and_what_the_file_says_are_asked_separately() -> None:
+def test_what_portage_uses_and_what_the_file_says_are_asked_separately(portage_env) -> None:
     """FEATURES comes from the profile as well, and conflating them misleads."""
-    from gentstore.core.portage_env import PortageUnavailableError, env
-
-    try:
-        environment = env()
-    except PortageUnavailableError as exc:  # pragma: no cover
-        pytest.skip(f"no usable Portage installation: {exc}")
-
+    environment = portage_env
     conf = makeconf.load(environment)
     from_portage = makeconf.effective("FEATURES", environment)
     assert from_portage, "Portage always has a FEATURES value"

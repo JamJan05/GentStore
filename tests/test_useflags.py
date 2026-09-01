@@ -32,7 +32,6 @@ import pytest
 from gentstore.core import confedit, useflags
 from gentstore.core import depgraph_hints as hints
 from gentstore.core import required_use as ru
-from gentstore.core.portage_env import PortageUnavailableError, env
 from gentstore.core.useflags import FlagLock, FlagSource, UseFlag, UseState
 
 # -- REQUIRED_USE: parsing --------------------------------------------------
@@ -301,14 +300,6 @@ def test_changing_nothing_plans_nothing(tmp_path, state) -> None:
 
 
 # -- against the real system ------------------------------------------------
-
-
-@pytest.fixture(scope="session")
-def portage_env():
-    try:
-        return env()
-    except PortageUnavailableError as exc:  # pragma: no cover - non-Gentoo host
-        pytest.skip(f"no usable Portage installation: {exc}")
 
 
 @pytest.fixture(scope="session")
