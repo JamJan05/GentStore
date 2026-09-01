@@ -9,6 +9,18 @@ tag was made.
 
 ## [Unreleased]
 
+### Changed
+
+- **The README's pictures are the application as it is now.** Every one of them dated from before
+  1.0.0 — the interface was Polish then, and the Repositories screen in them no longer exists.
+  Retaken in English, with two for repositories rather than one, since the screen now answers two
+  questions in two tabs, and the Settings dialog added to the table: it was already being
+  generated and shown nowhere. `config-files.png` is the exception and stays as it was, because
+  this machine has no `._cfg` waiting and the honest shot is an empty panel.
+  `tools/readme_shots.py` drives the new screen — its old `_search.setText("kde")` would now type
+  into the Configured tab's filter and photograph an empty list — and `overlay-filter.png`, which
+  nothing has referred to since 0.1.0, is gone.
+
 ## [1.3.0] — 2026-09-01
 
 ### Removed

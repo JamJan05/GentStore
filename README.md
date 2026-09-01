@@ -22,13 +22,16 @@ Written in Python 3 with PyQt6. Bilingual: **Polish and English**.
 |---|---|
 | ![Search and install](Docs/screenshots/search-and-install.png) | ![USE flags](Docs/screenshots/use-flags.png) |
 | **Search and install** — results from four repositories, package details, versions with their keywords | **USE flags** — where each flag's value comes from, and exactly what turning it on changes |
-| ![Repository filter](Docs/screenshots/repository-filter.png) | ![Repositories](Docs/screenshots/repositories.png) |
-| **One repository at a time** — the same package lives in `::gentoo` and in `::guru`; the badge you pick decides which one the install comes from | **Repositories** — the `repos.conf` section verbatim, and the catalogue of 459 overlays |
-| ![System update](Docs/screenshots/update.png) | ![Configuration files](Docs/screenshots/config-files.png) |
-| **System update** — six steps, with a preview table built from the output of `emerge -pv` | **`._cfg` files** — the difference, and three answers |
+| ![Repositories](Docs/screenshots/repositories.png) | ![Available repositories](Docs/screenshots/repositories-available.png) |
+| **Repositories** — the `repos.conf` section verbatim, and the 2303 packages that come from `::guru` and nowhere else | **Adding one** — the rest of Gentoo's catalogue, who runs each of them, and the two commands enabling one would run |
+| ![Repository filter](Docs/screenshots/repository-filter.png) | ![System update](Docs/screenshots/update.png) |
+| **One repository at a time** — the same package lives in `::gentoo` and in `::guru`; the badge you pick decides which one the install comes from | **System update** — six steps, with a preview table built from the output of `emerge -pv` |
+| ![Configuration files](Docs/screenshots/config-files.png) | ![Settings](Docs/screenshots/settings.png) |
+| **`._cfg` files** — the difference, and three answers | **Settings** — language, interface size, how the application becomes root, and how many backups to keep |
 
-*(The pictures were taken with the interface in Polish. `python tools/readme_shots.py` retakes
-them; it now defaults to English.)*
+*(`python tools/readme_shots.py` retakes them. All but one are current and in English; the `._cfg`
+one is older and Polish, because that screen has nothing to show on a machine with no
+configuration file waiting, and an empty panel is a worse picture than a dated one.)*
 
 ## The principles this application stands on
 

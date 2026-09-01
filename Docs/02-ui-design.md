@@ -244,7 +244,8 @@ graphical session and do not disturb the settings of a running application: the 
 | `search-and-install.png` | the query `mpv`, with a package selected | automatic |
 | `use-flags.png` | `media-video/mpv`, the `vulkan` flag unfolded | automatic |
 | `repository-filter.png` | `dev-libs/zydis` narrowed to `::guru` | automatic |
-| `repositories.png` | the configured repositories + the catalogue, searching for `kde` | automatic |
+| `repositories.png` | the Configured tab: `::guru`, its `repos.conf` section and its packages | automatic |
+| `repositories-available.png` | the Available tab: the catalogue searched for `kde`, one of them selected | automatic |
 | `update.png` | step 3 with the preview table filled in | **needs a system with pending updates** |
 | `config-files.png` | a pending `._cfg` with its difference | **needs a system with a pending `._cfg`** |
 | `settings.png` | the Settings dialog | automatic |
@@ -262,6 +263,7 @@ the machine: on a system that is up to date and has no pending `._cfg`, they com
 panels. When that happens it is better to keep the previous files than to put a picture that
 shows nothing into the README.
 
-The pictures currently in the repository were taken with the interface in Polish, from when the
-documentation was Polish too. `--lang` now defaults to `en`, so the next refresh brings them
-into line with this documentation.
+All of them were retaken for 1.3.0, in English, except `config-files.png`: this machine has no
+`._cfg` waiting, so the shot came out as the empty panel the paragraph above warns about and the
+older Polish picture was kept. It is the one file in the set that still shows the interface from
+before 1.0.0, and the first refresh on a machine with a pending configuration file replaces it.

@@ -83,6 +83,7 @@ SHOTS = (
     "repository-filter",
     "update",
     "repositories",
+    "repositories-available",
     "config-files",
     "settings",
 )
@@ -197,12 +198,38 @@ def shot_update(window: MainWindow, out: Path) -> None:
     capture(window, out, "update")
 
 
-def shot_repos(window: MainWindow, out: Path) -> None:
+def shot_repos(window: MainWindow, out: Path, repo: str) -> None:
+    """The Configured tab: a repository's own section, and what it brings.
+
+    An overlay rather than ``::gentoo``: the main repository is defined by the
+    profile and has no ``repos.conf`` section to show, which is half the point
+    of the panel.
+    """
     page = window.set_page("repos") or window.stack.currentWidget()
     settle()
-    page._search.setText("kde")
+    if repo in page._rows:
+        page.select(repo)
+    else:
+        print(f"  … no ::{repo} on this system; capturing whatever is selected", file=sys.stderr)
+    # The package list comes out of the search index, which may still be building.
     settle()
     capture(window, out, "repositories")
+
+
+def shot_repos_available(window: MainWindow, out: Path, query: str) -> None:
+    """The Available tab: the catalogue, and what enabling one of them runs."""
+    page = window.set_page("repos") or window.stack.currentWidget()
+    settle()
+    page.set_tab(page.AVAILABLE)
+    page._search.setText(query)
+    settle()
+    offers = list(page._offer_rows.values())
+    if offers:
+        page.select_offer(offers[0].entry)
+    else:
+        print(f"  … nothing in the catalogue matches {query!r}", file=sys.stderr)
+    settle()
+    capture(window, out, "repositories-available")
 
 
 def shot_cfgfiles(window: MainWindow, out: Path) -> None:
@@ -238,6 +265,16 @@ def main(argv: list[str]) -> int:
         default="dev-libs/zydis::guru",
         help="the two-repository package for the filter shot, as cat/pkg::repo",
     )
+    parser.add_argument(
+        "--overlay",
+        default="guru",
+        help="the configured overlay to show, with its packages",
+    )
+    parser.add_argument(
+        "--catalogue",
+        default="kde",
+        help="what to search the catalogue for in the Available shot",
+    )
     parser.add_argument("--only", action="append", choices=SHOTS, help="just these shots")
     options = parser.parse_args(argv[1:])
 
@@ -268,7 +305,9 @@ def main(argv: list[str]) -> int:
     if "repository-filter" in wanted:
         shot_repo_filter(window, out, package, repo)
     if "repositories" in wanted:
-        shot_repos(window, out)
+        shot_repos(window, out, options.overlay)
+    if "repositories-available" in wanted:
+        shot_repos_available(window, out, options.catalogue)
 
     # The step lists and the preview table want the extra forty pixels.
     size(options.tall)
