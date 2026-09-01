@@ -222,8 +222,15 @@ def collect(cpv: str, repo: str = "", env: PortageEnv | None = None) -> UseState
         forced = set(settings.useforce)
         expand_variables = tuple((settings.get("USE_EXPAND") or "").split())
         repo_location = env.repo_location(repo or _repo_of(env, cpv)) or ""
+        # ``use.desc`` and ``profiles/desc/*.desc`` live in the master
+        # repository, not beside the ebuild: an overlay carries neither, so
+        # looking for them in the package's own repository found nothing and
+        # every flag of every ::guru package came out with no description at
+        # all. ``metadata.xml`` and ``use.local.desc`` are per-repository and
+        # do belong to the package's own.
+        master_location = env.repo_location(env.main_repo_name or "") or ""
 
-    descriptions = _Descriptions(repo_location, cp)
+    descriptions = _Descriptions(repo_location, master_location, cp)
     flags = []
     for name in sorted({token.lstrip("+-") for token in iuse_raw.split()}):
         source = next(
@@ -339,6 +346,16 @@ _LOCAL_DESCRIPTIONS: dict[tuple[str, str], dict[str, str]] = {}
 
 _DESC_LINE = re.compile(r"^([^\s#][^\s]*)\s+-\s+(.*)$")
 
+#: A ``metadata.xml`` bigger than this is not one, so do not parse it.
+#:
+#: ElementTree resolves no external entities, but it does expand entities an
+#: internal subset defines — so a metadata.xml written to be a decompression
+#: bomb would be expanded here, and metadata.xml comes from whichever overlay
+#: the user added. A size limit bounds the cheap version of that; it is not a
+#: cure, and the cure is defusedxml, which this project does not have and would
+#: be a dependency to justify. The real files are a couple of kilobytes.
+METADATA_MAX_BYTES = 1 << 20
+
 
 class _Descriptions:
     """Where a flag's one-line description comes from, most specific first.
@@ -347,10 +364,17 @@ class _Descriptions:
     one that can talk about *this* package; ``use.local.desc`` is the same text
     flattened into one huge file; ``use.desc`` describes flags that mean roughly
     the same thing everywhere.
+
+    The first two are read from the repository carrying the package and the last
+    two from the master, because that is where each of them exists.
     """
 
-    def __init__(self, repo_location: str, cp: str) -> None:
+    def __init__(self, repo_location: str, master_location: str, cp: str) -> None:
         self._location = repo_location
+        #: Where the tree-wide files are. Falls back to the package's own
+        #: repository, which is the right answer when that *is* the master and
+        #: the only answer available when Portage will not name one.
+        self._master = master_location or repo_location
         self._cp = cp
         self._metadata = _metadata_descriptions(repo_location, cp)
         self._local = _local_descriptions(repo_location, cp)
@@ -361,11 +385,11 @@ class _Descriptions:
         if name in self._local:
             return self._local[name], DescriptionSource.LOCAL
         if expand_variable:
-            values = _expand_descriptions(self._location, expand_variable)
+            values = _expand_descriptions(self._master, expand_variable)
             value = name[len(expand_variable) + 1:]
             if value in values:
                 return values[value], DescriptionSource.EXPAND
-        globals_ = _global_descriptions(self._location)
+        globals_ = _global_descriptions(self._master)
         if name in globals_:
             return globals_[name], DescriptionSource.GLOBAL
         return "", DescriptionSource.NONE
@@ -418,6 +442,10 @@ def _metadata_descriptions(location: str, cp: str) -> dict[str, str]:
     """``<use><flag name="…">`` from the package's own ``metadata.xml``."""
     path = Path(location) / cp / "metadata.xml"
     try:
+        size = path.stat().st_size
+        if size > METADATA_MAX_BYTES:
+            log.warning("Ignoring %s: %d bytes is not a metadata.xml", path, size)
+            return {}
         tree = ElementTree.parse(path)
     except (OSError, ElementTree.ParseError):
         return {}

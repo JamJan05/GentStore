@@ -131,7 +131,7 @@ EMERGE_OPTIONS = frozenset(
     }
 )
 
-#: ``media-video/mpv``, ``=media-video/mpv-0.41.0-r2``, ``*/*::guru``.
+#: ``media-video/mpv``, ``=media-video/mpv-0.41.0-r2``, ``media-video/*``.
 #:
 #: Not a full Portage atom parser — this file stays standard-library only and
 #: readable in one sitting. It is a shape check, and the shape is what matters:
@@ -168,7 +168,14 @@ _SYNC_TYPES = frozenset({"git", "rsync", "svn", "mercurial", "cvs", "bzr", "darc
 #: The scheme is checked against a list rather than for the presence of "://",
 #: because git reads ``ext::sh -c '…'`` as "run this command" — and that string
 #: contains "://" quite happily if you put one at the end of it.
-_URI = re.compile(r"^(?:https?|git|ssh|rsync|file)://[^\s]+$")
+#:
+#: The same list as ``_SCHEME`` in gentstore/core/overlays.py, and it has to
+#: stay that way: the "Add overlay" dialog validates against that one and this
+#: file decides whether the command it built may run. When ``svn`` was in the
+#: first list and not in this one, the dialog enabled its OK button for an
+#: svn:// overlay and the launcher then refused the command it had just
+#: promised — an error nobody could act on.
+_URI = re.compile(r"^(?:https?|git|ssh|rsync|svn|file)://[^\s]+$")
 _SCP_URI = re.compile(r"^[A-Za-z0-9._-]+@[A-Za-z0-9._-]+:[^\s:]+$")
 
 #: ``202501-15``, or the word ``affected``.
@@ -178,8 +185,28 @@ _ADVISORY = re.compile(r"^\d{6,8}-\d{2}$")
 _INDEX = re.compile(r"^\d{1,4}$")
 
 
+def _is_everything(token: str) -> bool:
+    """``*/*`` — every package there is — however it is dressed up.
+
+    The atom shape above allows a wildcard in either half, and both at once is
+    still a valid atom, so ``emerge --unmerge --color=n '*/*'`` used to pass
+    every other check in this file. That is the whole system, and the dialog
+    said "install, update or remove packages"; during the ``auth_admin_keep``
+    window anything running as the user could have asked for it without a
+    dialog of its own. Nothing here needs it either — the one place Gentstore
+    writes ``*/*`` is ``*/*::<overlay>`` into ``package.mask``, and that goes
+    to the helper and never reaches this program.
+
+    Matched on the package name alone, so an operator, a slot, a repository or
+    a USE list cannot smuggle it past.
+    """
+    body = token.lstrip("!<>=~")
+    body = body.partition("::")[0].partition("[")[0].partition(":")[0]
+    return body == "*/*"
+
+
 def _is_atom(token: str) -> bool:
-    if token.endswith(_PACKAGE_SUFFIXES):
+    if token.endswith(_PACKAGE_SUFFIXES) or _is_everything(token):
         return False
     return bool(_ATOM.match(token) or _SET.match(token))
 

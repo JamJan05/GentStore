@@ -162,7 +162,11 @@ def locate(
     """
     base = _config_dir(env, config_dir) / name
     key = entry if entry is not None else cp
-    file_name = file_name or cp.partition("/")[2]
+    # ``cp.partition("/")[2]`` is empty for anything that is not a ``cat/pkg``,
+    # and an empty name makes ``base / file_name`` the directory itself — a path
+    # the helper can only refuse, with a message about the wrong thing. Falling
+    # back to the whole string keeps it a file.
+    file_name = file_name or cp.partition("/")[2] or cp
 
     if base.is_dir():
         for candidate in sorted(base.iterdir()):

@@ -248,17 +248,43 @@ class InstalledStatus:
 
 
 _INSTALLED: dict[str, InstalledStatus] = {}
+#: What the installed file was when its status was worked out, so that the
+#: memo above can tell it has since been replaced.
+_STAMPS: dict[str, tuple[int, int, int, int] | None] = {}
 
 _PROGRAMS = {HELPER_NAME: _SOURCE_HELPER, LAUNCHER_NAME: _SOURCE_LAUNCHER}
 
 
-def installed_status(name: str, *, refresh: bool = False) -> InstalledStatus:
-    """Compare the installed copy of *name* with the source it came from."""
-    if not refresh and name in _INSTALLED:
-        return _INSTALLED[name]
+def _stamp(path: Path) -> tuple[int, int, int, int] | None:
+    """Enough of *path* to notice it being replaced, without reading it.
 
+    The device and inode because ``install`` puts a new file there rather than
+    editing the old one; the timestamp and the size because a file can be
+    replaced in place too, and neither of those survives it.
+    """
+    try:
+        info = path.stat()
+    except OSError:
+        return None
+    return (info.st_dev, info.st_ino, info.st_mtime_ns, info.st_size)
+
+
+def installed_status(name: str, *, refresh: bool = False) -> InstalledStatus:
+    """Compare the installed copy of *name* with the source it came from.
+
+    The answer is remembered, but only for as long as the file it describes has
+    not moved. Without that the memo outlived its subject, and in the one way
+    that mattered: the interface said "the installed helper is from an older
+    version, run `sudo make install-system`", somebody ran it, and every refusal
+    for the rest of the session went on telling them to. A stat per call is
+    what buys the difference, against a full read of both files on a miss.
+    """
     source = _PROGRAMS.get(name)
     installed = INSTALL_DIR / name
+    stamp = _stamp(installed)
+    if not refresh and name in _INSTALLED and _STAMPS.get(name) == stamp:
+        return _INSTALLED[name]
+
     status = InstalledStatus(name=name, installed=installed.is_file(), current=True)
 
     if status.installed and source is not None:
@@ -271,6 +297,7 @@ def installed_status(name: str, *, refresh: bool = False) -> InstalledStatus:
         )
 
     _INSTALLED[name] = status
+    _STAMPS[name] = stamp
     return status
 
 

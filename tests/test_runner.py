@@ -326,6 +326,43 @@ def test_a_differing_copy_is_reported_as_stale(tmp_path, monkeypatch) -> None:
     assert [s.name for s in privilege.stale_programs(refresh=True)] == [privilege.HELPER_NAME]
 
 
+def test_reinstalling_is_noticed_without_being_asked_to_look_again(
+    tmp_path, monkeypatch
+) -> None:
+    """The advice has to stop once it has been taken.
+
+    ``installed_status`` remembers its answer, and every other test here passes
+    ``refresh=True`` — which is exactly how this went unnoticed. In the running
+    application nothing passes it: the status bar asks once at start-up and
+    ``helper_client._annotate`` asks again on every refusal. So the interface
+    said "the installed helper is from an older version, run
+    `sudo make install-system`", somebody ran it, and the memo went on saying it
+    for the rest of the session, about a file that had since been replaced.
+
+    A stat is what tells the memo its subject has moved.
+    """
+    from gentstore.runner import helper_client
+
+    source = tmp_path / "gentstore_helper.py"
+    source.write_text("new\n", encoding="utf-8")
+    installed = tmp_path / "installed"
+    installed.mkdir()
+    copy = installed / privilege.HELPER_NAME
+    copy.write_text("old\n", encoding="utf-8")
+    monkeypatch.setattr(privilege, "INSTALL_DIR", installed)
+    monkeypatch.setattr(privilege, "_PROGRAMS", {privilege.HELPER_NAME: source})
+
+    assert privilege.stale_programs()  # asked the way the application asks
+    assert "make install-system" in helper_client._annotate("outside_root")
+
+    # `sudo make install-system`, in the only way that matters here.
+    copy.unlink()
+    copy.write_text("new\n", encoding="utf-8")
+
+    assert privilege.stale_programs() == ()
+    assert helper_client._annotate("outside_root") == "outside_root"
+
+
 def test_a_refusal_says_when_a_stale_helper_may_be_the_reason(tmp_path, monkeypatch) -> None:
     from gentstore.runner import helper_client
 
@@ -597,3 +634,50 @@ def test_the_helper_and_the_core_agree_on_where_backups_live() -> None:
     assert backup_core.BACKUP_PARENT == helper.BACKUP_PARENT
     assert backup_core.BACKUP_PREFIX == helper.BACKUP_PREFIX
     assert backup_core.BACKUP_KEEP == helper.BACKUP_KEEP
+
+
+def test_the_launcher_refuses_every_package_there_is() -> None:
+    """``emerge --unmerge '*/*'`` is not "remove packages", it is "remove Gentoo".
+
+    The atom shape allows a wildcard in either half and had nothing to say about
+    both at once, so one command line got past every other check in the file —
+    and past it without a dialog of its own, for as long as polkit's
+    ``auth_admin_keep`` remembers the last answer. Nothing Gentstore runs needs
+    it: the one place ``*/*`` is written is ``*/*::<overlay>`` into
+    ``package.mask``, and that goes to the helper.
+    """
+    for atom in ("*/*", "*/*::guru", "=*/*-1", "!*/*", "*/*:0", "*/*[python]"):
+        with pytest.raises(launcher.LauncherError, match="not a package atom"):
+            launcher.check_arguments("emerge", ["--unmerge", "--color=n", atom])
+
+    # A wildcard on one side is still an ordinary atom and stays allowed.
+    launcher.check_arguments("emerge", ["--pretend", "media-video/*"])
+
+
+def test_the_overlay_dialog_and_the_launcher_agree_on_url_schemes() -> None:
+    """Two lists of schemes in two files, with a user standing between them.
+
+    ``svn`` was in one and not the other, so the "Add overlay" dialog enabled its
+    OK button for an ``svn://`` URL and the launcher then refused the very
+    command the dialog had just promised to run — a failure landing a long way
+    from the decision that caused it. Compared by behaviour rather than by
+    pattern, so a rewrite of either expression still has to keep the answers the
+    same.
+    """
+    from gentstore.core import overlays
+
+    candidates = (
+        "http://example.org/o", "https://example.org/o", "git://example.org/o",
+        "ssh://git@example.org/o", "rsync://example.org/o", "svn://example.org/o",
+        "file:///srv/o", "ext::sh -c whoami://", "javascript:alert(1)://x",
+        "ftp://example.org/o", "git@example.org:owner/repo", "not a url",
+    )
+    for uri in candidates:
+        assert overlays.is_valid_uri(uri) is launcher._is_uri(uri), uri
+
+
+def test_every_sync_type_the_dialog_offers_is_one_the_launcher_allows() -> None:
+    """The other half of the same seam: the dialog's dropdown."""
+    from gentstore.ui.widgets.add_overlay_dialog import SYNC_TYPES
+
+    assert set(SYNC_TYPES) <= launcher._SYNC_TYPES

@@ -61,8 +61,8 @@ CONFIG_ROOT = Path("/etc/portage")
 OWNED_SUBTREES = ("repos.conf", "binrepos.conf")
 
 #: Files that tell us which directories Portage protects, in the order Portage
-#: itself reads them. All three are owned by root, which is the point: the list
-#: of places this program may write must never come from the caller.
+#: itself reads them. All of them are owned by root — though see
+#: :data:`PROTECT_CEILINGS` for why that is not the whole answer.
 CONFIG_PROTECT_SOURCES = (
     Path("/usr/share/portage/config/make.globals"),
     Path("/etc/portage/make.conf"),
@@ -92,6 +92,16 @@ _BACKUP_NAME = re.compile(r"^portage\.bak-\d{4}-\d{2}-\d{2}T\d{4}(-\d+)?$")
 _ARCHIVE_NAME = re.compile(r"^portage\.bak-\d{4}-\d{2}-\d{2}T\d{4}(-\d+)?\.tar\.gz$")
 _CFG_PREFIX = re.compile(r"^\._cfg\d{4}_")
 
+#: Longest ``match`` pattern ``replace_line`` will compile.
+#:
+#: A bound, not a cure: nothing in the standard library can time a regular
+#: expression out, so a pattern crafted to backtrack for ever would hang this
+#: process — as root — until somebody killed it. Every pattern Gentstore itself
+#: sends is built with ``re.escape`` around one ``cat/pkg`` (see
+#: gentstore/core/confedit.py), so the length limit costs nothing real and
+#: takes the easiest version of that away.
+PATTERN_MAX = 256
+
 
 class HelperError(Exception):
     """A refusal with a machine-readable reason."""
@@ -117,6 +127,40 @@ def _root() -> Path:
 
 def _inside(path: Path, root: Path) -> bool:
     return path == root or root in path.parents
+
+
+def _only_root_can_write(path: Path) -> bool:
+    """Whether *path* and every directory above it belong to root alone.
+
+    The one hole in the paragraph on :data:`CONFIG_PROTECT_SOURCES`. Those files
+    are root-owned, but ``/etc/portage/make.conf`` is also a file this very
+    program appends lines to on request — so a caller can write a CONFIG_PROTECT
+    of its own and then ask ``cfg_apply`` to follow it somewhere new.
+
+    What actually matters about "somewhere new" is not where it is. Portage
+    users put all sorts of things in CONFIG_PROTECT and a list of blessed
+    prefixes would only break the ones nobody thought of. What matters is
+    whether an unprivileged user could have planted the ``._cfgNNNN_`` file that
+    lands there, and that is a question about ownership. No sticky-bit exception
+    here, unlike :func:`gentstore.runner.privilege._tampering_risk`: creating a
+    new file is exactly what the sticky bit still allows, and creating one is
+    the whole of the trick.
+
+    Asked only when we are root, which is the only time the answer means
+    anything — run unprivileged, as the test suite does, every directory in a
+    fixture belongs to whoever is running it, and refusing on that would be
+    refusing the person asking.
+    """
+    if os.geteuid() != 0:
+        return True
+    for candidate in (path, *path.parents):
+        try:
+            info = candidate.stat()
+        except OSError:
+            return False
+        if info.st_uid != 0 or info.st_mode & (stat.S_IWGRP | stat.S_IWOTH):
+            return False
+    return True
 
 
 def _config_protect_values(text: str) -> list[str]:
@@ -145,7 +189,8 @@ def protected_roots() -> list[Path]:
     so ``cfg_apply`` is the one operation that may reach outside
     :data:`CONFIG_ROOT`. It is still the narrowest reach possible: the file has
     to be a ``._cfgNNNN_`` file, inside one of these directories, and its target
-    has to sit right beside it.
+    has to sit right beside it, and the directory has to be one only root can
+    write to — see :func:`_only_root_can_write`.
     """
     values: list[str] = []
     for source in CONFIG_PROTECT_SOURCES:
@@ -167,6 +212,8 @@ def protected_roots() -> list[Path]:
         try:
             resolved = Path(value).resolve(strict=True)
         except OSError:
+            continue
+        if not _only_root_can_write(resolved):
             continue
         if resolved.is_dir() and resolved not in roots and resolved != Path("/"):
             roots.append(resolved)
@@ -221,7 +268,7 @@ def _require_owned(path: Path) -> None:
         relative = path.relative_to(root)
     except ValueError as exc:  # pragma: no cover - check_path ran first
         raise HelperError("outside_root", str(path)) from exc
-    if relative.parts[:1] not in {(name,) for name in OWNED_SUBTREES}:
+    if not relative.parts or relative.parts[0] not in OWNED_SUBTREES:
         allowed = ", ".join(str(root / name) for name in OWNED_SUBTREES)
         raise HelperError(
             "not_owned",
@@ -404,7 +451,15 @@ def restore_backup(name: str) -> Path:
         if previous.exists():
             shutil.rmtree(previous)
         os.rename(root, previous)
-        os.rename(staging, root)
+        try:
+            os.rename(staging, root)
+        except OSError:
+            # The one instant in which the configuration root does not exist.
+            # Put it back before reporting: a restore that failed is a bad
+            # afternoon, and a restore that failed *and* took /etc/portage with
+            # it is an unbootable-looking machine.
+            os.rename(previous, root)
+            raise
         shutil.rmtree(previous)
     except OSError as exc:
         raise HelperError("restore_failed", f"could not restore {source}: {exc}") from exc
@@ -443,6 +498,10 @@ def op_replace_line(request: dict[str, Any]) -> dict[str, Any]:
         # were written.
         raise HelperError("multiline", "replace_line takes exactly one line")
     pattern = _string(request, "match")
+    if len(pattern) > PATTERN_MAX:
+        raise HelperError(
+            "bad_pattern", f"the match pattern is longer than {PATTERN_MAX} characters"
+        )
     try:
         matcher = re.compile(pattern)
     except re.error as exc:
@@ -500,7 +559,7 @@ def op_delete_file(request: dict[str, Any]) -> dict[str, Any]:
 def op_backup(request: dict[str, Any]) -> dict[str, Any]:
     target, pruned = make_backup(
         archive=bool(request.get("archive")),
-        keep=request.get("keep"),
+        keep=_whole_number(request, "keep"),
     )
     return {"changed": True, "backup": str(target), "pruned": pruned}
 
@@ -600,6 +659,22 @@ def _string(request: dict[str, Any], key: str) -> str:
     return value
 
 
+def _whole_number(request: dict[str, Any], key: str) -> int | None:
+    """*key* as an integer, or ``None`` when it was not sent.
+
+    The one field that used to reach ``int()`` unchecked. A request carrying
+    ``"keep": "abc"`` raised ValueError, which :func:`main` does not catch, so
+    this program answered a refusal with a traceback on stderr and no JSON at
+    all — the caller then had nothing to report but an exit status.
+    """
+    value = request.get(key)
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise HelperError("bad_request", f"{key!r} must be a whole number")
+    return value
+
+
 def _check_expectation(path: Path, request: dict[str, Any]) -> None:
     """Refuse if the file is not what the caller thinks it is.
 
@@ -633,7 +708,7 @@ def handle(request: dict[str, Any]) -> dict[str, Any]:
     if request.get("ensure_backup") and operation in MUTATING:
         target, pruned = make_backup(
             archive=bool(request.get("archive")),
-            keep=request.get("keep"),
+            keep=_whole_number(request, "keep"),
         )
         result["backup"] = str(target)
         if pruned:
@@ -681,6 +756,12 @@ def main(stdin=None, stdout=None) -> int:  # noqa: ANN001 - streams, injected by
         response = {"ok": False, "code": "bad_json", "error": str(exc)}
     except OSError as exc:
         response = {"ok": False, "code": "os_error", "error": str(exc)}
+    except (TypeError, ValueError) as exc:
+        # Nothing should reach here — every field is checked above — but this
+        # process is root and its whole contract is "one JSON answer, always".
+        # A traceback instead of that answer is a worse bug than whatever
+        # caused it.
+        response = {"ok": False, "code": "bad_request", "error": str(exc)}
 
     response.setdefault("version", PROTOCOL_VERSION)
     response["identity"] = _identity()

@@ -84,9 +84,17 @@ class GentstoreApplication(QApplication):
         system = QLocale.system().name()  # e.g. "pl_PL"
         return "pl" if system.startswith("pl") else "en"
 
-    def apply_language(self, preference: str) -> None:
-        """Install the translators for *preference* ("system", "pl" or "en")."""
-        self.settings.language = preference  # type: ignore[assignment]
+    def apply_language(self, preference: str, *, persist: bool = True) -> None:
+        """Install the translators for *preference* ("system", "pl" or "en").
+
+        *persist* is the difference between a choice and an override. The View
+        menu and the settings dialog mean "from now on", so they write the
+        preference down; ``--lang`` says "for this run" in its own help text and
+        used to write it down anyway, so one ``gentstore --lang en`` changed the
+        language of every launch after it.
+        """
+        if persist:
+            self.settings.language = preference  # type: ignore[assignment]
         code = self.resolve_language(preference)
 
         self.removeTranslator(self._app_translator)
@@ -134,7 +142,10 @@ def main(argv: list[str] | None = None) -> int:
     log.info("%s %s starting, logging to %s", APP_NAME, __version__, log_file)
 
     app = GentstoreApplication(argv)
-    app.apply_language(options.lang or app.settings.language)
+    if options.lang:
+        app.apply_language(options.lang, persist=False)
+    else:
+        app.apply_language(app.settings.language)
 
     window = MainWindow(app.settings)
     window.warn_if_root()

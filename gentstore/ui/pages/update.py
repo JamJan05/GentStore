@@ -495,10 +495,23 @@ class UpdatePage(SplitPage):
         self._preview_model.set_rows(preview.merges)
         self._table.setVisible(bool(preview.merges))
 
-        if preview.needs_configuration:
-            lines = [change.heading for change in preview.required_changes]
-            for change in preview.required_changes:
-                lines.extend(change.lines)
+        # Each heading with its own lines under it. They used to be gathered
+        # as every heading and then every body, which reads correctly only when
+        # emerge asked for exactly one kind of change.
+        lines: list[str] = []
+        for change in preview.required_changes:
+            lines.append(change.heading)
+            lines.extend(change.lines)
+
+        # Blockers and ``!!!`` lines were parsed and then never shown. emerge
+        # usually exits non-zero when it prints them and the failure panel takes
+        # over — but usually is not always, and a preview that came back naming
+        # a conflict must not be summarised as "nothing to do" merely because no
+        # package survived into the merge list.
+        lines.extend(row.raw for row in preview.blockers if row.raw)
+        lines.extend(preview.problems)
+
+        if lines:
             self._required.setText("\n".join(lines))
             self._required.show()
             self._set_state("preview", StepState.FAILED)

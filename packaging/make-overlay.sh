@@ -200,14 +200,18 @@ have_tty() { { : < /dev/tty; } 2>/dev/null; }
 # The newest release in the overlay we just synced — asked of the tree rather
 # than hard-coded, so this script never has to be edited when a version lands.
 newest_release() {
-	local best="" v
+	# Through sort -V, not by taking whatever the glob listed last: a shell
+	# expands gentstore-*.ebuild in collation order, where 1.1.10 comes before
+	# 1.1.2 and "last" is therefore not "newest". Nothing has reached two digits
+	# yet, which is exactly why this read as correct. The release workflow picks
+	# the ebuild to copy the same way.
+	local e v
 	for e in "${REPO_PATH}/${ATOM}"/gentstore-*.ebuild; do
 		[[ -e ${e} ]] || continue
 		v="$(basename "${e}" .ebuild)"; v="${v#gentstore-}"
 		[[ ${v} == 9999 ]] && continue
-		best="${v}"
-	done
-	echo "${best}"
+		echo "${v}"
+	done | sort -V | tail -n 1
 }
 
 choose_version() {

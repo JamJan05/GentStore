@@ -84,11 +84,19 @@ if ! ${PUSH}; then
 fi
 
 step "Publishing ${BRANCH}"
-TMPGIT="${WORK}/.git-overlay"
 git init -q --initial-branch="${BRANCH}" "${WORK}"
 git -C "${WORK}" add -A
-git -C "${WORK}" -c user.name="$(git -C "${ROOT}" config user.name)" \
-	-c user.email="$(git -C "${ROOT}" config user.email)" \
+# A checkout with no identity configured is an ordinary state — a fresh CI
+# runner before the workflow sets one, a machine where git was never introduced
+# to its owner — and `git config user.name` then prints nothing and exits
+# non-zero. Interpolated straight into -c that becomes an empty name, and the
+# commit fails several lines later complaining about something else. Named here
+# instead, so the fallback is visible and the failure never happens.
+author_name="$(git -C "${ROOT}" config user.name || true)"
+author_email="$(git -C "${ROOT}" config user.email || true)"
+git -C "${WORK}" \
+	-c user.name="${author_name:-Gentstore overlay}" \
+	-c user.email="${author_email:-noreply@localhost}" \
 	commit -q -m "overlay: $(git -C "${ROOT}" describe --tags --always)
 
 Generated from packaging/ by publish-overlay.sh. Do not edit by hand."
@@ -102,7 +110,6 @@ git -C "${WORK}" push -q --force "${origin}" "${BRANCH}:${BRANCH}"
 # Printed without whatever sits before the @: that is a password or a token.
 shown="$(printf '%s' "${origin}" | sed 's|//[^@]*@|//|')"
 say "pushed ${BRANCH} to ${shown}"
-rm -rf -- "${TMPGIT}"
 
 cat <<-EOF
 

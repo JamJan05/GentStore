@@ -252,3 +252,23 @@ def test_merging_writes_what_the_user_ended_up_with(etc: Path, monkeypatch) -> N
     assert answer["ok"], answer
     assert (etc / "fstab").read_text(encoding="utf-8") == "mine and theirs\n"
     assert not candidate.exists()
+
+
+def test_a_pending_file_inside_two_protected_directories_is_offered_once(
+    tmp_path: Path,
+) -> None:
+    """CONFIG_PROTECT is assembled, and the parts can overlap.
+
+    ``make.globals`` names ``/etc``, ``make.conf`` may name it again, and a file
+    in ``/etc/env.d`` can add something already inside it. Walking each entry as
+    given scanned the inner one twice, and the same decision then arrived on the
+    screen as two identical rows.
+    """
+    outer = tmp_path / "etc"
+    inner = outer / "conf.d"
+    inner.mkdir(parents=True)
+    (inner / "hostname").write_text("old\n", encoding="utf-8")
+    (inner / "._cfg0000_hostname").write_text("new\n", encoding="utf-8")
+
+    found = cfgfiles.find(roots=(outer, inner, outer), masks=())
+    assert [item.target for item in found] == [inner / "hostname"]

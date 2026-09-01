@@ -506,3 +506,81 @@ def test_ensure_backup_copies_before_changing_anything(portage: Path) -> None:
 def test_the_answer_says_who_did_it(portage: Path) -> None:
     answer = call("backup")
     assert answer["identity"]["euid"] == os.geteuid()
+
+
+# -- the fields of the request itself ---------------------------------------
+
+
+@pytest.mark.parametrize("keep", ["abc", {"a": 1}, [], True, 1.5])
+def test_a_keep_that_is_not_a_whole_number_is_a_refusal_not_a_traceback(
+    portage: Path, keep: object
+) -> None:
+    """The contract is one JSON answer, always — including for bad input.
+
+    ``keep`` was the one field that reached ``int()`` unchecked, so a request
+    carrying ``"abc"`` raised a ValueError that ``main`` does not catch: root
+    printed a stack trace on stderr and nothing at all on stdout, and the
+    interface was left with an exit status and no reason. ``True`` is in the
+    list because ``isinstance(True, int)`` is the trap that would let it in.
+    """
+    answer = call("backup", keep=keep)
+    assert answer["ok"] is False
+    assert answer["code"] == "bad_request"
+
+
+def test_a_bad_keep_refuses_before_the_change_it_was_attached_to(portage: Path) -> None:
+    """``ensure_backup`` runs first, so the refusal has to happen before the write."""
+    target = portage / "package.use"
+    target.write_text("media-video/mpv vulkan\n", encoding="utf-8")
+
+    answer = call(
+        "append_line", path=str(target), line="x/y flag", ensure_backup=True, keep="zz"
+    )
+    assert answer["code"] == "bad_request"
+    assert target.read_text(encoding="utf-8") == "media-video/mpv vulkan\n"
+
+
+def test_a_match_pattern_longer_than_the_limit_is_refused(portage: Path) -> None:
+    """Nothing in the standard library can time a regular expression out.
+
+    The length cap is a bound rather than a cure, and it is worth a test only
+    because the alternative — an unbounded pattern compiled and run as root — has
+    no upper limit on how long it can hold the process.
+    """
+    target = portage / "package.use"
+    target.write_text("media-video/mpv vulkan\n", encoding="utf-8")
+
+    too_long = "a" * (helper.PATTERN_MAX + 1)
+    answer = call("replace_line", path=str(target), line="a b", match=too_long)
+    assert answer["code"] == "bad_pattern"
+    assert call("replace_line", path=str(target), line="x/y flag", match="^media-video/mpv")["ok"]
+
+
+# -- where cfg_apply may reach ----------------------------------------------
+
+
+def test_config_protect_cannot_be_pointed_at_a_directory_others_can_write(
+    portage: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The list of protected directories is only as trustworthy as its sources.
+
+    Two of the three are root-owned files nothing else touches. The third is
+    ``/etc/portage/make.conf``, which this same program appends lines to on
+    request — so a caller can write a CONFIG_PROTECT of its own and then ask
+    cfg_apply to follow it. Where it points is not the interesting part; whether
+    somebody other than root could have planted the ``._cfg`` file waiting there
+    is.
+
+    ``geteuid`` is faked because the check is deliberately asleep when we are not
+    root: unprivileged, every directory in this fixture belongs to whoever is
+    running the suite, and refusing on that would refuse the person asking.
+    """
+    theirs = tmp_path / "theirs"
+    theirs.mkdir()
+    monkeypatch.setattr(helper, "DEFAULT_PROTECTED", (str(theirs),))
+    monkeypatch.setattr(helper.os, "geteuid", lambda: 0)
+
+    # stat() answers honestly: the directory belongs to the user running this,
+    # and the faked euid says root is asking. That is exactly the shape of the
+    # thing being refused.
+    assert theirs.resolve() not in helper.protected_roots()

@@ -116,6 +116,18 @@ def test_every_version_a_file_states_is_one_the_script_rewrites() -> None:
     after 1.0.0 stopped being the release, because only the claim above it was
     ever rewritten. Any X.Y.Z in a file the script owns has to be one of the
     mentions it knows about.
+
+    Every number, not only today's. Filtering to ``current()`` made this test
+    blind to the very failure it cites: the stale ``1.0.0`` in the README was
+    not the current version — that was the whole problem with it — so the loop
+    skipped it and the test stayed green with the bug in front of it. It only
+    ever fired inside the window where a drifted mention still happened to equal
+    the current number, and one bump closes that window for good.
+
+    The cost is that a deliberate historical citation ("changed in 1.1.0") in one
+    of these three files now stops this test. That is the intended shape: such a
+    line either needs a pattern of its own, or it belongs in CHANGELOG.md, which
+    this script does not own. Both are decisions worth stopping for.
     """
     sys.path.insert(0, str(ROOT / "tools"))
     import release as release_module
@@ -125,10 +137,6 @@ def test_every_version_a_file_states_is_one_the_script_rewrites() -> None:
         # The spans the patterns cover, so the check is exact rather than "near".
         owned = [m.span() for pattern in patterns for m in pattern.finditer(body)]
         for match in re.finditer(r"\b\d+\.\d+\.\d+\b", body):
-            # Only today's number: an older one quoted on purpose, in a note
-            # about what changed when, is not a mention that should move.
-            if match.group() != release_module.current():
-                continue
             assert any(start <= match.start() < end for start, end in owned), (
                 f"{path.relative_to(ROOT)}:{body[:match.start()].count(chr(10)) + 1} "
                 f"states {match.group()} where nothing rewrites it"
@@ -148,6 +156,10 @@ def test_the_changelog_has_somewhere_to_write_the_next_release() -> None:
 
 def test_a_bump_rewrites_every_place_at_once(tree: Path) -> None:
     """The point of the script: four edits that cannot be made separately."""
+    # Asked of the fixture rather than written down. `\b1\.1\.\d\b` was the
+    # assertion below, and on 1.2.x it would match nothing in the copied README
+    # whatever the bump did — a guard that stops guarding without saying so.
+    replaced = release("current", cwd=tree).stdout.strip()
     done = release("bump", "9.9.9", "--date", "2026-01-01", cwd=tree)
     assert done.returncode == 0, done.stderr
 
@@ -161,7 +173,7 @@ def test_a_bump_rewrites_every_place_at_once(tree: Path) -> None:
     readme = (tree / "README.md").read_text()
     assert "> **Version 9.9.9.**" in readme
     assert "  1) 9.9.9 — the release." in readme
-    assert not re.search(r"\b1\.1\.\d\b", readme), "a version this bump replaced is still quoted"
+    assert replaced not in readme, f"{replaced}, which this bump replaced, is still quoted"
 
     changelog = (tree / "CHANGELOG.md").read_text()
     assert "## [9.9.9] — 2026-01-01" in changelog
@@ -205,6 +217,62 @@ def test_nothing_is_written_when_the_bump_is_refused(tree: Path) -> None:
     assert release("bump", "0.0.1", cwd=tree).returncode != 0
     for name, text in before.items():
         assert (tree / name).read_text() == text, f"{name} was written to anyway"
+
+
+def test_nothing_is_written_when_a_pattern_stops_matching(tree: Path) -> None:
+    """The refusal that used to arrive after three of the four files were written.
+
+    Every other refusal happens before anything is touched. This one could not:
+    the loop wrote each file as it finished it, so a mention that had been
+    reworded out from under its pattern refused only when the loop reached it —
+    with pyproject.toml, __init__.py and the changelog already rewritten, and the
+    tree therefore stating two different versions at once. Which is the exact
+    state the test above says must never happen, reached by the one door it did
+    not cover.
+    """
+    readme = tree / "README.md"
+    readme.write_text(
+        readme.read_text().replace(" — the release.", " - the release (reworded)."),
+        encoding="utf-8",
+    )
+    before = {name: (tree / name).read_text() for name in STATED_IN}
+
+    done = release("bump", "9.9.9", "--date", "2026-01-01", cwd=tree)
+    assert done.returncode != 0
+    # And it says which of the README's two mentions drifted, not merely that
+    # the README did: with two patterns on one file, "README.md" alone leaves
+    # the reader to work out which of them to go and look at.
+    assert "mention 2" in done.stderr, done.stderr
+
+    for name, text in before.items():
+        assert (tree / name).read_text() == text, f"{name} was written to anyway"
+
+
+def test_a_version_stated_twice_in_one_form_moves_both_times(tree: Path) -> None:
+    """1.1.2 fixed two *different* forms. One form used twice was still broken.
+
+    ``search`` and ``count=1`` stop at the first match, so a second copy of a
+    sentence the script already knows how to rewrite — a duplicated install
+    transcript, a translated section — went stale exactly the way 1.0.0 did in
+    the README, and ``check`` read only the first one and pronounced the file
+    consistent.
+    """
+    readme = tree / "README.md"
+    quoted = "  1) 1.1.2 — the release."
+    body = readme.read_text()
+    assert quoted in body, "the fixture no longer holds the mention this is about"
+    readme.write_text(f"{body}\n\n{quoted}\n", encoding="utf-8")
+
+    assert release("bump", "9.9.9", "--date", "2026-01-01", cwd=tree).returncode == 0
+    after = readme.read_text()
+    assert after.count("1) 9.9.9 — the release.") == 2
+    assert "1.1.2" not in after
+
+    # And a check run over a file where only one of them moved has to say so.
+    readme.write_text(after.replace("9.9.9 — the release.", "1.1.2 — the release.", 1))
+    refused = release("check", "9.9.9", cwd=tree)
+    assert refused.returncode != 0
+    assert "occurrence 1" in refused.stderr, refused.stderr
 
 
 # -- the workflow and the tree agree ----------------------------------------

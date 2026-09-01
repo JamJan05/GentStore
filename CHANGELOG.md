@@ -19,15 +19,103 @@ tag was made.
   halves apart: that the marker is a section boundary the parser sees, since an unrecognised
   heading would fold the withdrawn notes into the release above, and that nothing marked
   `[YANKED]` still has an ebuild or a `DIST` entry, since a record is not a mechanism.
+
+### Security
+
+- **`emerge --unmerge '*/*'` passed the launcher's argument check.** The atom shape allows a
+  wildcard in either half and said nothing about both at once, so a single command was the whole
+  system — a great deal more than the "install, update or remove packages" the authentication
+  dialog promises, and reachable without a dialog of its own for as long as polkit's
+  `auth_admin_keep` remembers the answer. Nothing Gentstore runs needs it: the one place `*/*` is
+  written is `*/*::<overlay>` into `package.mask`, and that goes to the helper.
+- **The helper answered a malformed request with a traceback instead of an answer.** `keep` was
+  the one field reaching `int()` unchecked, so `{"keep": "abc"}` raised a `ValueError` that
+  `main()` does not catch: root printed a stack trace on stderr and no JSON at all, leaving the
+  interface with nothing to report but an exit status. It is checked like every other field now,
+  and `main()` has a last-resort clause so the "one JSON answer, always" contract holds even for a
+  bug nobody has found yet.
+- **`cfg_apply` could be aimed outside `/etc/portage` by a caller that first rewrote
+  `make.conf`.** The directories it may reach come from `CONFIG_PROTECT`, described as read from
+  root-owned files — and one of those files is one this same helper appends lines to on request.
+  Where such an entry points is not the interesting part, and a list of blessed prefixes would
+  only have broken the systems nobody thought of; what matters is whether somebody other than
+  root could have planted the `._cfg` file waiting there. So an entry now has to be a directory
+  that only root can write to, every parent included, and the question is asked only when the
+  helper really is root — which is the only time the answer means anything.
+- **A failed restore could take `/etc/portage` with it.** `restore` renames the configuration root
+  aside and then renames the replacement into place; when the second rename failed, the first was
+  never undone. It is undone now, before the refusal is reported.
+- `replace_line` compiles a pattern the caller supplies, as root, and nothing in the standard
+  library can time a regular expression out. The length is bounded now — a bound, not a cure, and
+  said so where it is written. Every pattern Gentstore itself sends is `re.escape` around one
+  `cat/pkg`.
+- A `metadata.xml` is refused above a megabyte rather than parsed. ElementTree resolves no
+  external entities but does expand internally defined ones, and `metadata.xml` comes from
+  whichever overlay the user added.
+- The screenshot tools built their throwaway configuration directory at a fixed name in `/tmp` —
+  a name anybody on the machine can create first, as a symbolic link. It carries the uid, is made
+  0700, and is checked to be a directory of ours and not a link.
+
+### Fixed
+
 - Deleting the tag broke every link comparing against it — `[1.1.1]`'s own, and `[1.1.2]`'s, which
   compared *from* it. One was noticed and one was not, so `tests/test_release.py` now asks git
   whether every ref the changelog links to still resolves.
 - The README states the version **twice** — once as a claim, once inside the installer transcript
   it quotes — and only the first was ever rewritten, so the transcript had been offering 1.0.0 as
-  "the release" since 1.1.0. `tools/release.py` now moves every mention in a file together, and a
-  test refuses any occurrence of the current version that sits where nothing would rewrite it.
+  "the release" since 1.1.0. `tools/release.py` now moves every mention in a file together.
+- **A version stated twice in the same known form still moved only once.** The fix above covers
+  the README's two *different* forms; a file using one form twice was left one duplication away
+  from the original bug, because both the check and the rewrite stopped at the first match. They
+  see every occurrence now. The test meant to guard this was blind to it for a second reason: it
+  skipped any number that was not the current one, and a mention that has drifted is by definition
+  not the current one — which is exactly why the stale `1.0.0` sat there unnoticed. It no longer
+  filters, so a historical version quoted in one of these three files stops it, which is a
+  decision worth stopping for.
+- **`tools/release.py bump` could refuse after writing three of the four files.** Every other
+  refusal happens before anything is touched; this loop wrote each file as it finished it, so a
+  pattern that missed in the last one left the tree stating two versions at once and the changelog
+  already closed. It is all worked out first now, and the refusal names which mention drifted
+  rather than only which file.
 - The README's test count, which said 514 against 554. That one stays hand-maintained: counting
   the suite means running it, and the release runner has neither Portage nor a Qt platform.
+- **USE flags of a package from an overlay had no descriptions at all.** `use.desc` and
+  `profiles/desc/*.desc` live in the master repository, and they were being looked for beside the
+  ebuild, where no overlay carries them. `metadata.xml` and `use.local.desc` are per-repository
+  and were always read from the right place.
+- **`--lang` said "for this run" and meant "from now on".** One `gentstore --lang en` wrote the
+  preference down, so every launch after it was English too. The View menu and the settings dialog
+  still mean what they say.
+- **The "Add overlay" dialog accepted `svn://` and the launcher then refused the command it had
+  just enabled.** Two lists of URL schemes in two files, drifted apart; `svn` is back in the
+  launcher's, where the dialog's sync-type list had always assumed it was.
+- **A `._cfg` file could arrive on the configuration screen twice.** `CONFIG_PROTECT` is assembled
+  from `make.globals`, `make.conf` and every file in `/etc/env.d`, and any of them may name a
+  directory that is already inside another; both were walked.
+- **A preview reporting a blocker could be summarised as "nothing to do".** Blockers and `!!!`
+  lines were parsed and then never shown. Usually that hid nothing, because emerge exits non-zero
+  when it prints them and the failure panel takes over — but usually is not always. They appear
+  with the configuration changes emerge asked for, and those are now listed with each heading
+  above its own lines rather than every heading followed by every body.
+- **`packaging/make-overlay.sh` picked the newest release in collation order**, where 1.1.10 sorts
+  before 1.1.2 and "last" is therefore not "newest". Nothing has reached two digits yet, which is
+  why it read as correct. It uses `sort -V`, the same as the release workflow.
+- `packaging/publish-overlay.sh` interpolated `git config user.name` straight into the commit it
+  makes, and a checkout with no identity configured — a fresh CI runner, a machine where git was
+  never introduced to its owner — made that an empty name and a failure several lines later about
+  something else. There is a named fallback.
+- **The advice did not stop once it had been taken.** "The installed gentstore-helper is from an
+  older version — run `sudo make install-system`" was worked out once and then remembered for the
+  life of the process, so somebody who ran it went on being told to for the rest of the session,
+  about a file that had by then been replaced. The answer is still remembered, but only for as
+  long as the file it describes has not moved. Every test of that code passed `refresh=True`,
+  which is why it survived: nothing in the running application does.
+- Smaller corrections with no visible effect: a background task whose receiver vanished mid-flight
+  stayed in the pending set for the life of the process; `Command.close()` tore its process down
+  by hand and skipped half of what `_teardown()` does; `PortageEnv.configured()` invited nesting
+  and would have repointed the outer block's settings if anything had taken it up; a plan for
+  something that is not a `cat/pkg` named a directory rather than a file; and a size in plain
+  bytes parsed as no size at all.
 
 ## [1.1.2] — 2026-08-31
 

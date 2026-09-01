@@ -101,17 +101,23 @@ class Task(QRunnable):
         else:
             self._emit(self._signals.finished, result)
 
-    @staticmethod
-    def _emit(signal: Any, payload: Any) -> None:
+    def _emit(self, signal: Any, payload: Any) -> None:
         """Emit, tolerating a receiver that went away while we were working.
 
         During shutdown Qt can tear the signal object down before a still-running
         task reaches this point; that is not an error worth crashing over.
+
+        It is also the one path on which the slot that releases this task from
+        :data:`_pending` never runs, because the signal that would have carried
+        it is the thing that just failed. So the release happens here instead:
+        that set is a lifetime guard rather than a record of anything, and an
+        entry nobody will ever take out is a leak for the life of the process.
         """
         try:
             signal.emit(payload)
         except RuntimeError:  # pragma: no cover - shutdown race
             log.debug("Task result dropped: the receiver was already destroyed")
+            _pending.discard(self)
 
 
 def _survivor(callback: Callable[[Any], None]) -> Callable[[Any], None]:
@@ -156,7 +162,11 @@ def run_async(
 
     _pending.add(task)
     pool = QThreadPool.globalInstance()
-    assert pool is not None
+    if pool is None:  # pragma: no cover - Qt always has one
+        # Not an assert: those are compiled out under `python -O`, and what
+        # follows the assert would then be `None.start(task)`.
+        _pending.discard(task)
+        raise RuntimeError("there is no global QThreadPool to run this on")
     pool.start(task)
     return task
 

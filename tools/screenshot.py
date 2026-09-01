@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import stat
 import sys
 from pathlib import Path
 
@@ -41,9 +42,27 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 # The window saves its geometry, the last screen and the toolbar switches on
 # close, so the tool is pointed at a throwaway configuration directory unless
 # it is told otherwise with --real-settings.
+def _private_dir(name: str) -> Path:
+    """A directory under ``TMPDIR`` that belongs to this user and nobody else.
+
+    ``/tmp`` is shared and a fixed name in it is a name somebody else can create
+    first — as a symbolic link pointing at something of theirs, or of yours.
+    Creating it 0700 and then checking that what is actually there is a
+    directory, owned by us and not a link, is the whole of the defence. The uid
+    is in the name so two people on one machine do not collide over it in the
+    first place.
+    """
+    path = Path(os.environ.get("TMPDIR", "/tmp")) / f"{name}-{os.getuid()}"
+    path.mkdir(mode=0o700, parents=True, exist_ok=True)
+    info = path.lstat()
+    if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid():
+        raise SystemExit(f"{path} is not a directory of yours; refusing to use it")
+    path.chmod(0o700)
+    return path
+
+
 if "--real-settings" not in sys.argv:
-    _sandbox = Path(os.environ.get("TMPDIR", "/tmp")) / "gentstore-screenshot-config"
-    _sandbox.mkdir(parents=True, exist_ok=True)
+    _sandbox = _private_dir("gentstore-screenshot-config")
     os.environ["XDG_CONFIG_HOME"] = str(_sandbox)
     os.environ["XDG_STATE_HOME"] = str(_sandbox)
 
@@ -103,7 +122,7 @@ def main(argv: list[str]) -> int:
 
     app = GentstoreApplication(["gentstore"])
     app.apply_font_scale(options.scale)
-    app.apply_language(options.lang)
+    app.apply_language(options.lang, persist=False)
 
     window = MainWindow(app.settings)
     window.resize(int(width), int(height))

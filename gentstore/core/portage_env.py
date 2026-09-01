@@ -62,6 +62,7 @@ class PortageEnv:
     __slots__ = (
         "_bindb",
         "_clone",
+        "_clone_depth",
         "_clone_lock",
         "_portdb",
         "_root",
@@ -80,6 +81,7 @@ class PortageEnv:
         self._bindb = node["bintree"].dbapi
         self._clone: Any = None
         self._clone_lock = threading.RLock()
+        self._clone_depth = 0
 
     # -- handles -----------------------------------------------------------
 
@@ -136,14 +138,31 @@ class PortageEnv:
         import portage  # noqa: PLC0415 — slow import, deferred
 
         with self._clone_lock:
+            if self._clone_depth:
+                # A nested question, which the paragraph above says is a normal
+                # thing to ask. The block outside this one is holding the shared
+                # clone and still expects it to describe *its* package; calling
+                # setcpv() on that object would repoint it, and when this block
+                # ended the outer reader would carry on reading one package's
+                # answers for another's — quietly, and only for the questions
+                # asked after the nested one returned. Rare enough to pay for a
+                # clone of its own.
+                nested = portage.config(clone=self._settings)
+                nested.setcpv(cpv, mydb=self._portdb)
+                yield nested
+                return
             if self._clone is None:
                 # Built on demand and kept: cloning is cheap next to reading the
                 # profile stack, but not free, and this runs per selected
                 # package. It never needs invalidating, because the only way to
                 # get a newer configuration is a new PortageEnv.
                 self._clone = portage.config(clone=self._settings)
-            self._clone.setcpv(cpv, mydb=self._portdb)
-            yield self._clone
+            self._clone_depth += 1
+            try:
+                self._clone.setcpv(cpv, mydb=self._portdb)
+                yield self._clone
+            finally:
+                self._clone_depth -= 1
 
     # -- frequently needed scalars ----------------------------------------
 

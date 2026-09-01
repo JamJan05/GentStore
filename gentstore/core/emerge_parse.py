@@ -61,7 +61,11 @@ _ROW = re.compile(r"^\[(?P<kind>[a-z-]+)(?P<flags>[^\]]*)\]\s+(?P<rest>.*)$")
 _VARIABLE = re.compile(r'(?P<name>[A-Z][A-Z0-9_]*)="(?P<value>[^"]*)"')
 
 #: ``1445 KiB`` at the end of a row, with any of the separators a locale may use.
-_SIZE = re.compile(r"(?P<number>[\d   ,.]+?)\s*(?P<unit>[KMGT]?iB)\s*$")
+#: The bare ``B`` is spelled out because _UNITS has an entry for it: emerge
+#: prints KiB and up in practice, but a pattern that cannot match a unit the
+#: table beside it claims to understand is a trap for whoever reads the two
+#: together.
+_SIZE = re.compile(r"(?P<number>[\d   ,.]+?)\s*(?P<unit>(?:[KMGT]i)?B)\s*$")
 
 #: ``[1.0]`` — the version being replaced.
 _OLD_VERSION = re.compile(r"\[([^\]]+)\]")

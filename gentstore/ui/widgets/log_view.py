@@ -56,8 +56,13 @@ _ANSI = re.compile(r"\x1b\[[0-9;?]*[A-Za-z]")
 #: progress bar needs.
 _PROGRESS = re.compile(r"\((\d+) of (\d+)\)")
 
-#: Kept in memory. A long ``@world`` rebuild produces far more than this, and
-#: the interesting parts are the beginning and the end.
+#: Kept in memory. A long ``@world`` rebuild produces far more than this.
+#:
+#: ``setMaximumBlockCount`` discards from the *front*, so what survives is the
+#: tail — which is the right half to keep, because that is where a build says
+#: why it stopped. Worth knowing when reading the log back: anything that parses
+#: it (the update screen does) sees the end of a very long run and not its
+#: beginning.
 MAX_LINES = 20_000
 
 

@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import stat
 import sys
 import time
 from pathlib import Path
@@ -44,8 +45,26 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-_SANDBOX = Path(os.environ.get("TMPDIR", "/tmp")) / "gentstore-readme-shots"
-_SANDBOX.mkdir(parents=True, exist_ok=True)
+def _private_dir(name: str) -> Path:
+    """A directory under ``TMPDIR`` that belongs to this user and nobody else.
+
+    ``/tmp`` is shared and a fixed name in it is a name somebody else can create
+    first — as a symbolic link pointing at something of theirs, or of yours.
+    Creating it 0700 and then checking that what is actually there is a
+    directory, owned by us and not a link, is the whole of the defence. The uid
+    is in the name so two people on one machine do not collide over it in the
+    first place.
+    """
+    path = Path(os.environ.get("TMPDIR", "/tmp")) / f"{name}-{os.getuid()}"
+    path.mkdir(mode=0o700, parents=True, exist_ok=True)
+    info = path.lstat()
+    if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid():
+        raise SystemExit(f"{path} is not a directory of yours; refusing to use it")
+    path.chmod(0o700)
+    return path
+
+
+_SANDBOX = _private_dir("gentstore-readme-shots")
 os.environ["XDG_CONFIG_HOME"] = str(_SANDBOX / "config")
 os.environ["XDG_STATE_HOME"] = str(_SANDBOX / "state")
 
@@ -227,7 +246,7 @@ def main(argv: list[str]) -> int:
     package, _, repo = options.pair.partition("::")
 
     app = GentstoreApplication(["gentstore"])
-    app.apply_language(options.lang)
+    app.apply_language(options.lang, persist=False)
 
     window = MainWindow(app.settings)
     window.context.set_official_only(False, "hide")

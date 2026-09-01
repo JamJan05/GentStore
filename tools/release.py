@@ -95,18 +95,28 @@ def read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def stated(path: Path) -> list[str | None]:
-    """Every version *path* claims — None where the line it should be on is gone."""
+def stated(path: Path) -> list[list[str]]:
+    """Every version *path* claims, grouped by the pattern that found it.
+
+    Every match a pattern makes, not its first. A pattern here stands for a
+    *known form* of the version, and nothing stops a file from using one form
+    twice — a second install transcript, a translated section, a quoted example.
+    Reading only the first and rewriting only the first is how the second copy
+    goes stale with no check able to see it, which is precisely the failure this
+    module exists to stop.
+
+    An empty list is a form that has gone from the file altogether.
+    """
     body = read(path)
-    return [(m.group(1) if (m := pattern.search(body)) else None) for pattern in VERSION_IN[path]]
+    return [[m.group(1) for m in pattern.finditer(body)] for pattern in VERSION_IN[path]]
 
 
 def current() -> str:
     """pyproject.toml is the one that the build back end reads, so it decides."""
-    version = stated(PYPROJECT)[0]
-    if version is None:
+    found = stated(PYPROJECT)[0]
+    if not found:
         fail(f"no version line in {PYPROJECT.name}")
-    return version
+    return found[0]
 
 
 def sections(text: str) -> dict[str, tuple[str, str | None]]:
@@ -148,14 +158,18 @@ def do_check(args: argparse.Namespace) -> None:
 
     wrong = []
     for path in VERSION_IN:
-        for number, says in enumerate(stated(path), start=1):
+        for number, found in enumerate(stated(path), start=1):
             where = f"{path.relative_to(ROOT)}"
             if len(VERSION_IN[path]) > 1:
                 where += f" (mention {number})"
-            if says is None:
+            if not found:
                 wrong.append(f"{where}: the version line is gone")
-            elif says != expected:
-                wrong.append(f"{where}: says {says}, expected {expected}")
+                continue
+            for occurrence, says in enumerate(found, start=1):
+                if says == expected:
+                    continue
+                place = where if len(found) == 1 else f"{where}, occurrence {occurrence}"
+                wrong.append(f"{place}: says {says}, expected {expected}")
 
     found = sections(read(CHANGELOG))
     if expected not in found:
@@ -222,16 +236,32 @@ def do_bump(args: argparse.Namespace) -> None:
     text = text[: link.start()] + (
         f"[Unreleased]: {base}v{new}...HEAD\n[{new}]: {base}v{before}...v{new}"
     ) + text[link.end() :]
-    CHANGELOG.write_text(text, encoding="utf-8")
 
+    # Worked out in full before a single byte is written. Every refusal above
+    # happens before anything is touched, deliberately — a bump that stops
+    # halfway leaves the tree stating two different versions at once — and this
+    # loop used to be the exception: it wrote each file as it finished it, so a
+    # pattern that missed in the *last* file refused after the first three were
+    # already rewritten and the changelog already closed. Two files with two
+    # patterns each is four chances to find that out the hard way.
+    rewritten: dict[Path, str] = {}
     for path, patterns in VERSION_IN.items():
         body = read(path)
-        for pattern in patterns:
-            body, count = pattern.subn(
-                lambda m: m.group(0).replace(m.group(1), new, 1), body, count=1
-            )
-            if count != 1:
-                fail(f"{path.relative_to(ROOT)}: found no version line to rewrite")
+        for number, pattern in enumerate(patterns, start=1):
+            # Every occurrence of the form, not just the first — see stated().
+            body, count = pattern.subn(lambda m: m.group(0).replace(m.group(1), new, 1), body)
+            if count == 0:
+                where = f"{path.relative_to(ROOT)}"
+                if len(patterns) > 1:
+                    # Which mention drifted, not merely which file. do_check has
+                    # said this since it grew a second README pattern; there is
+                    # no reason for the message here to be the vaguer one.
+                    where += f" (mention {number})"
+                fail(f"{where}: found no version line to rewrite")
+        rewritten[path] = body
+
+    CHANGELOG.write_text(text, encoding="utf-8")
+    for path, body in rewritten.items():
         path.write_text(body, encoding="utf-8")
 
     for path in (*VERSION_IN, CHANGELOG):

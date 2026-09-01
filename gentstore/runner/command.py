@@ -250,8 +250,10 @@ class Command(QObject):
             process.errorOccurred.disconnect()
         except TypeError:  # pragma: no cover - already disconnected
             pass
-        self._escalate.stop()
-        self._process = None
+        # Through _teardown rather than by hand: it also schedules the QProcess
+        # for deletion and says that nothing is running any more, and a second
+        # copy of that sequence is a second copy to keep in step.
+        self._teardown()
 
     # -- finishing ---------------------------------------------------------
 

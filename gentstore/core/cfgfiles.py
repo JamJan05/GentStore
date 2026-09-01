@@ -128,6 +128,36 @@ def _is_masked(path: Path, masks: tuple[Path, ...]) -> bool:
     return any(path == mask or mask in path.parents for mask in masks)
 
 
+def _outermost(roots: tuple[Path, ...]) -> tuple[Path, ...]:
+    """*roots*, with the ones that are not directories, duplicates and anything
+    nested inside another taken out.
+
+    ``CONFIG_PROTECT`` is assembled from several files — ``make.globals``, then
+    ``make.conf``, then every file in ``/etc/env.d`` — and any of them may name
+    a directory that is already inside one of the others. Walking both scans the
+    inner one twice, and the same ``._cfg`` file then arrives on the screen as
+    two identical decisions to make.
+
+    The originals are returned rather than their resolved forms: resolving is
+    how the nesting question gets a correct answer, but the paths handed on from
+    here end up in front of the user, and those should read the way the
+    configuration wrote them.
+    """
+    seen: dict[Path, Path] = {}
+    for root in roots:
+        try:
+            resolved = root.resolve(strict=True)
+        except OSError:
+            continue
+        if resolved.is_dir() and resolved not in seen:
+            seen[resolved] = root
+    return tuple(
+        original
+        for resolved, original in seen.items()
+        if not any(other != resolved and other in resolved.parents for other in seen)
+    )
+
+
 # ---------------------------------------------------------------------------
 # finding them
 # ---------------------------------------------------------------------------
@@ -144,9 +174,7 @@ def find(
     masked = masks if masks is not None else masked_directories(env)
 
     found: list[ConfigFile] = []
-    for root in directories:
-        if not root.is_dir():
-            continue
+    for root in _outermost(tuple(directories)):
         found.extend(_scan(root, masked))
 
     owners = owner_of(tuple(item.target for item in found), env)
