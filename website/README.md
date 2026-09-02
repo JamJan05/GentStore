@@ -67,9 +67,14 @@ sudo rc-service cloudflared start
 ```
 
 Then, in the Cloudflare Zero Trust dashboard under Networks → Tunnels → the
-tunnel → Public Hostname, point the hostname at `http://localhost:8000`. That
-routing lives in the dashboard, not on this machine — a token-run connector
-takes its ingress rules from Cloudflare.
+tunnel → Public Hostname, add the hostname with type `HTTP` and the URL
+`127.0.0.1:8000` — the scheme comes from the type, so the URL field carries the
+host and the port and nothing else. Write the address numerically rather than
+as `localhost`: uvicorn binds `127.0.0.1`, and `localhost` resolves to `::1`
+first on a machine with IPv6, which answers a working setup with a 502.
+
+That routing lives in the dashboard, not on this machine — a token-run
+connector takes its ingress rules from Cloudflare.
 
 Two things worth being deliberate about:
 
