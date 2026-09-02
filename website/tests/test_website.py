@@ -19,6 +19,7 @@ from app.content import (  # noqa: E402
     LANGUAGES,
     LINKS,
     SCREENSHOT_DIR,
+    base_url,
     inline,
     load,
     negotiate,
@@ -181,6 +182,29 @@ def test_health_names_the_application_version(client: TestClient) -> None:
     assert payload["status"] == "ok"
     assert payload["app_version"] == load("en")["header"]["version"]
     assert payload["languages"] == list(LANGUAGES)
+
+
+def test_without_a_base_url_the_page_stays_relative(client: TestClient) -> None:
+    body = client.get("/pl").text
+    assert '<link rel="canonical" href="/pl">' in body
+    assert '<meta property="og:image" content="/screenshots/search-and-install.png">' in body
+
+
+def test_a_base_url_makes_the_crawler_facing_links_absolute(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("GENTSTORE_WEB_BASE_URL", "https://gentstore.example/")
+    assert base_url() == "https://gentstore.example"
+    body = client.get("/pl").text
+    assert '<link rel="canonical" href="https://gentstore.example/pl">' in body
+    assert '<link rel="alternate" hreflang="en" href="https://gentstore.example/en">' in body
+    assert '<meta property="og:url" content="https://gentstore.example/pl">' in body
+    assert (
+        '<meta property="og:image" '
+        'content="https://gentstore.example/screenshots/search-and-install.png">'
+    ) in body
+    # The links a visitor clicks stay relative, so the page works on any origin.
+    assert 'href="/en" hreflang="en"' in body
 
 
 def test_assets_are_served_from_the_repository(client: TestClient) -> None:

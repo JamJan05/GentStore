@@ -34,6 +34,19 @@ ICON_DIR = REPO_ROOT / "data" / "icons"
 LANGUAGES: tuple[str, ...] = ("pl", "en")
 DEFAULT_LANGUAGE = "pl"
 
+
+def base_url() -> str:
+    """The origin the page is reachable at, or ``""`` when it is not deployed.
+
+    Set ``GENTSTORE_WEB_BASE_URL`` to something like ``https://gentstore.example``
+    and the canonical link, the ``hreflang`` alternates and the preview image
+    become absolute, which is what a crawler and a link unfurler need. Left
+    unset — a development server, or a machine reached by its address — the page
+    keeps the relative URLs, which are correct wherever it is answering from.
+    """
+    return os.environ.get("GENTSTORE_WEB_BASE_URL", "").rstrip("/")
+
+
 #: Every outbound link on the page. Kept here, and referenced by key from the
 #: content files, so that a moved repository is one edit rather than four.
 LINKS: dict[str, str] = {

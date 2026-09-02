@@ -1,0 +1,17 @@
+# Configuration for /etc/init.d/gentstore-website.
+
+# The working tree the service runs out of, and the user it runs as. The user
+# needs to be able to read the tree and the screenshots the page serves out of
+# it; it needs nothing else, and in particular no write access anywhere.
+website_root="/opt/gentstore/website"
+website_user="gentstore"
+
+# The Cloudflare tunnel is the only way in, so bind the loopback. Whatever you
+# put here has to match the service address of the tunnel's public hostname.
+website_host="127.0.0.1"
+website_port="8000"
+website_workers="2"
+
+# The address the site answers on in public. With it set, the canonical link,
+# the hreflang alternates and the preview image are absolute.
+#website_base_url="https://gentstore.example"

@@ -33,6 +33,7 @@ from app.content import (
     SCREENSHOT_DIR,
     STATIC_DIR,
     TEMPLATE_DIR,
+    base_url,
     inline,
     load,
     negotiate,
@@ -72,6 +73,7 @@ def _page(request: Request, language: str, status_code: int = 200) -> Response:
             "lang": language,
             "other": other_language(language),
             "version": __version__,
+            "base_url": base_url(),
         },
         status_code=status_code,
     )
@@ -150,6 +152,7 @@ def http_error(request: Request, exc: StarletteHTTPException) -> Response:
             "other": other_language(language),
             "status_code": exc.status_code,
             "detail": exc.detail,
+            "base_url": base_url(),
         },
         status_code=exc.status_code,
     )

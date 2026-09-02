@@ -8,16 +8,17 @@
   <meta name="description" content="{{ c.meta.description }}">
   <meta name="color-scheme" content="dark">
 
-  <link rel="canonical" href="/{{ lang }}">
+  <link rel="canonical" href="{{ base_url }}/{{ lang }}">
   {% for code in languages %}
-  <link rel="alternate" hreflang="{{ code }}" href="/{{ code }}">
+  <link rel="alternate" hreflang="{{ code }}" href="{{ base_url }}/{{ code }}">
   {%- endfor %}
-  <link rel="alternate" hreflang="x-default" href="/">
+  <link rel="alternate" hreflang="x-default" href="{{ base_url }}/">
 
   <meta property="og:type" content="website">
   <meta property="og:title" content="{{ c.meta.title }}">
   <meta property="og:description" content="{{ c.meta.description }}">
-  <meta property="og:image" content="/screenshots/search-and-install.png">
+  <meta property="og:image" content="{{ base_url }}/screenshots/search-and-install.png">
+  <meta property="og:url" content="{{ base_url }}/{{ lang }}">
   <meta name="twitter:card" content="summary_large_image">
 
   <link rel="icon" href="/icons/gentstore.svg" type="image/svg+xml">

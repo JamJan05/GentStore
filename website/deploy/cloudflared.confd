@@ -1,0 +1,12 @@
+# Configuration for /etc/init.d/cloudflared.
+#
+# This file holds a credential: it must be owned by root and mode 0600.
+# The token authorises a connector for the tunnel — anyone who reads it can
+# attach one of their own.
+
+# From the Cloudflare Zero Trust dashboard, Networks → Tunnels → your tunnel.
+TUNNEL_TOKEN=""
+
+# The connector updates itself by default; on Gentoo the package manager owns
+# the binary, so leave that off.
+cloudflared_opts="--no-autoupdate"

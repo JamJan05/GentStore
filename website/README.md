@@ -27,11 +27,59 @@ In production, drop `--reload` and give uvicorn the workers and the host it
 should bind to:
 
 ```sh
-python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 2
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 2 \
+    --proxy-headers --forwarded-allow-ips 127.0.0.1
 ```
 
 The page is static once rendered, so anything that can sit in front of a WSGI
-or ASGI server — nginx, Caddy — can cache it whole.
+or ASGI server — nginx, Caddy, a CDN — can cache it whole.
+
+`GENTSTORE_WEB_BASE_URL=https://example` makes the canonical link, the
+`hreflang` alternates and the preview image absolute, which is what a crawler
+and a link unfurler want. The links a visitor clicks stay relative either way,
+so the page is correct on whatever origin answers for it.
+
+## Behind a Cloudflare tunnel
+
+The deployment this was written for: `cloudflared` holds an outbound connection
+to Cloudflare, and Cloudflare hands requests back down it. Nothing listens on a
+public address, no port is forwarded, and the machine can sit behind any
+router. Two services, both under `deploy/`, both OpenRC:
+
+```sh
+# 1. The virtualenv the service runs out of.
+python -m venv .venv
+.venv/bin/pip install -r requirements.txt
+
+# 2. The website.
+sudo install -m 0755 deploy/gentstore-website.initd /etc/init.d/gentstore-website
+sudo install -m 0644 deploy/gentstore-website.confd /etc/conf.d/gentstore-website
+sudoedit /etc/conf.d/gentstore-website          # the path, the user, the port
+sudo rc-update add gentstore-website default
+sudo rc-service gentstore-website start
+
+# 3. The connector.
+sudo install -m 0755 deploy/cloudflared.initd /etc/init.d/cloudflared
+sudo install -m 0600 deploy/cloudflared.confd /etc/conf.d/cloudflared
+sudoedit /etc/conf.d/cloudflared                # TUNNEL_TOKEN, from the dashboard
+sudo rc-update add cloudflared default
+sudo rc-service cloudflared start
+```
+
+Then, in the Cloudflare Zero Trust dashboard under Networks → Tunnels → the
+tunnel → Public Hostname, point the hostname at `http://localhost:8000`. That
+routing lives in the dashboard, not on this machine — a token-run connector
+takes its ingress rules from Cloudflare.
+
+Two things worth being deliberate about:
+
+- **The token is a credential.** It authorises a connector for the tunnel, so
+  `/etc/conf.d/cloudflared` is mode 0600. `cloudflared service install` writes
+  the token into a world-readable init script instead; `deploy/cloudflared.initd`
+  exists to avoid that, and to put the connector under `supervise-daemon`.
+- **The site binds the loopback.** The tunnel is the one way in. Nothing else
+  on the machine or on the local network can reach uvicorn, so nothing has to
+  be firewalled off it.
 
 ## Routes
 
