@@ -2,8 +2,9 @@
 
 The landing page for `app-portage/gentstore`, and the small FastAPI application
 that serves it. Built from the design canvas the project was mocked up in; the
-colours, type and spacing are the tokens in `gentstore/ui/theme/tokens.py`, so
-the page and the application window look like the same piece of software.
+colours, type and spacing are the tokens in `gentstore/ui/theme/tokens.py` on
+the `main` branch, so the page and the application window look like the same
+piece of software.
 
 It has no database and makes no outbound calls. Everything on the page comes
 from two JSON files in this directory and from files that already live in the
@@ -127,6 +128,6 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
-They live here rather than in the repository's `tests/` tree: the application
-suite runs where FastAPI is not installed, and these need it. `pytest` from
-this directory picks up `conftest.py` and finds them.
+They live under `website/` rather than beside the application's own suite on
+`main`: that one runs where FastAPI is not installed, and these need it.
+`pytest` from this directory picks up `conftest.py` and finds them.

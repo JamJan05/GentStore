@@ -226,4 +226,4 @@ def test_assets_are_served_from_the_repository(client: TestClient) -> None:
 
 
 def test_screenshots_are_not_a_way_out_of_their_directory(client: TestClient) -> None:
-    assert client.get("/screenshots/../../pyproject.toml").status_code == 404
+    assert client.get("/screenshots/../../LICENSE").status_code == 404

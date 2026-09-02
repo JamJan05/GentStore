@@ -7,27 +7,14 @@ dist/
 .venv/
 venv/
 
-# --- Generated at build or install time --------------------------------------
-# Compiled translations — generated from the .ts files, see Docs/03-i18n.md
-gentstore/i18n/*.qm
-
-# --- Prototype and specification material ------------------------------------
-# The design mock-up and the original functional brief. They shaped the project
-# but nothing in it reads them: every token, screen and rule that mattered was
-# copied into Docs/. Kept locally, out of the repository.
-#
-# prompt-*.md also covers the briefs written for one piece of work at a time.
-# Those are notes to a reader, not to the program, and they are the one place
-# in this tree written in Polish; what they establish belongs in the commit
-# message or in Docs/, where it can be found without them.
+# --- Material kept locally, out of the repository ----------------------------
+# The design canvas the site was built from, delivered as an archive, and the
+# briefs written for one piece of work at a time. What they established is in
+# website/ now, served rather than unpacked.
+Web/
 Gentoo portage UI prototype.zip
 prompt-*.md
 *.dc.html
-
-# The design canvas the website was built from, delivered as an archive. Same
-# reasoning as the prototype above: the layout, the copy and the screen list it
-# carried are in website/, where they are served rather than unpacked.
-Web/
 
 # --- Tooling caches and test leftovers ---------------------------------------
 .pytest_cache/
@@ -47,6 +34,6 @@ htmlcov/
 .DS_Store
 
 # --- Runtime output ----------------------------------------------------------
-# The application logs to ~/.local/state/gentstore/, but a stray run redirected
+# The service logs to /var/log/gentstore-website.log; a stray run redirected
 # into the working tree should not become a commit.
 *.log
