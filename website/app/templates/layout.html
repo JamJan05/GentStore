@@ -1,0 +1,75 @@
+{#- The shell every page shares: the head, the sticky header, the footer. -#}
+<!DOCTYPE html>
+<html lang="{{ lang }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ c.meta.title }}{% endblock %}</title>
+  <meta name="description" content="{{ c.meta.description }}">
+  <meta name="color-scheme" content="dark">
+
+  <link rel="canonical" href="/{{ lang }}">
+  {% for code in languages %}
+  <link rel="alternate" hreflang="{{ code }}" href="/{{ code }}">
+  {%- endfor %}
+  <link rel="alternate" hreflang="x-default" href="/">
+
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="{{ c.meta.title }}">
+  <meta property="og:description" content="{{ c.meta.description }}">
+  <meta property="og:image" content="/screenshots/search-and-install.png">
+  <meta name="twitter:card" content="summary_large_image">
+
+  <link rel="icon" href="/icons/gentstore.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap">
+  <link rel="stylesheet" href="/static/site.css">
+</head>
+<body>
+  <a class="skip-link" href="#content">{{ c.header.skip_to_content }}</a>
+
+  <header class="header">
+    <div class="header__inner">
+      <a class="header__identity" href="/{{ lang }}">
+        <img class="header__mark" src="/icons/gentstore.svg" alt="" width="26" height="26">
+        <span class="header__name">GentStore</span>
+      </a>
+      <span class="header__version">{{ c.header.version }}</span>
+      <span class="header__keyword">{{ c.header.keyword }}</span>
+      <span class="header__spacer"></span>
+      <nav class="langswitch" aria-label="{{ c.header.language_switch }}">
+        {%- for code in languages %}
+        <a href="/{{ code }}" hreflang="{{ code }}" lang="{{ code }}"
+           {% if code == lang %}aria-current="true"{% endif %}>{{ code|upper }}</a>
+        {%- endfor %}
+      </nav>
+      <a class="header__github" href="{{ links.github }}" rel="noopener">{{ c.header.github }}</a>
+    </div>
+  </header>
+
+  {% block body %}{% endblock %}
+
+  <footer class="footer">
+    <hr class="rule">
+    <div class="footer__row">
+      <div class="footer__identity">
+        <img src="/icons/gentstore.svg" alt="" width="22" height="22">
+        <div>
+          <div class="footer__owner">{{ c.footer.owner }}</div>
+          <div class="footer__license">{{ c.footer.license }}</div>
+        </div>
+      </div>
+      <nav class="footer__links">
+        {%- for link in c.footer.links %}
+        <a href="{{ links[link.key] }}" rel="noopener">{{ link.label }}</a>
+        {%- endfor %}
+      </nav>
+    </div>
+    <p class="footer__note">{{ c.footer.note|inline }}</p>
+  </footer>
+
+  <script src="/static/site.js" defer></script>
+</body>
+</html>

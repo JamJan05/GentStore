@@ -1,0 +1,10 @@
+{% extends "layout.html" %}
+{% block title %}{{ status_code }} — {{ c.error.title }}{% endblock %}
+{% block body %}
+<main class="error" id="content">
+  <div class="error__code">{{ status_code }}{% if detail %} · {{ detail }}{% endif %}</div>
+  <h1>{{ c.error.title }}</h1>
+  <p>{{ c.error.body }}</p>
+  <a class="button button--primary" href="/{{ lang }}">{{ c.error.home }}</a>
+</main>
+{% endblock %}

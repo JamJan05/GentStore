@@ -1,0 +1,243 @@
+{% extends "layout.html" %}
+
+{% macro figure(f, class="") -%}
+<figure{% if class %} class="{{ class }}"{% endif %}>
+  <div class="shot">
+    <img src="/screenshots/{{ f.file }}" alt="{{ f.alt }}" loading="lazy" decoding="async">
+  </div>
+  <figcaption>{{ f.caption }}</figcaption>
+</figure>
+{%- endmacro %}
+
+{% macro command(text, boxed=false) -%}
+<div class="command{% if boxed %} command--boxed{% endif %}">
+  <span class="command__text">{{ text }}</span>
+  <button type="button" class="copy" data-copy="{{ text }}"
+          data-label="{{ c.ui.copy_label }}" data-done="{{ c.ui.copied_label }}">{{ c.ui.copy_label }}</button>
+</div>
+{%- endmacro %}
+
+{% block body %}
+<main id="content">
+
+  {# ---------------------------------------------------------------- hero #}
+  <section class="wrap section">
+    <div class="hero">
+      <div>
+        <div class="hero__eyebrow">{{ c.hero.eyebrow }}</div>
+        <h1>{% for line in c.hero.title_lines %}{{ line }}{% if not loop.last %}<br>{% endif %}{% endfor %}</h1>
+        <p class="hero__lead">{{ c.hero.lead }}</p>
+        <p class="hero__note">{{ c.hero.note|inline }}</p>
+      </div>
+      <div class="hero__aside">
+        <div class="card--install">
+          <div class="card__label">{{ c.hero.install_card.label }}</div>
+          {{ command(c.hero.install_card.command) }}
+          <p class="card__hint">{{ c.hero.install_card.note }}</p>
+        </div>
+        <div class="hero__actions">
+          {%- for action in c.hero.actions %}
+          <a class="button{% if action.primary %} button--primary{% endif %}"
+             href="{{ action.href }}">{{ action.label }}</a>
+          {%- endfor %}
+        </div>
+        <ul class="badges">
+          {%- for badge in c.hero.badges %}
+          <li>{{ badge }}</li>
+          {%- endfor %}
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="wrap section--tight">
+    {{ figure(c.figures.search) }}
+  </section>
+
+  {# ---------------------------------------------------------- principles #}
+  <section class="wrap section">
+    <hr class="rule">
+    <div class="eyebrow">{{ c.principles.eyebrow }}</div>
+    <h2>{{ c.principles.title }}</h2>
+    <p class="lead">{{ c.principles.lead }}</p>
+    <div class="cards">
+      {%- for item in c.principles.rules %}
+      <article class="card{% if item.wide %} card--wide{% endif %}">
+        <h3>{{ item.title|inline }}</h3>
+        <p>{{ item.body|inline }}</p>
+      </article>
+      {%- endfor %}
+    </div>
+  </section>
+
+  {# ------------------------------------------------------------- screens #}
+  <section class="wrap section section--anchor" id="screens">
+    <hr class="rule">
+    <div class="eyebrow">{{ c.screens.eyebrow }}</div>
+    <h2 class="h2--spaced">{{ c.screens.title }}</h2>
+    <div class="screens">
+      {%- for screen in c.screens.entries %}
+      <div class="screen">
+        <span class="screen__n" aria-hidden="true">{{ screen.n }}</span>
+        <div>
+          <h4>{{ screen.title }}</h4>
+          <p>{{ screen.body|inline }}</p>
+        </div>
+      </div>
+      {%- endfor %}
+      <div class="screen screen--shortcuts">
+        <span class="screen__n" aria-hidden="true">⌘</span>
+        <p>{{ c.screens.shortcuts|inline }}</p>
+      </div>
+    </div>
+  </section>
+
+  {# ----------------------------------------------------------- USE flags #}
+  <section class="wrap section--figure">
+    {{ figure(c.figures.use_flags, "figure-lead") }}
+    <div class="split split--narrow-first">
+      <div>
+        <h3>{{ c.use_flags.title }}</h3>
+        {%- for paragraph in c.use_flags.paragraphs %}
+        <p>{{ paragraph|inline }}</p>
+        {%- endfor %}
+      </div>
+      {{ figure(c.figures.repository_filter) }}
+    </div>
+  </section>
+
+  <section class="wrap section--tight">
+    <div class="figure-pair">
+      {{ figure(c.figures.update) }}
+      {{ figure(c.figures.repositories_available) }}
+    </div>
+  </section>
+
+  {# ---------------------------------------------------------- privileges #}
+  <section class="wrap section">
+    <hr class="rule">
+    <div class="split split--wide-first">
+      <div class="prose-lg">
+        <div class="eyebrow">{{ c.privileges.eyebrow }}</div>
+        <h2>{{ c.privileges.title }}</h2>
+        {%- for paragraph in c.privileges.paragraphs %}
+        <p>{{ paragraph|inline }}</p>
+        {%- endfor %}
+      </div>
+      <div class="manifest">
+        <div class="card__label">{{ c.privileges.install_list.title|inline }}</div>
+        <ul>
+          {%- for item in c.privileges.install_list.files %}
+          <li>
+            <div class="manifest__path">{{ item.path }}</div>
+            <div class="manifest__note">{{ item.note }}</div>
+          </li>
+          {%- endfor %}
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  {# -------------------------------------------------------- installation #}
+  <section class="wrap section section--anchor" id="install">
+    <hr class="rule">
+    <div class="eyebrow">{{ c.install.eyebrow }}</div>
+    <h2>{{ c.install.title }}</h2>
+    <p class="lead">{{ c.install.lead }}</p>
+    <div class="routes">
+      {%- for route in c.install.routes %}
+      <article class="route{% if route.recommended %} route--recommended{% endif %}">
+        <h3>{{ route.title }}</h3>
+        <p class="route__note">{{ route.note|inline }}</p>
+        <pre class="code">{{ route.code|join("\n") }}</pre>
+        <p class="route__body">{{ route.body|inline }}</p>
+      </article>
+      {%- endfor %}
+    </div>
+  </section>
+
+  {# ------------------------------------------- requirements and the CLI #}
+  <section class="wrap section--figure">
+    <div class="split split--even">
+      <div>
+        <h3>{{ c.requirements.title }}</h3>
+        <table class="requirements">
+          <tbody>
+            {%- for row in c.requirements.rows %}
+            <tr>
+              <td>{{ row.package }}</td>
+              <td>{{ row.note }}</td>
+            </tr>
+            {%- endfor %}
+          </tbody>
+        </table>
+        <p class="footnote">{{ c.requirements.footnote|inline }}</p>
+      </div>
+      <div>
+        <h3>{{ c.cli.title }}</h3>
+        <p>{{ c.cli.lead|inline }}</p>
+        <pre class="code code--surface">{{ c.cli.code|join("\n") }}</pre>
+        <p class="footnote">{{ c.cli.footnote|inline }}</p>
+      </div>
+    </div>
+  </section>
+
+  {# -------------------------------------------------------------- status #}
+  <section class="wrap section">
+    <hr class="rule">
+    <div class="split split--aside-first">
+      <div class="status">
+        <div class="eyebrow">{{ c.status.eyebrow }}</div>
+        <h2 class="h2--tight">{{ c.status.title }}</h2>
+        <p>{{ c.status.body|inline }}</p>
+        <aside class="caveat">
+          <div class="caveat__title">{{ c.status.caveat.title }}</div>
+          <p>{{ c.status.caveat.body|inline }}</p>
+        </aside>
+      </div>
+      <div>
+        <div class="eyebrow eyebrow--muted eyebrow--spaced">{{ c.status.changes_title }}</div>
+        <div class="changes">
+          {%- for change in c.status.changes %}
+          <article class="change">
+            <h4>{{ change.title }}</h4>
+            <p>{{ change.body|inline }}</p>
+          </article>
+          {%- endfor %}
+        </div>
+        <a class="link-button" href="{{ links.changelog }}" rel="noopener">{{ c.status.changelog_link }}</a>
+      </div>
+    </div>
+  </section>
+
+  {# ------------------------------------------------------------ settings #}
+  <section class="wrap section--figure">
+    <div class="split split--narrow-first">
+      <div>
+        <h3>{{ c.settings.title }}</h3>
+        {%- for paragraph in c.settings.paragraphs %}
+        <p>{{ paragraph|inline }}</p>
+        {%- endfor %}
+      </div>
+      {{ figure(c.figures.settings) }}
+    </div>
+  </section>
+
+  {# ----------------------------------------------------------------- CTA #}
+  <section class="wrap section">
+    <div class="cta">
+      <div>
+        <h2>{{ c.cta.title }}</h2>
+        <p>{{ c.cta.body }}</p>
+      </div>
+      <div class="cta__commands">
+        {%- for cmd in c.cta.commands %}
+        {{ command(cmd, boxed=true) }}
+        {%- endfor %}
+        <a class="button button--primary" href="{{ links.github }}" rel="noopener">{{ c.cta.link }}</a>
+      </div>
+    </div>
+  </section>
+
+</main>
+{% endblock %}

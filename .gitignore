@@ -24,6 +24,11 @@ Gentoo portage UI prototype.zip
 prompt-*.md
 *.dc.html
 
+# The design canvas the website was built from, delivered as an archive. Same
+# reasoning as the prototype above: the layout, the copy and the screen list it
+# carried are in website/, where they are served rather than unpacked.
+Web/
+
 # --- Tooling caches and test leftovers ---------------------------------------
 .pytest_cache/
 .ruff_cache/

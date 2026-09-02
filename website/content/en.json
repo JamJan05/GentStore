@@ -1,0 +1,362 @@
+{
+  "lang": "en",
+  "label": "English",
+  "meta": {
+    "title": "GentStore — Portage, with a view of what is about to happen",
+    "description": "A graphical front-end for Portage on Gentoo Linux: package search, USE flags with explanations, masks and licences, overlays, and the full system update cycle."
+  },
+  "header": {
+    "version": "1.3.0",
+    "keyword": "~amd64",
+    "github": "GitHub",
+    "skip_to_content": "Skip to content",
+    "language_switch": "Site language"
+  },
+  "hero": {
+    "eyebrow": "app-portage/gentstore",
+    "title_lines": [
+      "Portage, with a view",
+      "of what is about to happen."
+    ],
+    "lead": "A graphical front-end for Portage on Gentoo Linux. Searching for and installing packages, USE flags with an explanation of what each one does, masks and licences, overlays, and the full system update cycle.",
+    "note": "Every change to `/etc/portage` is previewed before it is written. The interface never runs as root.",
+    "install_card": {
+      "label": "Install",
+      "command": "emerge --ask app-portage/gentstore",
+      "note": "once the overlay is registered — see below"
+    },
+    "actions": [
+      {
+        "label": "How to install",
+        "href": "#install",
+        "primary": true
+      },
+      {
+        "label": "See the screens",
+        "href": "#screens",
+        "primary": false
+      }
+    ],
+    "badges": [
+      "Python 3.12+",
+      "PyQt6",
+      "GPL-2+",
+      "pl · en",
+      "572 tests"
+    ]
+  },
+  "figures": {
+    "search": {
+      "file": "search-and-install.png",
+      "alt": "Search and install: the query mpv, media-video/mpv selected, the USE flags panel",
+      "caption": "Search and install — results from four repositories, package details, versions with their keywords, the command under the buttons"
+    },
+    "use_flags": {
+      "file": "use-flags.png",
+      "alt": "The USE flags panel for media-video/mpv with the vulkan flag unfolded",
+      "caption": "USE flags — where each flag's value comes from, and exactly what turning it on changes"
+    },
+    "repository_filter": {
+      "file": "repository-filter.png",
+      "alt": "dev-libs/zydis narrowed to ::guru",
+      "caption": "One repository at a time — the same package lives in ::gentoo and in ::guru; the badge you pick decides which one the install comes from"
+    },
+    "update": {
+      "file": "update.png",
+      "alt": "System update, step three with the preview table filled in",
+      "caption": "System update — a preview table built from the output of emerge -pv"
+    },
+    "repositories_available": {
+      "file": "repositories-available.png",
+      "alt": "The Available tab: the catalogue searched for kde",
+      "caption": "Adding one — who runs each repository, and the two commands enabling it would run"
+    },
+    "settings": {
+      "file": "settings.png",
+      "alt": "The Settings dialog: language, interface size, how the application becomes root, how many backups to keep",
+      "caption": "Settings — language, interface size, how the application becomes root, and how many backups to keep"
+    }
+  },
+  "principles": {
+    "eyebrow": "Principles",
+    "title": "Five rules the whole application stands on",
+    "lead": "Not slogans — each one has a specific consequence in the interface, visible on screen before anything is written.",
+    "rules": [
+      {
+        "title": "Nothing happens quietly",
+        "body": "Every change to `/etc/portage` is previewed before it is written, and afterwards the application shows the exact path of the file and the exact line it added. Every button that executes a command has a tooltip with the command in full.",
+        "wide": true
+      },
+      {
+        "title": "We never overwrite your files",
+        "body": "We append lines, or change one specific line; comments and the formatting of the rest of the file are left untouched.",
+        "wide": false
+      },
+      {
+        "title": "The graphical process is not root",
+        "body": "Everything that needs privileges goes through `pkexec` and a small, reviewable helper program.",
+        "wide": false
+      },
+      {
+        "title": "The data comes from the `portage` API",
+        "body": "Not from parsing ebuilds. The `core/` layer is plain Python with no Qt — it can be queried from a terminal.",
+        "wide": false
+      },
+      {
+        "title": "The chosen repository applies everywhere",
+        "body": "Clicking a `::repo` badge narrows not only the list but also the detail panel, the versions, and the atom `emerge` is given. The same package in two overlays no longer blurs together.",
+        "wide": false
+      }
+    ]
+  },
+  "screens": {
+    "eyebrow": "Nine screens",
+    "title": "The whole Portage cycle, screen by screen",
+    "shortcuts": "`Ctrl+1…9` switches screens, `Ctrl+F` jumps to the search box, `Ctrl+L` to the log.",
+    "entries": [
+      {
+        "n": "01",
+        "title": "Search and install",
+        "body": "Searching by name, category and description. Repository filters, a list of versions, and the Pretend, Install and Uninstall actions — each shows the exact command before it runs it."
+      },
+      {
+        "n": "02",
+        "title": "System update",
+        "body": "Six steps, each run separately: sync, Gentoo news, a preview in the form of a table, the update itself with a live log and an “Interrupt” button, `--depclean`, and the configuration files."
+      },
+      {
+        "n": "03",
+        "title": "Repositories",
+        "body": "What you have configured, with the `repos.conf` section verbatim — and the catalogue of 459 Gentoo repositories in the second tab. Enabling an overlay is one click."
+      },
+      {
+        "n": "04",
+        "title": "Masks and licences",
+        "body": "Why Portage refuses: for a mask, the maintainer's note verbatim along with the file it came from; for keywords, three cases told apart; for a licence, the full text to read."
+      },
+      {
+        "n": "05",
+        "title": "Configuration files",
+        "body": "The `._cfg` files, with the package that brought each one and the number of changed lines. Next to it the difference, and under that three answers: keep mine, take the new one, merge by hand."
+      },
+      {
+        "n": "06",
+        "title": "make.conf",
+        "body": "Two values for each variable: the one written in the file and the one Portage actually uses. A change replaces one line. `MAKEOPTS` gets a suggestion computed from the core count and the amount of memory."
+      },
+      {
+        "n": "07",
+        "title": "elog messages",
+        "body": "What packages said about themselves during installation — the messages that scroll past in the terminal and vanish. Each entry has a class and a build phase, and the left edge of the row carries the colour of the most serious message inside it."
+      },
+      {
+        "n": "08",
+        "title": "@world set",
+        "body": "Side by side, two things that look identical once installed: the packages you asked for, and everything that is installed. Removing an entry uninstalls nothing."
+      },
+      {
+        "n": "09",
+        "title": "Profile",
+        "body": "The profiles from `eselect`, with the current one marked and, before a change, what follows from it said plainly: different default USE flags, different masks, a full rebuild."
+      }
+    ]
+  },
+  "use_flags": {
+    "title": "A USE flag stops being a guess",
+    "paragraphs": [
+      "For each flag you can see where its value comes from — the ebuild, the profile, `make.conf`, `package.use` — and the description from the repository.",
+      "Unfolded: exactly what turning it on changes, which packages will be pulled in and which ones will have the same flag forced on them. `REQUIRED_USE` conditions are checked as you go, and saving is blocked until the selection satisfies them.",
+      "At the bottom of the panel, the exact line that will go into the file, and the file it will be appended to — before anything happens."
+    ]
+  },
+  "privileges": {
+    "eyebrow": "Privileges",
+    "title": "GentStore never runs as root",
+    "paragraphs": [
+      "Started with `sudo` it says so in a dialog and asks to be closed. Everything that needs privileges goes through `pkexec` and two small programs in `/usr/libexec`.",
+      "Both are single files that use nothing but the standard library, with no imports from the rest of the project — written so that they can be read end to end before being let anywhere near root. It is worth doing.",
+      "Without the privileged half the application still runs — read-only: search, browsing flags, `emerge --pretend`. Every attempt to write then says what is missing."
+    ],
+    "install_list": {
+      "title": "What `make install` puts in place",
+      "files": [
+        {
+          "path": "/usr/libexec/gentstore/gentstore-helper",
+          "note": "the only program that writes to /etc/portage"
+        },
+        {
+          "path": "/usr/libexec/gentstore/gentstore-launcher",
+          "note": "runs emerge and friends, and can interrupt them"
+        },
+        {
+          "path": "/usr/share/polkit-1/actions/org.gentoo.gentstore.policy",
+          "note": "two named polkit actions"
+        },
+        {
+          "path": "/usr/share/applications/gentstore.desktop",
+          "note": "the menu entry"
+        },
+        {
+          "path": "/usr/share/icons/hicolor/scalable/apps/gentstore.svg",
+          "note": "the icon"
+        }
+      ]
+    }
+  },
+  "install": {
+    "eyebrow": "Installation",
+    "title": "Two routes",
+    "lead": "The choice comes down to whether Portage should know about GentStore.",
+    "routes": [
+      {
+        "title": "Through Portage — a local overlay",
+        "note": "No clone needed. Fetch the script, read it, run it.",
+        "code": [
+          "curl -fsSL -O https://raw.githubusercontent.com/\\",
+          "  JamJan05/GentStore/main/packaging/make-overlay.sh",
+          "less make-overlay.sh",
+          "sudo bash make-overlay.sh",
+          "",
+          "emerge --ask app-portage/gentstore"
+        ],
+        "body": "The script registers `/var/db/repos/gentstore` as a synced overlay — later ebuilds arrive with an ordinary `emerge --sync`. It prints every file it writes and overwrites nobody else's. **Reading it first is the version this project recommends** — 200 lines, and it is about to run as root.",
+        "recommended": true
+      },
+      {
+        "title": "From the working directory — for working on the code",
+        "note": "The `.qm` catalogues are not kept in the repository.",
+        "code": [
+          "emerge --ask dev-python/pyqt6 dev-qt/qttools \\",
+          "  app-eselect/eselect-repository sys-auth/polkit",
+          "",
+          "python tools/i18n.py compile",
+          "sudo make install",
+          "",
+          "python -m gentstore"
+        ],
+        "body": "You get the tagged release, unless you say otherwise — the installer asks, and `--stable` and `--live` skip the question. The `9999` ebuild sorts above every release there will ever be, so choosing the release means the live one is deliberately left unaccepted.",
+        "recommended": false
+      }
+    ]
+  },
+  "requirements": {
+    "title": "Requirements",
+    "rows": [
+      {
+        "package": "dev-lang/python ≥ 3.12",
+        "note": "the runtime"
+      },
+      {
+        "package": "sys-apps/portage",
+        "note": "the portage module — package data"
+      },
+      {
+        "package": "dev-python/pyqt6",
+        "note": "the graphical interface"
+      },
+      {
+        "package": "dev-qt/qttools[linguist]",
+        "note": "lrelease — compiling the translations"
+      },
+      {
+        "package": "app-eselect/eselect-repository",
+        "note": "overlays and the repositories.xml catalogue"
+      },
+      {
+        "package": "sys-auth/polkit",
+        "note": "pkexec — raising privileges"
+      }
+    ],
+    "footnote": "Optional: `app-portage/gentoolkit` (GLSA scanning) and `app-portage/cpuid2cpuflags`. Their absence disables a single feature and is reported in the interface — it does not bring the application down."
+  },
+  "cli": {
+    "title": "The backend without the GUI",
+    "lead": "The `core/` layer is plain Python with no Qt, so it can be queried from a terminal. Useful when a list in the window is empty and you need to know whether the problem is in the interface or in the data.",
+    "code": [
+      "python -m gentstore.core.cli info",
+      "python -m gentstore.core.cli repos -v",
+      "python -m gentstore.core.cli search mpv",
+      "python -m gentstore.core.cli show media-video/mpv",
+      "python -m gentstore.core.cli show dev-libs/zydis --repo guru",
+      "python -m gentstore.core.cli world"
+    ],
+    "footnote": "Every command takes `--json` and `--debug`. It is a development tool — it speaks English only, because it is not part of the interface."
+  },
+  "status": {
+    "eyebrow": "Where the project stands",
+    "title": "Version 1.3.0",
+    "body": "All nine screens work, and both halves have been exercised on a live system: the read-only side — search, USE flags, masks, repositories, the update preview, configuration files, `make.conf`, elog and `@world` — and the privileged one, which has written real `package.use`, `package.license` and `package.accept_keywords` entries through `pkexec`.",
+    "caveat": {
+      "title": "What that number does not claim",
+      "body": "572 tests pass, but this has run on **one** machine, amd64 only — so the ebuild is keyworded `~amd64`. Bug reports from other setups are the fastest way to make the next release better."
+    },
+    "changes_title": "New in 1.3.0",
+    "changes": [
+      {
+        "title": "The Repositories screen is one list with two tabs",
+        "body": "“Configured” and “Available” are the same question asked at different times. One search box serves whichever tab is open, and picking a row fills the right side — for a configured repository, also **what it brings**: the packages that come from it and nowhere else."
+      },
+      {
+        "title": "Three holes in the privileged half closed",
+        "body": "`emerge --unmerge '*/*'` passed the launcher's argument check; the helper answered a malformed request with a traceback instead of an answer; `cfg_apply` could be aimed outside `/etc/portage`. A failed restore no longer takes the configuration root with it."
+      },
+      {
+        "title": "USE flags of a package from an overlay finally have descriptions",
+        "body": "`use.desc` lives in the master repository, and it was being looked for beside the ebuild, where no overlay carries it."
+      },
+      {
+        "title": "1.1.1 is withdrawn",
+        "body": "The release, its asset and its tag are deleted, and the ebuild is out of the overlay, so Portage cannot resolve to a version that cannot be built. The changelog keeps the section, marked `[YANKED]` — a withdrawn release is a fact about the project."
+      }
+    ],
+    "changelog_link": "The full changelog →"
+  },
+  "settings": {
+    "title": "Polish and English, switched on the fly",
+    "paragraphs": [
+      "The language comes from the system settings; `View → Language` changes it without a restart. The interface scale — 100, 115 or 130% — is under `View → Interface size`, because the 12.5 px base font is small on purpose: the screens show a lot of data at once.",
+      "The settings also carry how the application becomes root, and how many copies of `/etc/portage` to keep."
+    ]
+  },
+  "cta": {
+    "title": "Install it and see what Portage was trying to tell you",
+    "body": "The script stops short of installing anything and prints the command instead. You run it yourself.",
+    "commands": [
+      "sudo bash make-overlay.sh",
+      "emerge --ask app-portage/gentstore"
+    ],
+    "link": "The repository on GitHub"
+  },
+  "footer": {
+    "owner": "GentStore — JamJan05",
+    "license": "GNU GPL v2 or later; distributed releases link PyQt6, so in practice GPL v3.",
+    "links": [
+      {
+        "key": "github",
+        "label": "GitHub"
+      },
+      {
+        "key": "docs",
+        "label": "Documentation"
+      },
+      {
+        "key": "changelog",
+        "label": "Changelog"
+      },
+      {
+        "key": "packaging",
+        "label": "Packaging"
+      }
+    ],
+    "note": "The screenshots come from `Docs/screenshots/` in the repository, taken in a 1520×960 window. The colours and typography of this page are the same tokens the application's stylesheet is generated from."
+  },
+  "ui": {
+    "copy_label": "Copy",
+    "copied_label": "Copied"
+  },
+  "error": {
+    "title": "There is nothing at this address",
+    "body": "The site has two addresses — one in Polish, one in English. Everything else lands here.",
+    "home": "Back to the front page"
+  }
+}
