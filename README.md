@@ -14,7 +14,6 @@ website/                 the site: a FastAPI application and its content
   content/               the copy, one JSON file per language
   build.py               renders the whole site to dist/
 wrangler.jsonc           how Cloudflare serves what build.py produced
-  deploy/                OpenRC services, for serving it from a machine instead
   tests/                 40 tests over the routes, the content and the build
 Docs/screenshots/        the six screenshots the page shows
 data/icons/              the application icon, which is also the favicon
@@ -42,8 +41,8 @@ python -m venv .venv
 That is a preview for editing, not the thing the public reaches. To see exactly
 what gets published, `python build.py` and open `dist/`.
 
-`website/README.md` has the rest — the routes, how the content files work, the
-build, and the Cloudflare tunnel as the other way to serve it.
+`website/README.md` has the rest — the routes, how the content files work, and
+the build.
 
 ## Licence
 
