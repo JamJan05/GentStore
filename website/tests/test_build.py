@@ -46,7 +46,7 @@ def test_every_url_the_site_needs_is_a_file(site: Path) -> None:
         "static/site.js",
         "icons/gentstore.svg",
     ]
-    expected += [f"{language}/index.html" for language in LANGUAGES]
+    expected += [f"{language}.html" for language in LANGUAGES]
     expected += [f"api/content/{language}.json" for language in LANGUAGES]
     missing = [name for name in expected if not (site / name).is_file()]
     assert missing == []
@@ -67,11 +67,11 @@ def test_a_built_page_is_the_page_the_application_serves(site: Path) -> None:
     with TestClient(app) as client:
         for language in LANGUAGES:
             served = client.get(f"/{language}").text
-            assert (site / language / "index.html").read_text(encoding="utf-8") == served
+            assert (site / f"{language}.html").read_text(encoding="utf-8") == served
 
 
 def test_the_built_page_carries_the_deployed_address(site: Path) -> None:
-    page = (site / "pl" / "index.html").read_text(encoding="utf-8")
+    page = (site / "pl.html").read_text(encoding="utf-8")
     assert f'<link rel="canonical" href="{BASE_URL}/pl">' in page
 
 

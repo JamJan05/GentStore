@@ -11,8 +11,9 @@
   "assets": {
     "directory": "dist",
 
-    // /pl is served from dist/pl/index.html — the reason build.py writes the
-    // pages as directories rather than as pl.html.
+    // /pl is served from dist/pl.html, and /pl.html redirects to /pl. Written
+    // as pl/index.html instead, the canonical URL would be /pl/ and every link
+    // on the page — all of which say /pl — would cost a redirect.
     "html_handling": "auto-trailing-slash",
 
     // Anything else gets dist/404.html, which is the application's own error

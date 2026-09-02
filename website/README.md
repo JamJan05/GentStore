@@ -50,8 +50,8 @@ pip install -r requirements-build.txt
 python build.py --base-url https://www.gentstore.dev
 ```
 
-That writes `dist/` beside the repository root: `pl/index.html` and
-`en/index.html`, a `404.html`, the content as JSON under `api/content/`, and
+That writes `dist/` beside the repository root: `pl.html` and `en.html`,
+a `404.html`, the content as JSON under `api/content/`, and
 the stylesheet, screenshots and icon copied in. It renders by walking the
 application with a test client rather than by driving the templates directly,
 so a built page is the served page byte for byte — and everything the tests
@@ -71,8 +71,8 @@ reads the meta refresh to `/pl`.
 ### On Cloudflare
 
 `wrangler.jsonc` at the repository root describes the deployment: the assets
-directory, `/pl` served from `dist/pl/index.html`, and `dist/404.html` for
-anything missing. The project settings in the dashboard supply the rest:
+directory, `/pl` served from `dist/pl.html`, and `dist/404.html` for anything
+missing. The project settings in the dashboard supply the rest:
 
 | Setting | Value |
 | --- | --- |

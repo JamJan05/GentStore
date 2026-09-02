@@ -104,8 +104,11 @@ def build(destination: Path, base_url: str = "") -> list[Path]:
         for language in LANGUAGES:
             page = client.get(f"/{language}")
             page.raise_for_status()
-            # /pl as a directory, so the URL stays /pl and not /pl.html.
-            write(f"{language}/index.html", page.text)
+            # pl.html, not pl/index.html: Cloudflare serves the first at /pl and
+            # the second at /pl/, redirecting /pl to it. Every link on the page
+            # and the canonical URL say /pl, so that redirect would be a hop on
+            # the way to every page and a canonical that is not where you land.
+            write(f"{language}.html", page.text)
 
             content = client.get(f"/api/content/{language}")
             content.raise_for_status()
