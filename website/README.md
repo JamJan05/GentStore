@@ -34,7 +34,7 @@ python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 2 \
 The page is static once rendered, so anything that can sit in front of a WSGI
 or ASGI server — nginx, Caddy, a CDN — can cache it whole.
 
-`GENTSTORE_WEB_BASE_URL=https://example` makes the canonical link, the
+`GENTSTORE_WEB_BASE_URL=https://www.gentstore.dev` makes the canonical link, the
 `hreflang` alternates and the preview image absolute, which is what a crawler
 and a link unfurler want. The links a visitor clicks stay relative either way,
 so the page is correct on whatever origin answers for it.

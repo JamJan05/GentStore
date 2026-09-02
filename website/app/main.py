@@ -40,6 +40,11 @@ from app.content import (
     other_language,
 )
 
+#: Answer HEAD as well as GET. Starlette adds it for a plain route, FastAPI does
+#: not, and a 405 to a HEAD is a broken link to a monitor and to half the tools
+#: that check one.
+PAGE_METHODS = ["GET", "HEAD"]
+
 #: How long a visitor's choice of language is remembered.
 LANGUAGE_COOKIE = "lang"
 LANGUAGE_COOKIE_MAX_AGE = 60 * 60 * 24 * 365
@@ -87,7 +92,7 @@ def _page(request: Request, language: str, status_code: int = 200) -> Response:
     return response
 
 
-@app.get("/", include_in_schema=False)
+@app.api_route("/", methods=PAGE_METHODS, include_in_schema=False)
 def root(request: Request) -> RedirectResponse:
     """Send a visitor to the language they are most likely to want."""
     language = negotiate(
@@ -97,7 +102,7 @@ def root(request: Request) -> RedirectResponse:
     return RedirectResponse(f"/{language}", status_code=302)
 
 
-@app.get("/api/health", tags=["api"])
+@app.api_route("/api/health", methods=PAGE_METHODS, tags=["api"])
 def health() -> dict[str, Any]:
     """A liveness check that also names what the site is currently serving."""
     return {
@@ -108,7 +113,7 @@ def health() -> dict[str, Any]:
     }
 
 
-@app.get("/api/content/{language}", tags=["api"])
+@app.api_route("/api/content/{language}", methods=PAGE_METHODS, tags=["api"])
 def api_content(language: str) -> JSONResponse:
     """The page's copy, exactly as the template receives it."""
     if language not in LANGUAGES:
@@ -116,17 +121,17 @@ def api_content(language: str) -> JSONResponse:
     return JSONResponse(load(language))
 
 
-@app.get("/robots.txt", include_in_schema=False)
+@app.api_route("/robots.txt", methods=PAGE_METHODS, include_in_schema=False)
 def robots() -> PlainTextResponse:
     return PlainTextResponse("User-agent: *\nAllow: /\n")
 
 
-@app.get("/favicon.ico", include_in_schema=False)
+@app.api_route("/favicon.ico", methods=PAGE_METHODS, include_in_schema=False)
 def favicon() -> FileResponse:
     return FileResponse(ICON_DIR / "gentstore.svg", media_type="image/svg+xml")
 
 
-@app.get("/{language}", include_in_schema=False)
+@app.api_route("/{language}", methods=PAGE_METHODS, include_in_schema=False)
 def page(request: Request, language: str) -> Response:
     """The landing page in one language."""
     if language not in LANGUAGES:

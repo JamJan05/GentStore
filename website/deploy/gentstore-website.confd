@@ -14,4 +14,4 @@ website_workers="2"
 
 # The address the site answers on in public. With it set, the canonical link,
 # the hreflang alternates and the preview image are absolute.
-#website_base_url="https://gentstore.example"
+#website_base_url="https://www.gentstore.dev"

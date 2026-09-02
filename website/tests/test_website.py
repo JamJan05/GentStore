@@ -207,6 +207,16 @@ def test_a_base_url_makes_the_crawler_facing_links_absolute(
     assert 'href="/en" hreflang="en"' in body
 
 
+@pytest.mark.parametrize(
+    "path", ["/", "/pl", "/en", "/api/health", "/api/content/pl", "/robots.txt", "/favicon.ico"]
+)
+def test_head_is_answered_wherever_get_is(client: TestClient, path: str) -> None:
+    """A 405 to a HEAD reads as a broken link to whatever is checking."""
+    head = client.head(path, follow_redirects=False)
+    get = client.get(path, follow_redirects=False)
+    assert head.status_code == get.status_code, path
+
+
 def test_assets_are_served_from_the_repository(client: TestClient) -> None:
     assert client.get("/static/site.css").status_code == 200
     assert client.get("/screenshots/search-and-install.png").status_code == 200
