@@ -13,9 +13,9 @@ website/                 the site: a FastAPI application and its content
   app/                   routes, templates, stylesheet, the one script
   content/               the copy, one JSON file per language
   build.py               renders the whole site to dist/
+wrangler.jsonc           how Cloudflare serves what build.py produced
   deploy/                OpenRC services, for serving it from a machine instead
   tests/                 40 tests over the routes, the content and the build
-functions/               the language redirect for "/", run at Cloudflare's edge
 Docs/screenshots/        the six screenshots the page shows
 data/icons/              the application icon, which is also the favicon
 ```
@@ -26,9 +26,9 @@ files.
 
 ## How it is served
 
-Cloudflare Pages builds this branch on every push and serves the result. The
-page is static once rendered, so nothing runs between deploys and the site does
-not depend on any machine here being awake.
+Cloudflare builds this branch on every push and serves the result as static
+assets. The page is static once rendered, so nothing runs between deploys and
+the site does not depend on any machine here being awake.
 
 ## Working on it
 

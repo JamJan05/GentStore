@@ -62,21 +62,24 @@ keeps the API at `/api/content/pl`, the path the application answers at, and
 `_headers` sets cache lifetimes in hours — nothing here is fingerprinted, so an
 updated screenshot has to be able to reach a returning visitor.
 
-The one thing a file cannot answer is which language `/` should go to.
-`functions/index.js`, at the repository root, is that decision at the edge: the
-same rule as `negotiate()` here, in JavaScript. If Functions are not deployed,
-`dist/index.html` answers with a slower version of it.
+The one thing a file cannot answer is which language `/` should go to. The
+served site decides that from `Accept-Language`; the built one decides it in
+`dist/index.html`, from `navigator.languages`, which is the same list the
+browser puts in that header. It costs a hop, and a crawler that runs no script
+reads the meta refresh to `/pl`.
 
-### On Cloudflare Pages
+### On Cloudflare
 
-Connect the project to this branch and give it:
+`wrangler.jsonc` at the repository root describes the deployment: the assets
+directory, `/pl` served from `dist/pl/index.html`, and `dist/404.html` for
+anything missing. The project settings in the dashboard supply the rest:
 
 | Setting | Value |
 | --- | --- |
 | Build command | `pip install -r website/requirements-build.txt && python website/build.py` |
-| Build output directory | `dist` |
-| Environment variable | `GENTSTORE_WEB_BASE_URL` = `https://www.gentstore.dev` |
-| Environment variable | `PYTHON_VERSION` = `3.12` |
+| Deploy command | `npx wrangler deploy` |
+| Variable | `GENTSTORE_WEB_BASE_URL` = `https://www.gentstore.dev` |
+| Variable | `PYTHON_VERSION` = `3.12` |
 
 A push to the branch builds and publishes. Nothing runs between deploys, so
 the site does not depend on any machine of yours being awake.

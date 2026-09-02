@@ -81,8 +81,8 @@ def test_the_api_files_match_the_content(site: Path) -> None:
         assert built == load(language)
 
 
-def test_the_fallback_index_sends_a_visitor_on(site: Path) -> None:
-    """It answers only if Functions are not deployed, and then it has to work."""
+def test_the_index_sends_a_visitor_to_a_language(site: Path) -> None:
+    """The only page whose whole job is to send you somewhere else."""
     index = (site / "index.html").read_text(encoding="utf-8")
     assert 'http-equiv="refresh"' in index
     assert 'content="0; url=/pl"' in index

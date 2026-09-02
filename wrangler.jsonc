@@ -1,0 +1,22 @@
+{
+  // Cloudflare deploys this branch as a Worker that serves static assets and
+  // nothing else: `python website/build.py` renders the site into dist/, and
+  // everything below describes how those files are handed out.
+  //
+  // The name has to match the project in the dashboard, or `wrangler deploy`
+  // creates a second one beside it.
+  "name": "gentstore",
+  "compatibility_date": "2026-09-01",
+
+  "assets": {
+    "directory": "dist",
+
+    // /pl is served from dist/pl/index.html — the reason build.py writes the
+    // pages as directories rather than as pl.html.
+    "html_handling": "auto-trailing-slash",
+
+    // Anything else gets dist/404.html, which is the application's own error
+    // page, rendered at build time.
+    "not_found_handling": "404-page"
+  }
+}

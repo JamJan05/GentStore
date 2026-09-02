@@ -29,9 +29,10 @@ ASSET_TREES = {
     "icons": ICON_DIR,
 }
 
-#: A visitor who asks for "/" is redirected by functions/index.js at the edge.
-#: This is what answers if Functions are not deployed: a redirect a browser
-#: follows and a crawler reads, with the same default the application uses.
+#: The one decision the application makes per request that a file cannot: which
+#: language "/" leads to. Served as a page rather than as a redirect, it costs a
+#: hop — a crawler reads the meta refresh, a browser runs the script and gets
+#: the same answer the server would have given from Accept-Language.
 INDEX_FALLBACK = """<!DOCTYPE html>
 <html lang="{default}">
 <head>
@@ -52,8 +53,9 @@ INDEX_FALLBACK = """<!DOCTYPE html>
 </html>
 """
 
-#: Cloudflare Pages reads these two. The rewrite keeps the API at the path the
-#: application serves it at, rather than at the name of the file behind it.
+#: Cloudflare reads these two out of the assets directory. The rewrite keeps the
+#: API at the path the application serves it at, rather than at the name of the
+#: file behind it.
 REDIRECTS = """# The application answers /api/content/pl; a file needs an extension.
 /api/content/pl  /api/content/pl.json  200
 /api/content/en  /api/content/en.json  200
@@ -112,7 +114,7 @@ def build(destination: Path, base_url: str = "") -> list[Path]:
                 json.dumps(content.json(), ensure_ascii=False, indent=2) + "\n",
             )
 
-        # Cloudflare Pages serves this for anything it cannot find.
+        # Served for anything that is not a file — see not_found_handling.
         missing = client.get("/this-path-does-not-exist")
         write("404.html", missing.text)
 
