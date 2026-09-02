@@ -12,9 +12,11 @@ would delete the application; treat the two as separate lines of work.
 website/                 the site: a FastAPI application and its content
   app/                   routes, templates, stylesheet, the one script
   content/               the copy, one JSON file per language
-  deploy/                OpenRC services for uvicorn and the tunnel
-  tests/                 33 tests over the routes and the content
-Docs/screenshots/        the eight screenshots the page shows
+  build.py               renders the whole site to dist/
+  deploy/                OpenRC services, for serving it from a machine instead
+  tests/                 40 tests over the routes, the content and the build
+functions/               the language redirect for "/", run at Cloudflare's edge
+Docs/screenshots/        the six screenshots the page shows
 data/icons/              the application icon, which is also the favicon
 ```
 
@@ -22,7 +24,13 @@ The screenshots and the icon stay where they are on `main` rather than being
 copied into the site: the application takes them, and the page serves the same
 files.
 
-## Standing it up
+## How it is served
+
+Cloudflare Pages builds this branch on every push and serves the result. The
+page is static once rendered, so nothing runs between deploys and the site does
+not depend on any machine here being awake.
+
+## Working on it
 
 ```sh
 cd website
@@ -31,8 +39,11 @@ python -m venv .venv
 .venv/bin/python -m uvicorn app.main:app --reload
 ```
 
-`website/README.md` has the rest — the routes, how the content files work, and
-the Cloudflare tunnel the live site is served through.
+That is a preview for editing, not the thing the public reaches. To see exactly
+what gets published, `python build.py` and open `dist/`.
+
+`website/README.md` has the rest — the routes, how the content files work, the
+build, and the Cloudflare tunnel as the other way to serve it.
 
 ## Licence
 

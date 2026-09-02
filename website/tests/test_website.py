@@ -13,6 +13,8 @@ import pytest
 
 pytest.importorskip("fastapi")
 
+from fastapi.testclient import TestClient  # noqa: E402
+
 from app.content import (  # noqa: E402
     CONTENT_DIR,
     DEFAULT_LANGUAGE,
@@ -25,7 +27,6 @@ from app.content import (  # noqa: E402
     negotiate,
 )
 from app.main import app  # noqa: E402
-from fastapi.testclient import TestClient  # noqa: E402
 
 
 @pytest.fixture(scope="module")

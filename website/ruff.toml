@@ -1,0 +1,12 @@
+# The same lint settings the application uses on `main`, kept here because
+# pyproject.toml went with it: code that moves between the two branches should
+# be judged the same way either side.
+line-length = 100
+target-version = "py312"
+
+[lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]
+
+[lint.isort]
+# `app` and `build` are this project's own modules, not somebody's package.
+known-first-party = ["app", "build"]

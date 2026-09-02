@@ -22,6 +22,11 @@ prompt-*.md
 # belong to `main`; here they are leftovers of moving between the two.
 gentstore/
 
+# --- Build output ------------------------------------------------------------
+# What build.py renders and Cloudflare Pages publishes. Generated from the
+# content files and the templates; never edited, never committed.
+dist/
+
 # --- Tooling caches and test leftovers ---------------------------------------
 .pytest_cache/
 .ruff_cache/

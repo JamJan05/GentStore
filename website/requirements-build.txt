@@ -1,0 +1,6 @@
+# What the static build needs — a subset of requirements.txt. No server runs
+# during a build: the page is rendered through a test client, which is what
+# httpx is here for.
+fastapi>=0.110
+jinja2>=3.1
+httpx>=0.27

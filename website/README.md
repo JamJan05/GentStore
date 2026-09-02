@@ -40,7 +40,52 @@ or ASGI server — nginx, Caddy, a CDN — can cache it whole.
 and a link unfurler want. The links a visitor clicks stay relative either way,
 so the page is correct on whatever origin answers for it.
 
+## Building the static site
+
+The page does nothing per request that cannot be done once, so it can be
+rendered to files and served without a Python process anywhere:
+
+```sh
+pip install -r requirements-build.txt
+python build.py --base-url https://www.gentstore.dev
+```
+
+That writes `dist/` beside the repository root: `pl/index.html` and
+`en/index.html`, a `404.html`, the content as JSON under `api/content/`, and
+the stylesheet, screenshots and icon copied in. It renders by walking the
+application with a test client rather than by driving the templates directly,
+so a built page is the served page byte for byte — and everything the tests
+assert about one is true of the other.
+
+Two files are for Cloudflare Pages rather than for a browser: `_redirects`
+keeps the API at `/api/content/pl`, the path the application answers at, and
+`_headers` sets cache lifetimes in hours — nothing here is fingerprinted, so an
+updated screenshot has to be able to reach a returning visitor.
+
+The one thing a file cannot answer is which language `/` should go to.
+`functions/index.js`, at the repository root, is that decision at the edge: the
+same rule as `negotiate()` here, in JavaScript. If Functions are not deployed,
+`dist/index.html` answers with a slower version of it.
+
+### On Cloudflare Pages
+
+Connect the project to this branch and give it:
+
+| Setting | Value |
+| --- | --- |
+| Build command | `pip install -r website/requirements-build.txt && python website/build.py` |
+| Build output directory | `dist` |
+| Environment variable | `GENTSTORE_WEB_BASE_URL` = `https://www.gentstore.dev` |
+| Environment variable | `PYTHON_VERSION` = `3.12` |
+
+A push to the branch builds and publishes. Nothing runs between deploys, so
+the site does not depend on any machine of yours being awake.
+
 ## Behind a Cloudflare tunnel
+
+The other way to serve it, and the one to reach for if the site ever grows
+something that has to run per request. It costs a machine that stays on: the
+page is reachable exactly as long as this one is.
 
 The deployment this was written for: `cloudflared` holds an outbound connection
 to Cloudflare, and Cloudflare hands requests back down it. Nothing listens on a
