@@ -28,6 +28,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
+        with:
+          # Same reason as in tests.yml: tests/test_release.py resolves every
+          # ref CHANGELOG.md links to, and a shallow clone holds none of them.
+          fetch-depth: 0
 
       # The tree as a volume, which is how the Gentoo images are meant to be
       # used together: no `emerge --sync` on a runner.
