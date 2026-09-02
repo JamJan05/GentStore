@@ -16,6 +16,12 @@ Gentoo portage UI prototype.zip
 prompt-*.md
 *.dc.html
 
+# --- Left behind by a checkout of `main` -------------------------------------
+# Switching to the application branch and building it leaves the package tree,
+# its caches and the compiled translations in the working directory. They
+# belong to `main`; here they are leftovers of moving between the two.
+gentstore/
+
 # --- Tooling caches and test leftovers ---------------------------------------
 .pytest_cache/
 .ruff_cache/
