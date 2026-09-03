@@ -154,23 +154,26 @@ def test_line_edits_are_refused_outside_the_files_gentstore_writes(
 
 
 @pytest.mark.parametrize(
-    "name",
+    ("name", "line"),
     [
-        "package.use",
-        "package.use/mpv",
-        "package.accept_keywords/mpv",
-        "package.license/mpv",
-        "package.unmask/mpv",
-        "package.mask/guru",
-        "make.conf",
+        ("package.use", "media-video/mpv vulkan"),
+        ("package.use/mpv", "media-video/mpv vulkan"),
+        ("package.accept_keywords/mpv", "=media-video/mpv-0.41.0 ~amd64"),
+        ("package.license/mpv", "=media-video/mpv-0.41.0 NVIDIA-CUDA"),
+        ("package.unmask/mpv", "=media-video/mpv-0.41.0"),
+        ("package.mask/guru", "*/*::guru"),
+        # make.conf takes a line of its own shape — see _check_make_conf_line.
+        ("make.conf", 'MAKEOPTS="-j4 -l4.5"'),
     ],
 )
-def test_the_files_gentstore_writes_are_still_writable(portage: Path, name: str) -> None:
+def test_the_files_gentstore_writes_are_still_writable(
+    portage: Path, name: str, line: str
+) -> None:
     """The other half of the whitelist: it has to let the interface work."""
     target = portage / name
     target.parent.mkdir(parents=True, exist_ok=True)
 
-    answer = call("append_line", path=str(target), line="media-video/mpv vulkan")
+    answer = call("append_line", path=str(target), line=line)
 
     assert answer["ok"] and answer["changed"], answer
 
@@ -306,7 +309,192 @@ def test_replace_line_refuses_a_smuggled_second_line(portage: Path) -> None:
 def test_replace_line_refuses_when_nothing_matches(portage: Path) -> None:
     target = portage / "make.conf"
     target.write_text('USE="X"\n', encoding="utf-8")
-    assert call("replace_line", path=str(target), match="^NOPE=", line="x")["code"] == "no_match"
+    # A line make.conf could hold, so that "nothing matches" is what this test
+    # gets to be about rather than the shape of the replacement.
+    answer = call("replace_line", path=str(target), match="^NOPE=", line='USE="X wayland"')
+    assert answer["code"] == "no_match"
+
+
+# -- what a line in make.conf may say ---------------------------------------
+
+#: Assignments that are not Gentstore's to make. The first three move the whole
+#: operation or run a script of somebody's choosing during every merge; the rest
+#: are the shell syntax that would make any variable do the same.
+FORBIDDEN_MAKE_CONF = [
+    'ROOT="/tmp/foo"',
+    'PORTAGE_CONFIGROOT="/tmp/foo"',
+    'SYSROOT="/tmp/foo"',
+    'PORTAGE_BASHRC="/tmp/x"',
+    'FETCHCOMMAND="/tmp/x \\${URI}"',
+    'PORTAGE_TMPDIR="/tmp/x"',
+    'FEATURES="$(command)"',
+    'FEATURES="`command`"',
+    'FEATURES="${OTHER}"',
+    'USE="X" ; ROOT="/tmp/foo"',
+    'USE="X" # and a comment',
+    'USE="X"; reboot',
+    "USE=\"X\" && reboot",
+    'USE="X\\"',
+    "USE='X' 'Y'",
+    'USE="X',
+    'USE=X"',
+    "USE=\"X\"\x00",
+    "not an assignment at all",
+    "# USE=\"X\"",
+    "  export USE=\"X\"",
+]
+
+
+@pytest.mark.parametrize("line", FORBIDDEN_MAKE_CONF)
+@pytest.mark.parametrize("op", ["append_line", "replace_line", "remove_line"])
+def test_make_conf_takes_only_the_assignments_gentstore_makes(
+    portage: Path, op: str, line: str
+) -> None:
+    """The path check says which file; this says which line.
+
+    ``make.conf`` is the one file on the list whose contents decide what Portage
+    *does* rather than which packages it installs, so being allowed to write the
+    file is not the same as being allowed to write anything in it. The interface
+    already refuses to type these — that is not a reason for this program to
+    accept them, because the request arrives on stdin and what is on the other
+    end of stdin is not this program's business to assume.
+    """
+    target = portage / "make.conf"
+    target.write_text('USE="X"\n', encoding="utf-8")
+
+    answer = call(op, path=str(target), line=line, match="^USE=")
+
+    assert answer["ok"] is False, answer
+    assert answer["code"] == "make_conf_line", answer
+    assert target.read_text(encoding="utf-8") == 'USE="X"\n'
+
+
+def test_a_line_break_in_a_make_conf_value_is_still_a_line_break(portage: Path) -> None:
+    """Refused a step earlier, and worth saying which step.
+
+    ``append_line`` and ``replace_line`` take one line by definition, so this
+    never reaches the make.conf check. The reason it is here is that the two
+    checks together are what covers it, and a later rearrangement could drop the
+    first one without anything else noticing.
+    """
+    target = portage / "make.conf"
+    target.write_text('USE="X"\n', encoding="utf-8")
+
+    answer = call("append_line", path=str(target), line='USE="X"\nROOT="/tmp/foo"')
+
+    assert answer["code"] == "multiline"
+    assert target.read_text(encoding="utf-8") == 'USE="X"\n'
+
+
+def test_replace_line_checks_the_new_line_and_not_only_the_pattern(
+    portage: Path,
+) -> None:
+    """Two claims in one request, checked separately.
+
+    "Find the line matching ``USE=``" is a claim about the file. "Put this in
+    its place" is a claim about what is going in. A request may make the first
+    one honestly and the second one not, and the pattern says nothing at all
+    about the line that replaces what it found.
+    """
+    target = portage / "make.conf"
+    target.write_text('USE="X"\nMAKEOPTS="-j4"\n', encoding="utf-8")
+
+    answer = call(
+        "replace_line", path=str(target), match="^USE=", line='ROOT="/tmp/foo"'
+    )
+
+    assert answer["code"] == "make_conf_line"
+    assert target.read_text(encoding="utf-8") == 'USE="X"\nMAKEOPTS="-j4"\n'
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        'MAKEOPTS="-j4 -l4.5"',
+        "MAKEOPTS=-j4",
+        'EMERGE_DEFAULT_OPTS="--quiet-build=y --with-bdeps=y"',
+        'USE="-bindist X gtk python_targets_python3_12"',
+        'ACCEPT_KEYWORDS="~amd64"',
+        'ACCEPT_LICENSE="-* @FREE @BINARY-REDISTRIBUTABLE"',
+        'VIDEO_CARDS="amdgpu radeonsi"',
+        'CPU_FLAGS_X86="aes avx avx2 sse4_2"',
+        'FEATURES="parallel-fetch -sandbox candy"',
+        'L10N="pl en pt-BR"',
+        'USE=""',
+        '\tMAKEOPTS="-j4"',
+    ],
+)
+def test_the_assignments_gentstore_does_make_still_go_through(
+    portage: Path, line: str
+) -> None:
+    """A policy that refuses the real thing is not a policy, it is a bug."""
+    target = portage / "make.conf"
+    target.write_text("# somebody's own notes\n", encoding="utf-8")
+
+    answer = call("append_line", path=str(target), line=line)
+
+    assert answer["ok"] and answer["changed"], answer
+
+
+def test_a_file_called_make_conf_somewhere_else_is_not_make_conf(portage: Path) -> None:
+    """``package.use/make.conf`` is an ordinary package.use entry.
+
+    The make.conf policy is keyed off which of the allowed names the path
+    started with, not off the file's own name, because those are two different
+    questions and only one of them is about /etc/portage/make.conf.
+    """
+    target = portage / "package.use" / "make.conf"
+    target.parent.mkdir()
+
+    answer = call("append_line", path=str(target), line="media-video/mpv vulkan")
+
+    assert answer["ok"] and answer["changed"], answer
+
+
+def test_the_helper_and_the_interface_agree_on_what_is_editable() -> None:
+    """The copy in the helper is allowed to exist; it is not allowed to drift.
+
+    The helper imports nothing from the rest of Gentstore, on purpose: it is
+    meant to be readable as one file by somebody who does not trust it. That
+    costs a duplicated list, and this is the rent.
+    """
+    from gentstore.core import makeconf  # noqa: PLC0415 - the helper must not import it
+
+    assert set(helper.MAKE_CONF_VARIABLES) == set(makeconf.EDITABLE)
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("MAKEOPTS", "-j4 -l4.5"),
+        ("EMERGE_DEFAULT_OPTS", "--quiet-build=y --with-bdeps=y --keep-going"),
+        ("USE", "-bindist X gtk"),
+        ("ACCEPT_KEYWORDS", "~amd64"),
+        ("ACCEPT_LICENSE", "-* @FREE"),
+        ("VIDEO_CARDS", "amdgpu radeonsi"),
+        ("CPU_FLAGS_X86", "aes avx avx2"),
+        ("FEATURES", "parallel-fetch -sandbox"),
+        ("L10N", "pl en pt-BR"),
+        ("USE", ""),
+    ],
+)
+def test_what_the_interface_writes_is_what_the_helper_accepts(
+    portage: Path, name: str, value: str
+) -> None:
+    """The seam itself, rather than the two lists either side of it.
+
+    A stricter helper than the screen it serves is a refusal the user cannot
+    act on: the line in front of them is the line being refused.
+    """
+    from gentstore.core import makeconf  # noqa: PLC0415
+
+    line = makeconf.format_line(name, value)
+    target = portage / "make.conf"
+    target.write_text("# somebody's own notes\n", encoding="utf-8")
+
+    answer = call("append_line", path=str(target), line=line)
+
+    assert answer["ok"] and answer["changed"], (line, answer)
 
 
 # -- remove_line ------------------------------------------------------------

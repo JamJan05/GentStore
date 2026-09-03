@@ -83,6 +83,44 @@ LINE_EDITABLE = (
     "make.conf",
 )
 
+#: The ``make.conf`` variables a line written by Gentstore may assign.
+#:
+#: ``make.conf`` is the one name on :data:`LINE_EDITABLE` whose *contents*
+#: decide what Portage does rather than which packages it installs, so for this
+#: file "which file may be written" and "which line may be written" are two
+#: different questions and the path check only answers the first.
+#: ``PORTAGE_BASHRC`` names a script sourced during every merge. ``ROOT``,
+#: ``PORTAGE_CONFIGROOT`` and ``SYSROOT`` move the whole operation to another
+#: system. ``FETCHCOMMAND`` is a command line. None of them is something this
+#: application edits, and the interface refusing to type them is not a reason
+#: for this program to accept them: the request arrives on stdin, and what is on
+#: the other end of stdin is not this program's business to assume.
+#:
+#: A copy of ``EDITABLE`` in ``gentstore/core/makeconf.py``, and a deliberate
+#: one — this file imports nothing from the rest of Gentstore, so that reading
+#: it is reading one file. The test suite compares the two lists, which is where
+#: a copy is allowed to live.
+MAKE_CONF_VARIABLES = (
+    "MAKEOPTS",
+    "EMERGE_DEFAULT_OPTS",
+    "USE",
+    "ACCEPT_KEYWORDS",
+    "ACCEPT_LICENSE",
+    "VIDEO_CARDS",
+    "CPU_FLAGS_X86",
+    "FEATURES",
+    "L10N",
+)
+
+#: ``NAME=value``, indented or not, quoted or not.
+_MAKE_CONF_ASSIGNMENT = re.compile(r"^[ \t]*(?P<name>[A-Z][A-Z0-9_]*)=(?P<value>.*)$")
+
+#: What the value may be made of. The same subset ``core/makeconf.py`` will
+#: produce, kept here so that the two can be compared by a test rather than
+#: assumed to agree — and so that this program answers the question on its own,
+#: which is the only way a boundary means anything.
+_MAKE_CONF_VALUE = re.compile(r"^[A-Za-z0-9 _+=@,./:~*-]*$")
+
 #: How deep under :data:`CONFIG_ROOT` each of those may go.
 #:
 #: A ``package.*`` name is either a file or a directory holding one file per
@@ -299,8 +337,12 @@ def check_path(
     return resolved
 
 
-def _require_line_target(path: Path) -> None:
+def _require_line_target(path: Path) -> str:
     """Only the configuration files Gentstore edits one line at a time.
+
+    Returns the name it matched, because ``make.conf`` has a second check of its
+    own and the caller should not work out for itself which file it is looking
+    at — ``package.use/make.conf`` is a perfectly ordinary package.use entry.
 
     Runs after :func:`check_path`, so "inside the root" is already settled and
     what is left is which file inside it. The order matters for what a refusal
@@ -325,6 +367,57 @@ def _require_line_target(path: Path) -> None:
     if len(relative.parts) > depth:
         raise HelperError(
             "not_editable", f"{path} is deeper than anything Gentstore writes"
+        )
+    return name
+
+
+def _check_make_conf_line(line: str) -> None:
+    """Refuse a line that is not one of the assignments Gentstore makes.
+
+    Applied to the line being *written*, and on its own — never to the pattern
+    used to find the line being replaced. A request may perfectly well say "find
+    the line matching ``USE=``" and hand over ``ROOT="/somewhere"`` to put in its
+    place, and the two halves of that request are checked separately because
+    they are two separate claims.
+
+    Deliberately not a parser for ``make.conf``. It answers one question about
+    one line: is this one of the nine assignments this application makes, spelt
+    the way it spells them. Something valid but unusual is refused, which is the
+    right way round for a program running as root — the file is still there to
+    be edited by hand.
+    """
+    if "\x00" in line:
+        raise HelperError("make_conf_line", "a make.conf line cannot contain a null byte")
+
+    match = _MAKE_CONF_ASSIGNMENT.match(line)
+    if match is None:
+        raise HelperError(
+            "make_conf_line", f"not a NAME=value assignment: {line!r}"
+        )
+
+    name = match.group("name")
+    if name not in MAKE_CONF_VARIABLES:
+        allowed = ", ".join(MAKE_CONF_VARIABLES)
+        raise HelperError(
+            "make_conf_line",
+            f"{name} is not one of the variables Gentstore edits ({allowed})",
+        )
+
+    value = match.group("value")
+    quote = value[:1] if value[:1] in ("'", '"') else ""
+    if quote:
+        # The closing quote has to be the last character of the line: anything
+        # after it is a second thing on a line that claimed to be one thing.
+        if len(value) < 2 or value[-1] != quote:
+            raise HelperError(
+                "make_conf_line", f"the value of {name} does not end where it opened"
+            )
+        value = value[1:-1]
+
+    if not _MAKE_CONF_VALUE.match(value):
+        raise HelperError(
+            "make_conf_line",
+            f"the value of {name} has characters Gentstore does not write: {line!r}",
         )
 
 
@@ -540,10 +633,12 @@ def restore_backup(name: str) -> Path:
 
 def op_append_line(request: dict[str, Any]) -> dict[str, Any]:
     path = check_path(_string(request, "path"))
-    _require_line_target(path)
+    target = _require_line_target(path)
     line = _string(request, "line").rstrip("\n")
     if "\n" in line:
         raise HelperError("multiline", "append_line takes exactly one line")
+    if target == "make.conf":
+        _check_make_conf_line(line)
 
     text = _read(path)
     lines = _lines(text)
@@ -558,7 +653,7 @@ def op_append_line(request: dict[str, Any]) -> dict[str, Any]:
 
 def op_replace_line(request: dict[str, Any]) -> dict[str, Any]:
     path = check_path(_string(request, "path"), must_exist=True)
-    _require_line_target(path)
+    target = _require_line_target(path)
     line = _string(request, "line").rstrip("\n")
     if "\n" in line:
         # One line in, one line out. Otherwise the ``previous`` and ``line``
@@ -566,6 +661,11 @@ def op_replace_line(request: dict[str, Any]) -> dict[str, Any]:
         # account of what happened — would describe one line where several
         # were written.
         raise HelperError("multiline", "replace_line takes exactly one line")
+    if target == "make.conf":
+        # Before the pattern is even compiled: what is going in is a claim of
+        # its own, and "the line I am replacing looked reasonable" says nothing
+        # about the line replacing it.
+        _check_make_conf_line(line)
     pattern = _string(request, "match")
     if len(pattern) > PATTERN_MAX:
         raise HelperError(
@@ -598,8 +698,13 @@ def op_replace_line(request: dict[str, Any]) -> dict[str, Any]:
 
 def op_remove_line(request: dict[str, Any]) -> dict[str, Any]:
     path = check_path(_string(request, "path"), must_exist=True)
-    _require_line_target(path)
+    target = _require_line_target(path)
     line = _string(request, "line").rstrip("\n")
+    if target == "make.conf":
+        # Nothing in the interface removes a line from make.conf, and a line
+        # this program would not write is not one it should be talked into
+        # taking away either.
+        _check_make_conf_line(line)
 
     lines = _lines(_read(path))
     if line not in lines:
