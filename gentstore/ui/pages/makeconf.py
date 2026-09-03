@@ -319,7 +319,18 @@ class MakeConfPage(Page):
             self._rows[self._pending].revert()
         self._pending = name
 
-        plan = makeconf.plan_set(conf, name, value)
+        try:
+            plan = makeconf.plan_set(conf, name, value)
+        except makeconf.UnsafeValue as refused:
+            # Nothing is written and nothing is previewed: there is no line to
+            # preview, which is the whole reason it was refused.
+            self._plan = None
+            self._diff.hide()
+            self._preview.set_plan(None)
+            self._preview.report_failure(str(refused))
+            self._preview.show()
+            return
+
         self._plan = plan
         if plan.is_noop:
             self._pending = None

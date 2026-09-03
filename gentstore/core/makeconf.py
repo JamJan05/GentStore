@@ -64,6 +64,59 @@ EDITABLE = (
 )
 
 
+#: What a value written from the interface may be made of.
+#:
+#: A whitelist, and a short one, because the nine variables in :data:`EDITABLE`
+#: all hold the same kind of thing: a list of bare tokens. Flags (``-bindist``,
+#: ``X``), keywords (``~amd64``), licence groups (``@FREE``, ``-*``), option
+#: strings (``--with-bdeps=y``), locale codes (``pt-BR``), ``make`` options
+#: (``-j4``, ``-l4.5``). Every one of those is spelled with these characters.
+#:
+#: What it leaves out is everything that means something to whatever reads the
+#: file: the quotes, the backslash, the backtick, the ``$``, and the line break
+#: that would end the assignment early and leave the rest of the value sitting
+#: in ``make.conf`` as something else entirely.
+#:
+#: The cost is that ``MAKEOPTS="-j$(nproc)"`` cannot be *written* from here. It
+#: can still be read, shown, and left alone — a value nobody edits is never
+#: reformatted — and a shell parser good enough to write that safely is a much
+#: larger thing than this file, wrong in ways nobody would notice until it had
+#: rewritten somebody's make.conf.
+_SAFE_CHARACTERS = "A-Za-z0-9 _+=@,./:~*-"
+_SAFE_VALUE = re.compile(f"^[{_SAFE_CHARACTERS}]*$")
+_UNSAFE_CHARACTER = re.compile(f"[^{_SAFE_CHARACTERS}]")
+
+
+class UnsafeValue(ValueError):
+    """A value that cannot be written to ``make.conf`` without changing its syntax."""
+
+
+def unsafe_value(name: str, value: str) -> str | None:
+    """Why *value* cannot be written for *name*, or ``None`` when it can.
+
+    Asked before a plan is built, so the interface can say what is wrong while
+    the user is still looking at what they typed.
+    """
+    if "\x00" in value:
+        return f"{name} cannot contain a null byte."
+    if "\n" in value or "\r" in value:
+        return (
+            f"{name} has to be one line. A line break would end the assignment "
+            f"where it appears, and leave the rest of what you typed in "
+            f"make.conf as something Portage would read as its own setting."
+        )
+    if not _SAFE_VALUE.match(value):
+        rejected = sorted(set(_UNSAFE_CHARACTER.findall(value)))
+        return (
+            f"{name} cannot contain {' '.join(rejected)}. make.conf is read as "
+            f"shell, and Gentstore writes only values it can be sure change "
+            f"nothing but the variable — letters, digits and "
+            f"_ + = @ , . / : ~ * - and spaces. Edit the file by hand for "
+            f"anything else."
+        )
+    return None
+
+
 @dataclass(frozen=True, slots=True)
 class Assignment:
     """One ``NAME=value`` line, and where it is."""
@@ -188,7 +241,23 @@ def load(env: PortageEnv | None = None, path: Path | None = None) -> MakeConf:
 
 
 def format_line(name: str, value: str, quote: str = '"', indent: str = "") -> str:
-    return f'{indent}{name}={quote}{value}{quote}'
+    """One ``NAME="value"`` line, or a refusal.
+
+    The refusal is the point: this is the only place a value from the interface
+    becomes a line of ``make.conf``, so it is where a value that would not stay
+    a value has to stop. See :func:`unsafe_value`.
+    """
+    reason = unsafe_value(name, value)
+    if reason is not None:
+        raise UnsafeValue(reason)
+
+    if quote not in ("'", '"'):
+        # No quote to reuse. :func:`parse` never produces that — it records a
+        # bare `MAKEOPTS=-j4` as double-quoted precisely so the rewrite carries
+        # one — but this function is callable on its own, and an unquoted value
+        # with a space in it is an assignment followed by a command.
+        quote = '"' if value == "" or " " in value else ""
+    return f"{indent}{name}={quote}{value}{quote}"
 
 
 def plan_set(conf: MakeConf, name: str, value: str) -> WritePlan:
@@ -198,7 +267,14 @@ def plan_set(conf: MakeConf, name: str, value: str) -> WritePlan:
     does not mention is appended. An assignment that spans several lines is
     refused rather than guessed at — rewriting somebody's carefully wrapped
     ``USE`` is not a thing to do on their behalf.
+
+    Raises :class:`UnsafeValue` for a value that would not stay a value; ask
+    :func:`unsafe_value` first to say so without an exception.
     """
+    reason = unsafe_value(name, value)
+    if reason is not None:
+        raise UnsafeValue(reason)
+
     existing = conf.get(name)
     if existing is not None and not existing.is_editable:
         return WritePlan("none", conf.path, existing.raw, _kind(conf), previous=existing.raw)

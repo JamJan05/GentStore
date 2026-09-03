@@ -309,3 +309,95 @@ def test_what_portage_uses_and_what_the_file_says_are_asked_separately(portage_e
     if not conf.defines("FEATURES"):
         assert from_file == ""
         assert from_portage != from_file, "the profile contributes even with no line here"
+
+
+# -- what may be written at all ---------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        '-j4" \nFEATURES="-sandbox',      # closes the quote and opens another line
+        "-j4\nPORTAGE_TMPDIR=/tmp/mine",  # a second assignment of its own
+        "-j4\rMAKEOPTS=-j64",             # the same, with the carriage return alone
+        "-j$(nproc)",                     # command substitution
+        "-j`nproc`",
+        "-j${JOBS}",
+        '-j4"',                           # one unbalanced quote is enough
+        "-j4'",
+        "-j4 \\",                          # a continuation onto the next line
+        "-j4\x00",
+        "-j4; rm -rf /",
+        "-j4 && reboot",
+        "-j4 #",
+    ],
+)
+def test_a_value_that_would_stop_being_a_value_is_refused(value: str) -> None:
+    """make.conf is read as shell, and this is where a value becomes a line.
+
+    Every one of these was written verbatim between two quotes before. What
+    comes of it depends on what reads the file — Portage's own parser is not a
+    shell — but a configuration file whose syntax the interface can break is
+    already wrong, and it is wrong in the file people keep their notes in.
+    """
+    assert makeconf.unsafe_value("MAKEOPTS", value) is not None
+    with pytest.raises(makeconf.UnsafeValue):
+        makeconf.format_line("MAKEOPTS", value)
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("MAKEOPTS", "-j4 -l4.5"),
+        ("EMERGE_DEFAULT_OPTS", "--quiet-build=y --with-bdeps=y --keep-going"),
+        ("USE", "-bindist X gtk python_targets_python3_12"),
+        ("ACCEPT_KEYWORDS", "~amd64"),
+        ("ACCEPT_LICENSE", "-* @FREE @BINARY-REDISTRIBUTABLE"),
+        ("VIDEO_CARDS", "amdgpu radeonsi"),
+        ("CPU_FLAGS_X86", "aes avx avx2 sse4_2"),
+        ("FEATURES", "parallel-fetch -sandbox candy"),
+        ("L10N", "pl en pt-BR"),
+        ("USE", ""),
+    ],
+)
+def test_everything_the_screen_is_for_still_goes_through(name: str, value: str) -> None:
+    """The other half: a whitelist that refuses real values is not a fix.
+
+    One case per variable the settings screen offers, with the kind of value
+    that variable actually holds.
+    """
+    assert makeconf.unsafe_value(name, value) is None
+    assert makeconf.format_line(name, value) == f'{name}="{value}"'
+
+
+def test_a_refused_value_never_reaches_a_plan(tmp_path: Path) -> None:
+    """plan_set is what the screen calls; it must not hand back a broken line."""
+    conf = makeconf.MakeConf(
+        path=tmp_path / "make.conf",
+        lines=('MAKEOPTS="-j4"',),
+        assignments=makeconf.parse('MAKEOPTS="-j4"\n'),
+    )
+    with pytest.raises(makeconf.UnsafeValue):
+        makeconf.plan_set(conf, "MAKEOPTS", '-j8" \nFEATURES="-sandbox')
+
+
+def test_an_unquoted_assignment_is_written_back_quoted(tmp_path: Path) -> None:
+    """``MAKEOPTS=-j4`` is legal shell; ``MAKEOPTS=-j4 -l4`` is two things.
+
+    :func:`parse` already closes this by recording a missing quote as a double
+    quote, so the rewrite carries one. :func:`format_line` is callable without
+    going through a plan, so it decides the same thing for itself rather than
+    trusting its caller to have come from there.
+    """
+    text = "MAKEOPTS=-j4\n"
+    conf = makeconf.MakeConf(
+        path=tmp_path / "make.conf",
+        lines=tuple(text.splitlines()),
+        assignments=makeconf.parse(text),
+    )
+    assert conf.get("MAKEOPTS").quote == '"'
+    assert makeconf.plan_set(conf, "MAKEOPTS", "-j8 -l8").line == 'MAKEOPTS="-j8 -l8"'
+
+    assert makeconf.format_line("MAKEOPTS", "-j8", quote="") == "MAKEOPTS=-j8"
+    assert makeconf.format_line("MAKEOPTS", "-j8 -l8", quote="") == 'MAKEOPTS="-j8 -l8"'
+    assert makeconf.format_line("USE", "", quote="") == 'USE=""'
