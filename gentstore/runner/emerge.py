@@ -21,9 +21,28 @@ button run" is a question with a single answer that can be read, tested and put
 in front of the user before anything happens. Every screen shows the string
 these functions produce before running it.
 
-Two flags are on every command. ``--color=n`` because escape sequences in a log
-widget are noise, and ``--nospinner`` because the spinner is written with
-carriage returns that a log cannot animate.
+Three flags are on every command. ``--color=n`` because escape sequences in a
+log widget are noise, ``--nospinner`` because the spinner is written with
+carriage returns that a log cannot animate, and ``--ignore-default-opts``
+because otherwise the command that runs is not the command anybody agreed to.
+
+``emerge`` reads ``EMERGE_DEFAULT_OPTS`` out of ``make.conf`` and puts it in
+front of the argument list before deciding what it has been asked to do
+(``_emerge/main.py``: ``if "--ignore-default-opts" not in myopts``). So the
+string this module builds, the string the window shows, and the string
+``gentstore-launcher`` checks against its table can all agree with each other
+and still not be the operation Portage carries out — and some of what could
+arrive that way is not a matter of degree: ``--root``, ``--config-root`` and
+``--sysroot`` in those default options are read early and put straight into the
+environment of the ``emerge`` process, which moves the whole operation to
+another system.
+
+Not solved by clearing the variable in the environment, because it does not
+have to come from the environment. Not solved by validating its contents,
+because that would be a second, weaker copy of the table in the launcher. The
+command is simply built to ignore it — and the settings screen still edits the
+variable, which now means what it says: it applies to the ``emerge`` the user
+runs in a terminal, and not to the ones this window runs on their behalf.
 """
 
 from __future__ import annotations
@@ -32,7 +51,11 @@ from collections.abc import Iterable
 
 from .command import CommandSpec
 
-_BASE = ("emerge", "--color=n", "--nospinner")
+#: Kept in this order, and the launcher's table has the same three at the front
+#: of every row: the two files are checked against each other by the test suite,
+#: and an option that is present in one order and absent in another is exactly
+#: the drift that check exists to catch.
+_BASE = ("emerge", "--ignore-default-opts", "--color=n", "--nospinner")
 
 #: Forced on every command whose output gets parsed.
 #:

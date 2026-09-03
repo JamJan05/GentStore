@@ -252,9 +252,17 @@ EMAINT_COMMANDS = (
     ("sync", "-r", REPOSITORY),
 )
 
-#: The two options on every command ``gentstore/runner/emerge.py`` builds, in
+#: The three options on every command ``gentstore/runner/emerge.py`` builds, in
 #: the order that file puts them in.
-_EMERGE_BASE = ("--color=n", "--nospinner")
+#:
+#: ``--ignore-default-opts`` is the one that matters here rather than in the
+#: window. ``emerge`` reads ``EMERGE_DEFAULT_OPTS`` out of ``make.conf`` and
+#: puts it in front of the arguments before working out what it has been asked
+#: to do, so without this flag every row below describes a command that is only
+#: a prefix of the one that would run. Requiring it, rather than tolerating it,
+#: is the point: a command arriving here without it is one whose meaning this
+#: program cannot vouch for, whoever built it.
+_EMERGE_BASE = ("--ignore-default-opts", "--color=n", "--nospinner")
 
 #: Every ``emerge`` command line Gentstore builds — one row per function in
 #: gentstore/runner/emerge.py, in that file's order.

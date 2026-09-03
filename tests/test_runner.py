@@ -78,14 +78,19 @@ def test_the_launcher_no_longer_offers_an_editor() -> None:
     assert "etc-update" not in launcher.ALLOWED
 
 
-def test_the_launcher_accepts_every_command_the_interface_builds() -> None:
-    """The grammar in the launcher and the two builders have to stay in step.
+def every_emerge_command() -> tuple[object, ...]:
+    """Every ``emerge`` command line the interface can build, options and all.
 
-    If this fails after a command was added to runner/emerge.py or
-    runner/eselect.py, the command is the thing that is new — say so in the
-    launcher too. That file is the list of what one authentication buys.
+    Written out rather than discovered by walking the module. The point of the
+    list is to notice a builder growing an option or losing one, and anything
+    that found the commands by following the code would follow it there too and
+    keep agreeing with itself.
+
+    Both halves of each optional flag appear, because "with ``--getbinpkg``" and
+    "without it" are two different command lines as far as the launcher's table
+    is concerned.
     """
-    for spec in (
+    return (
         emerge.install(["media-video/mpv"]),
         emerge.install(["media-video/mpv"], oneshot=True, binaries=True),
         emerge.install(["media-video/mpv"], binaries=True),
@@ -106,6 +111,18 @@ def test_the_launcher_accepts_every_command_the_interface_builds() -> None:
         emerge.update_world(binaries=True),
         emerge.depclean(),
         emerge.preserved_rebuild(),
+    )
+
+
+def test_the_launcher_accepts_every_command_the_interface_builds() -> None:
+    """The grammar in the launcher and the two builders have to stay in step.
+
+    If this fails after a command was added to runner/emerge.py or
+    runner/eselect.py, the command is the thing that is new — say so in the
+    launcher too. That file is the list of what one authentication buys.
+    """
+    for spec in (
+        *every_emerge_command(),
         emerge.sync_all(),
         eselect.enable("guru"),
         eselect.add("myrepo", "git", "https://github.com/x/y.git"),
@@ -158,31 +175,31 @@ def test_the_launcher_refuses_arguments_the_interface_never_builds(
     [
         # Removing the system. A set is a literal in the two rows that take
         # one, so it cannot appear where a package is expected.
-        ["--color=n", "--nospinner", "--unmerge", "@world"],
-        ["--color=n", "--nospinner", "--unmerge", "@system"],
-        ["--color=n", "--nospinner", "--unmerge", "@preserved-rebuild"],
-        ["--color=n", "--nospinner", "--pretend", "--verbose", "--unmerge", "@world"],
+[*launcher._EMERGE_BASE, "--unmerge", "@world"],
+[*launcher._EMERGE_BASE, "--unmerge", "@system"],
+[*launcher._EMERGE_BASE, "--unmerge", "@preserved-rebuild"],
+[*launcher._EMERGE_BASE, "--pretend", "--verbose", "--unmerge", "@world"],
         # --depclean works out for itself what is orphaned. Given a package it
         # means something else, and the update screen never asks for it.
-        ["--color=n", "--nospinner", "--depclean", "media-video/mpv"],
-        ["--color=n", "--nospinner", "--pretend", "--depclean", "media-video/mpv"],
-        ["--color=n", "--nospinner", "--depclean", "@world"],
+[*launcher._EMERGE_BASE, "--depclean", "media-video/mpv"],
+[*launcher._EMERGE_BASE, "--pretend", "--depclean", "media-video/mpv"],
+[*launcher._EMERGE_BASE, "--depclean", "@world"],
         # Options the interface never puts together, each one allowed on its
         # own by the old set of permitted options.
-        ["--color=n", "--nospinner", "--unmerge", "--getbinpkg", "media-video/mpv"],
-        ["--color=n", "--nospinner", "--deselect", "--oneshot", "media-video/mpv"],
-        ["--color=n", "--nospinner", "--select", "media-video/mpv"],
-        ["--color=n", "--nospinner", "--unmerge", "--deselect", "media-video/mpv"],
-        ["--color=n", "--nospinner", "--verbose", "--depclean", "media-video/mpv"],
+[*launcher._EMERGE_BASE, "--unmerge", "--getbinpkg", "media-video/mpv"],
+[*launcher._EMERGE_BASE, "--deselect", "--oneshot", "media-video/mpv"],
+[*launcher._EMERGE_BASE, "--select", "media-video/mpv"],
+[*launcher._EMERGE_BASE, "--unmerge", "--deselect", "media-video/mpv"],
+[*launcher._EMERGE_BASE, "--verbose", "--depclean", "media-video/mpv"],
         # The right options in an order nothing builds.
-        ["--color=n", "--nospinner", "--verbose", "--oneshot", "--getbinpkg", "media-video/mpv"],
-        ["--nospinner", "--color=n", "--verbose", "media-video/mpv"],
+[*launcher._EMERGE_BASE, "--verbose", "--oneshot", "--getbinpkg", "media-video/mpv"],
+        ["--ignore-default-opts", "--nospinner", "--color=n", "--verbose", "media-video/mpv"],
         # A world update has to be a world update.
-        ["--color=n", "--nospinner", "--verbose", "--update", "--deep", "--newuse"],
-        ["--color=n", "--nospinner", "--verbose", "--update", "--deep", "--newuse", "@system"],
+[*launcher._EMERGE_BASE, "--verbose", "--update", "--deep", "--newuse"],
+[*launcher._EMERGE_BASE, "--verbose", "--update", "--deep", "--newuse", "@system"],
         # Nothing to work on.
-        ["--color=n", "--nospinner", "--verbose"],
-        ["--color=n", "--nospinner", "--unmerge"],
+[*launcher._EMERGE_BASE, "--verbose"],
+[*launcher._EMERGE_BASE, "--unmerge"],
     ],
 )
 def test_the_launcher_refuses_emerge_commands_the_interface_never_builds(
@@ -199,6 +216,113 @@ def test_the_launcher_refuses_emerge_commands_the_interface_never_builds(
     """
     with pytest.raises(launcher.LauncherError):
         launcher.check_arguments("emerge", arguments)
+
+
+# -- EMERGE_DEFAULT_OPTS ----------------------------------------------------
+
+
+def test_every_emerge_command_ignores_the_users_default_options() -> None:
+    """Otherwise the command that runs is not the command that was checked.
+
+    ``emerge`` reads ``EMERGE_DEFAULT_OPTS`` from ``make.conf`` and puts it in
+    front of the argument list before working out what it has been asked to do
+    (``_emerge/main.py``: ``if "--ignore-default-opts" not in myopts``). Every
+    validator in this project looks at the argv Gentstore built, so without this
+    flag all of them are checking a prefix of the real command.
+    """
+    for spec in every_emerge_command():
+        assert "--ignore-default-opts" in spec.argv, spec.display
+
+
+def test_the_preview_and_the_real_thing_have_the_same_policy() -> None:
+    """A preview that ignores the default options and a run that does not would
+    be the worst of the three possible arrangements: the table on screen would
+    be right about a command nobody was going to run.
+
+    Checked as pairs, because that is the property — not "both contain a flag"
+    but "the option that decides this is the same on both sides".
+    """
+    pairs = (
+        (emerge.pretend(["media-video/mpv"]), emerge.install(["media-video/mpv"])),
+        (emerge.unmerge_pretend(["media-video/mpv"]), emerge.unmerge(["media-video/mpv"])),
+        (emerge.update_world_pretend(), emerge.update_world()),
+        (emerge.depclean_pretend(), emerge.depclean()),
+    )
+    for preview, real in pairs:
+        assert ("--ignore-default-opts" in preview.argv) is (
+            "--ignore-default-opts" in real.argv
+        ), preview.display
+
+
+def test_the_launcher_and_the_builders_agree_on_the_base() -> None:
+    """Two files, three options, one order. Compared rather than assumed.
+
+    The launcher's rows all start with its own copy of the base. If the two
+    drifted, every row would describe a command the interface no longer builds
+    and the suite would say so somewhere else — but it would say it eighteen
+    times, about the wrong thing.
+    """
+    assert emerge._BASE[0] == "emerge"
+    assert emerge._BASE[1:] == launcher._EMERGE_BASE
+
+
+def test_a_command_without_the_flag_is_not_a_command_gentstore_runs() -> None:
+    """The launcher requires it rather than tolerating it.
+
+    A command arriving here without it is one whose meaning this program cannot
+    vouch for, whoever built it — the argv says one thing and Portage would do
+    that plus whatever is in the user's make.conf.
+    """
+    for spec in every_emerge_command():
+        stripped = [
+            argument for argument in spec.argv[1:] if argument != "--ignore-default-opts"
+        ]
+        with pytest.raises(launcher.LauncherError):
+            launcher.check_arguments("emerge", stripped)
+
+
+def test_the_installed_emerge_still_understands_the_flag(portage_env) -> None:
+    """The whole fix rests on one option of somebody else's program.
+
+    Not a run of ``emerge`` — nothing here is worth starting a real one for.
+    ``parse_opts`` is the function ``main()`` calls on the argv before deciding
+    whether to prepend ``EMERGE_DEFAULT_OPTS``, so a flag it puts in ``myopts``
+    is a flag that decision can see.
+    """
+    main = pytest.importorskip("_emerge.main")
+
+    _action, options, _files = main.parse_opts(
+        ["--ignore-default-opts", "--pretend", "--verbose", "sys-apps/portage"], silent=True
+    )
+    assert "--ignore-default-opts" in options
+
+    # And it is not simply ignored as an unknown word: without it the same parse
+    # does not invent it.
+    _action, without, _files = main.parse_opts(
+        ["--pretend", "--verbose", "sys-apps/portage"], silent=True
+    )
+    assert "--ignore-default-opts" not in without
+
+
+# -- the table and the builders, in both directions --------------------------
+
+
+def test_every_launcher_template_belongs_to_a_command_the_interface_builds() -> None:
+    """The direction the other test does not cover.
+
+    A builder can be changed or dropped and its row left behind, and nothing
+    would fail: the row would go on granting a command through one
+    authentication that the application has no way to ask for. Checked against
+    the same written-out list, so the two directions cannot both be satisfied by
+    editing one place.
+    """
+    built = [list(spec.argv[1:]) for spec in every_emerge_command()]
+    orphaned = [
+        " ".join(template)
+        for template in launcher.EMERGE_COMMANDS
+        if not any(launcher._matches(template, arguments) for arguments in built)
+    ]
+    assert orphaned == [], "no builder produces these rows any more"
 
 
 def test_the_child_gets_an_unbuffered_environment() -> None:
@@ -414,7 +538,13 @@ def test_a_stale_installed_copy_is_noticed() -> None:
         pytest.skip("the helper is not installed on this machine")
 
     source = Path(privilege.__file__).resolve().parent.parent / "helper" / "gentstore_helper.py"
-    same = status.path.read_bytes() == source.read_bytes()
+    # Bodies, not bytes. The ``#!`` line is deliberately left out of the
+    # comparison — a correctly installed copy has had it rewritten to the exact
+    # interpreter the package was built for — so comparing raw bytes here would
+    # be a stricter question than the code asks and would fail on a machine
+    # where the install had worked. That the shebang alone is not staleness has
+    # a test of its own in the packaging suite.
+    same = privilege._body(status.path.read_bytes()) == privilege._body(source.read_bytes())
     assert status.current is same
     assert status.is_stale is not same
 
@@ -546,7 +676,10 @@ def test_removing_is_unmerge_and_never_depclean() -> None:
 
 def test_the_display_string_is_what_somebody_would_type() -> None:
     spec = emerge.pretend(["media-video/mpv"])
-    assert spec.display == "emerge --color=n --nospinner --pretend --verbose media-video/mpv"
+    assert spec.display == (
+        "emerge --ignore-default-opts --color=n --nospinner "
+        "--pretend --verbose media-video/mpv"
+    )
 
 
 # -- running one ------------------------------------------------------------
@@ -793,12 +926,12 @@ def test_the_launcher_refuses_every_package_there_is() -> None:
         assert launcher._is_package_atom(atom) is False, atom
         with pytest.raises(launcher.LauncherError):
             launcher.check_arguments(
-                "emerge", ["--color=n", "--nospinner", "--unmerge", atom]
+                "emerge", [*launcher._EMERGE_BASE, "--unmerge", atom]
             )
 
     # A wildcard on one side is still an ordinary atom and stays allowed.
     launcher.check_arguments(
-        "emerge", ["--color=n", "--nospinner", "--pretend", "--verbose", "media-video/*"]
+        "emerge", [*launcher._EMERGE_BASE, "--pretend", "--verbose", "media-video/*"]
     )
 
 
