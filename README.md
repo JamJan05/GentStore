@@ -11,15 +11,21 @@ the five principles below costs in practice — is at
 **[www.gentstore.dev](https://www.gentstore.dev/en)**, and
 [po polsku](https://www.gentstore.dev/pl).
 
-> **Version 1.3.1.** All nine screens work, and both halves have been exercised on a live
-> system: the read-only side — search, USE flags, masks, repositories, the update preview,
+> **Version 1.3.1 — beta.** All nine screens work, and both halves have been exercised on a
+> live system: the read-only side — search, USE flags, masks, repositories, the update preview,
 > configuration files, `make.conf`, elog and `@world` — and the privileged one, which has
 > written real `package.use`, `package.license` and `package.accept_keywords` entries through
-> `pkexec` and run `emerge`, `emaint sync` and `eselect` through the launcher. 572 tests pass.
+> `pkexec` and run `emerge`, `emaint sync` and `eselect` through the launcher. 797 tests pass.
 >
-> What that number does not claim: this has run on **one** machine, amd64 only, so the ebuild
-> is keyworded `~amd64`. Bug reports from other setups are the fastest way to make the next
-> release better.
+> What that does not claim: this has run on **one** machine, amd64 only. The ebuild is
+> keyworded `~amd64` and the package announces itself as `Development Status :: 4 - Beta`,
+> which is the same statement said twice on purpose. Bug reports from other setups are the
+> fastest way to make the next release better.
+>
+> Two things to know before installing, because both are deliberate and both are noticed on
+> the first day: **you are asked for your password at every privileged step**, and
+> **`EMERGE_DEFAULT_OPTS` does not apply to the commands this window runs**. Why, under
+> [Installation](#installation) and [Running it](#running-it) below.
 
 ## What it looks like
 
@@ -201,6 +207,14 @@ before being let anywhere near root. It is worth doing.
 closed. The two halves are versioned together: if you update the code and forget
 `sudo make install-system`, the application tells you at startup.
 
+**You are asked for your password at every privileged step**, and a six-step system update
+therefore asks six times. The polkit actions are `auth_admin` and not `auth_admin_keep`, which
+is the form that remembers an answer for a few minutes — and what it remembers is not "this
+window may carry on" but "this user has authenticated for this action", so anything else
+running as you could use the same window. Fewer prompts would mean smaller privileges rather
+than a remembered answer, and that is a change nobody has made yet
+([04-privileges.md §3](Docs/04-privileges.md)).
+
 ## Running it
 
 ```bash
@@ -246,7 +260,7 @@ pinned to a specific version. The **Masks and licences** screen shows everything
 already accepted, and lets you take it back.
 
 The **Repositories** screen shows what you have configured — together with the `repos.conf`
-section verbatim — and lets you search the catalogue of 459 Gentoo repositories. Enabling an
+section verbatim — and lets you search the catalogue of Gentoo repositories. Enabling an
 overlay is one click (`eselect repository enable` + `emaint sync -r`), with the command shown
 before it runs. Removing one tells you how many installed packages will lose their ebuild.
 Adding a repository from outside the catalogue gets its own dialog with a warning — ebuilds
@@ -273,6 +287,14 @@ the profile adds to them. A change replaces **one line**, leaving comments and o
 untouched, and the difference is visible before it is saved. `MAKEOPTS` gets a suggestion
 computed from the core count and the amount of memory (about 2 GiB per job), and
 `CPU_FLAGS_X86` one from `cpuid2cpuflags`, if it is installed.
+
+One variable there behaves differently from the rest. `EMERGE_DEFAULT_OPTS` can be edited on
+that screen and applies to the `emerge` **you** run in a terminal, but not to the ones this
+window runs: every command Gentstore builds carries `--ignore-default-opts`. Otherwise the
+command shown before a run would be a prefix of the command carried out — Portage puts that
+variable in front of the arguments before deciding what it has been asked to do, and `--root`
+sitting in it would move the whole operation to another system
+([04-privileges.md §2a](Docs/04-privileges.md)).
 
 The **Profile** screen lists the profiles from `eselect`, marks the current one and, before a
 change, says plainly what follows from it: different default USE flags, different masks, and a
