@@ -2,8 +2,8 @@
   "lang": "en",
   "label": "English",
   "meta": {
-    "title": "GentStore - GUI for Portage",
-    "description": "A graphical front-end for Portage on Gentoo Linux: package search, USE flags with explanations, masks and licences, overlays, and the full system update cycle."
+    "title": "GentStore — GUI for Portage on Gentoo Linux",
+    "description": "It shows what it will do before it does it. Package search, USE flags with explanations, masks, licences and overlays — in one window, never as root."
   },
   "header": {
     "version": "1.3.1",
@@ -15,8 +15,8 @@
   "hero": {
     "eyebrow": "app-portage/gentstore",
     "title_lines": [
-      "Portage, with a view",
-      "of what is about to happen."
+      "A graphical Portage.",
+      "It shows, then it acts."
     ],
     "lead": "A graphical front-end for Portage on Gentoo Linux. Searching for and installing packages, USE flags with an explanation of what each one does, masks and licences, overlays, and the full system update cycle.",
     "note": "Every change to `/etc/portage` is previewed before it is written. The interface never runs as root.",
