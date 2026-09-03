@@ -66,6 +66,23 @@ Hard rules inside the helper, enforced regardless of what the GUI sent:
    line appended to any of them is code running as root later on, and none of them is a file
    this application has ever needed to write. Naming what is allowed also covers the ones nobody
    has thought of, which a list of forbidden names cannot do.
+1b. For `make.conf`, **which line** matters as well, because it is the one name on that list
+   whose contents decide what Portage *does* rather than which packages it installs.
+   `PORTAGE_BASHRC` names a script sourced during every merge; `ROOT`, `PORTAGE_CONFIGROOT` and
+   `SYSROOT` move the whole operation to another system; `FETCHCOMMAND` is a command line. A
+   line written there has to be an assignment to one of the nine variables the settings screen
+   offers, with a value drawn from the same small character set `core/makeconf.py` will produce
+   — one line, balanced quotes, nothing after the closing one.
+
+   The check is on the line **going in**, and separately from anything else in the request. That
+   matters most for `replace_line`, which used to check only that its pattern found exactly one
+   line: a request could say “find the line matching `USE=`” quite honestly and hand over
+   `ROOT="/somewhere"` to put in its place. Two claims, checked separately.
+
+   The variable names and the character set are a **copy** of `EDITABLE` in
+   `core/makeconf.py`, not an import: the helper imports nothing from the rest of Gentstore so
+   that reading it is reading one file. The test suite compares the two lists and runs what the
+   screen produces through the helper, which is where a copy is allowed to live.
 2. It refuses to follow symbolic links that lead outside the permitted area.
 3. Atomic writes: a temporary file in the same directory → `fsync` → `os.replace`. A file is
    never left damaged halfway through a write.
@@ -125,9 +142,27 @@ users are.
      members. `--unmerge` and `@world` were both on the old list and neither is wrong on its
      own; together they are a command that removes the system. The two commands that do work on
      a set (`@world` for the update, `@preserved-rebuild` for the rebuild) name it literally,
-     which is what keeps a set out of every other row;
+     which is what keeps a set out of every other row.
+
+     Every row also **requires** `--ignore-default-opts`, and so does every command
+     `runner/emerge.py` builds. Without it the table describes a command that is only a prefix
+     of the one that runs: `emerge` reads `EMERGE_DEFAULT_OPTS` out of `make.conf` and puts it
+     in front of the argument list before working out what it has been asked to do
+     (`_emerge/main.py`: `if "--ignore-default-opts" not in myopts`). Some of what could arrive
+     that way is not a matter of degree — `--root`, `--config-root` and `--sysroot` in those
+     options are read early and put straight into the environment of the `emerge` process. The
+     variable is one the settings screen itself edits, and it now means what it says: the
+     `emerge` the user runs in a terminal, not the ones this window runs for them;
    - `emaint`, `eselect` — a table of complete command templates (`repository add <name> <type>
-     <url>`, `profile set <number>` and so on), matched token by token;
+     <url>`, `profile set <number>` and so on), matched token by token.
+
+     One thing `emaint` does that this cannot close: `emaint sync` parses `EMERGE_DEFAULT_OPTS`
+     for itself (`portage/emaint/modules/sync/sync.py`) and has no equivalent of
+     `--ignore-default-opts`. Its reach there is narrower than `emerge`'s was — the action is
+     fixed as `sync` before the parse, and the `--root` handling that moves an operation lives
+     in `_emerge.main` and is not on this path — so what a user's default options can change is
+     how the sync runs, not what runs. Recorded because it is the one place where “the command
+     shown is the command carried out” is still an approximation;
    - `glsa-check` — `-l` or `-f`, and after that nothing but GLSA numbers or the word
      `affected`.
 
@@ -227,6 +262,20 @@ a chroot is useful and changes nothing.
 
 Supporting an alternate root properly means teaching the helper and the launcher about it too.
 Until that is done, refusing is the honest answer.
+
+**What that check does not see, and why it is not a hole.** Portage also takes `ROOT` from
+`make.conf` — `config.py` calls `locations_manager.set_root_override(make_conf.get("ROOT"))`
+when the environment did not set one — and `alternate_root()` reads the environment only. On
+such a machine the window does describe another root while the check says nothing. It is not a
+divergence, though: the helper writes to `/etc/portage`, which is `PORTAGE_CONFIGROOT` and stays
+`/` (make.conf cannot move the directory it is read from), and the launcher's `emerge` reads the
+same `make.conf` and targets the same root. Both halves talk about the same system, which is the
+property the check exists to keep. It has not been extended on the strength of an argument
+nobody could demonstrate.
+
+**The divergence that did exist** ran through `EMERGE_DEFAULT_OPTS` rather than the environment:
+`--root=` there moved the privileged `emerge` while `PortageEnv`, which never reads that
+variable, went on describing this machine. `--ignore-default-opts` closes it — see §2a.
 
 ## 4. The “never overwrite” principle
 

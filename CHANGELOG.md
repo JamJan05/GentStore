@@ -60,6 +60,29 @@ tag was made.
   `MAKEOPTS="-j$(nproc)"` can no longer be written from the screen; it can still be read, shown
   and left alone.
 
+- **`EMERGE_DEFAULT_OPTS` went round the launcher's whole table.** `emerge` reads that variable
+  out of `make.conf` and puts it in front of the argument list before working out what it has
+  been asked to do, so the command Gentstore built, the command the window showed and the
+  command the launcher checked could all agree with each other and still not be the operation
+  Portage carried out. Some of what could arrive that way is not a matter of degree: `--root`,
+  `--config-root` and `--sysroot` in those options are read early and put straight into the
+  environment of the `emerge` process, which moves the whole operation to another system — and
+  the variable is one the settings screen itself edits. Every command now carries
+  `--ignore-default-opts`, and the launcher requires it rather than tolerating it.
+  `EMERGE_DEFAULT_OPTS` still applies to the `emerge` you run in a terminal, which is what it
+  was always supposed to mean.
+
+- **The helper took any single line for `make.conf`.** The path check said which file; nothing
+  said which line, and `make.conf` is the one file on that list whose contents decide what
+  Portage *does* rather than which packages it installs — `PORTAGE_BASHRC` names a script
+  sourced during every merge, `ROOT` and `PORTAGE_CONFIGROOT` move the whole operation. The
+  settings screen refused to type those, and that was all that was stopping them; the helper
+  reads its request from stdin and is not in a position to assume what wrote it. It now requires
+  an assignment to one of the nine variables the screen offers, with a value from the same small
+  character set. `replace_line` carried the sharpest version — it checked that its pattern found
+  exactly one line and never looked at what was going in its place, so a request could say “find
+  the line matching `USE=`” quite honestly and hand over `ROOT="/somewhere"`.
+
 - **The two privileged programs asked `PATH` which Python they were.** `#!/usr/bin/env python3`
   for something started as root, where pkexec sanitises the environment and `sudo` has a
   secure_path — never the easy hole it looks like, and one fewer thing between the dialog and what
