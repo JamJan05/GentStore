@@ -13,10 +13,10 @@ rather than as part of it. That is how the page came to announce 1.3.0 while
 `emerge` was already installing 1.3.1: nothing about cutting a release touched
 this branch, and nothing here could tell that it had been left behind.
 
-The release workflow on `main` now dispatches
-`.github/workflows/website-version.yml`, which runs this. `--check` is the half
-the test suite runs, so the two language files cannot drift apart from each
-other even between releases.
+`.github/workflows/website-version.yml` on `main` checks this branch out and
+runs this, with the version the release it follows has just tagged. `--check` is
+the half the test suite runs, so the two language files cannot drift apart from
+each other even between releases.
 
 What this deliberately does not touch is `status.changes_title` — the "New in
 X" heading over the hand-written list of that release's highlights. Moving it

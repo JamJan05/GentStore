@@ -117,10 +117,15 @@ python set_version.py --tests 576      # move the count
 ```
 
 `--check` is what the test suite runs, so the two language files cannot drift
-apart from each other. The release workflow on `main` dispatches
-`.github/workflows/website-version.yml`, which runs the same script with the
-version it just tagged — a tag cannot trigger a workflow on this branch itself,
-and the header of that file explains why.
+apart from each other. `.github/workflows/website-version.yml` on `main` checks
+this branch out and runs the same script with the version a release just tagged,
+then commits the result back here.
+
+That workflow lives on `main` and not here for a reason GitHub imposes:
+`workflow_dispatch` only reaches a file that exists on the default branch, and a
+workflow triggered by `push: tags` is read from the tagged commit, which is on
+`main` too. Nothing on this branch can be started by a release. The header of
+that file says the rest.
 
 The count is not passed automatically: it is only known to a machine that has
 run the whole suite, which the release runner is not. Give it by hand, from the
