@@ -51,8 +51,8 @@ python build.py --base-url https://www.gentstore.dev
 ```
 
 That writes `dist/` beside the repository root: `pl.html` and `en.html`,
-a `404.html`, the content as JSON under `api/content/`, and
-the stylesheet, screenshots and icon copied in. It renders by walking the
+a `404.html`, `robots.txt` and `sitemap.xml`, the content as JSON under
+`api/content/`, and the stylesheet, screenshots and icon copied in. It renders by walking the
 application with a test client rather than by driving the templates directly,
 so a built page is the served page byte for byte — and everything the tests
 assert about one is true of the other.
@@ -83,6 +83,24 @@ missing. The project settings in the dashboard supply the rest:
 
 A push to the branch builds and publishes. Nothing runs between deploys, so
 the site does not depend on any machine of yours being awake.
+
+## Being found
+
+Everything a crawler needs is rendered into the page rather than arranged
+afterwards: a `<title>` and description per language from `meta` in the content
+files, a canonical URL, `hreflang` alternates naming both languages and
+`x-default`, an Open Graph preview, and the application described as
+schema.org `SoftwareApplication` in a `ld+json` block. `sitemap.xml` lists both
+pages with the same alternates, and `robots.txt` names it — both only once
+`GENTSTORE_WEB_BASE_URL` is set, because a relative URL is not allowed in
+either.
+
+The rest is not in this repository and has to be done once, by hand: verify the
+domain in Google Search Console, submit `https://www.gentstore.dev/sitemap.xml`
+there, and ask for the two pages to be indexed. Nothing on a new domain is
+crawled because it exists; it is crawled because something already indexed
+links to it, so the repository, the ebuild and wherever the project is
+announced are what actually bring the crawler.
 
 ## Content
 

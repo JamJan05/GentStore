@@ -7,7 +7,9 @@ Run them from the ``website`` directory with ``pytest``.
 
 from __future__ import annotations
 
+import html
 import json
+from xml.etree import ElementTree
 
 import pytest
 
@@ -20,6 +22,7 @@ from app.content import (  # noqa: E402
     DEFAULT_LANGUAGE,
     LANGUAGES,
     LINKS,
+    LOCALES,
     SCREENSHOT_DIR,
     base_url,
     inline,
@@ -225,6 +228,75 @@ def test_assets_are_served_from_the_repository(client: TestClient) -> None:
     assert client.get("/icons/apple-touch-icon.png").status_code == 200
     assert client.get("/favicon.ico").headers["content-type"] == "image/x-icon"
     assert client.get("/robots.txt").text.startswith("User-agent: *")
+
+
+def test_robots_names_the_sitemap_once_the_address_is_known(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A relative Sitemap line is not one, so it appears only when deployed."""
+    monkeypatch.delenv("GENTSTORE_WEB_BASE_URL", raising=False)
+    assert "Sitemap:" not in client.get("/robots.txt").text
+
+    monkeypatch.setenv("GENTSTORE_WEB_BASE_URL", "https://gentstore.example")
+    assert "Sitemap: https://gentstore.example/sitemap.xml" in client.get("/robots.txt").text
+
+
+def test_the_sitemap_lists_every_page_with_its_translations(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("GENTSTORE_WEB_BASE_URL", "https://gentstore.example")
+    response = client.get("/sitemap.xml")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/xml")
+
+    sitemap = "{http://www.sitemaps.org/schemas/sitemap/0.9}"
+    xhtml = "{http://www.w3.org/1999/xhtml}"
+    root = ElementTree.fromstring(response.text)
+
+    located = [url.findtext(f"{sitemap}loc") for url in root.findall(f"{sitemap}url")]
+    assert located == [f"https://gentstore.example/{code}" for code in LANGUAGES]
+
+    for url in root.findall(f"{sitemap}url"):
+        alternates = {
+            link.get("hreflang"): link.get("href") for link in url.findall(f"{xhtml}link")
+        }
+        assert alternates == {
+            **{code: f"https://gentstore.example/{code}" for code in LANGUAGES},
+            "x-default": "https://gentstore.example/",
+        }
+
+
+def test_each_page_declares_its_own_locale(client: TestClient) -> None:
+    """An unfurler told nothing assumes en_US, which is wrong for half the site."""
+    # A language added without a locale would fail in the template, not here.
+    assert set(LOCALES) == set(LANGUAGES)
+
+    polish = client.get("/pl").text
+    assert '<meta property="og:locale" content="pl_PL">' in polish
+    assert '<meta property="og:locale:alternate" content="en_GB">' in polish
+
+    english = client.get("/en").text
+    assert '<meta property="og:locale" content="en_GB">' in english
+    assert '<meta property="og:locale:alternate" content="pl_PL">' in english
+
+
+def test_the_page_carries_the_application_as_structured_data(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """What a search engine reads has to be what the page says, not a second copy."""
+    monkeypatch.setenv("GENTSTORE_WEB_BASE_URL", "https://gentstore.example")
+    page = client.get("/en").text
+
+    block = page.split('<script type="application/ld+json">')[1].split("</script>")[0]
+    data = json.loads(html.unescape(block))
+
+    content = load("en")
+    assert data["@type"] == "SoftwareApplication"
+    assert data["description"] == content["meta"]["description"]
+    assert data["softwareVersion"] == content["header"]["version"]
+    assert data["url"] == "https://gentstore.example/en"
+    assert data["codeRepository"] == LINKS["github"]
 
 
 def test_screenshots_are_not_a_way_out_of_their_directory(client: TestClient) -> None:

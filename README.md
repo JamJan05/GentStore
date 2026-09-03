@@ -14,7 +14,7 @@ website/                 the site: a FastAPI application and its content
   content/               the copy, one JSON file per language
   build.py               renders the whole site to dist/
 wrangler.jsonc           how Cloudflare serves what build.py produced
-  tests/                 40 tests over the routes, the content and the build
+  tests/                 56 tests over the routes, the content and the build
 Docs/screenshots/        the six screenshots the page shows
 data/icons/              the application icon, which is also the favicon
 ```

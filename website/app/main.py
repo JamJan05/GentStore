@@ -30,6 +30,7 @@ from app.content import (
     ICON_DIR,
     LANGUAGES,
     LINKS,
+    LOCALES,
     SCREENSHOT_DIR,
     STATIC_DIR,
     TEMPLATE_DIR,
@@ -61,11 +62,61 @@ app = FastAPI(
 templates = Jinja2Templates(directory=str(TEMPLATE_DIR))
 templates.env.filters["inline"] = inline
 templates.env.globals["languages"] = LANGUAGES
+templates.env.globals["locales"] = LOCALES
 templates.env.globals["links"] = LINKS
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 app.mount("/screenshots", StaticFiles(directory=str(SCREENSHOT_DIR)), name="screenshots")
 app.mount("/icons", StaticFiles(directory=str(ICON_DIR)), name="icons")
+
+
+#: One ``<url>`` per page, each naming every language the page exists in — the
+#: same set the ``<head>`` declares, which is what a crawler is asked to find in
+#: both places.
+SITEMAP = """<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml">
+{urls}</urlset>
+"""
+
+
+def sitemap_xml(site: str) -> str:
+    """The sitemap for a deployment answering at *site*."""
+    alternates = "".join(
+        f'    <xhtml:link rel="alternate" hreflang="{code}" href="{site}/{code}"/>\n'
+        for code in LANGUAGES
+    )
+    alternates += f'    <xhtml:link rel="alternate" hreflang="x-default" href="{site}/"/>\n'
+    urls = "".join(
+        f"  <url>\n    <loc>{site}/{code}</loc>\n{alternates}  </url>\n" for code in LANGUAGES
+    )
+    return SITEMAP.format(urls=urls)
+
+
+def _structured_data(content: dict[str, Any], language: str, site: str) -> dict[str, Any]:
+    """What the page says about the application, in the form a search engine reads.
+
+    Every value is one the page already carries — the same description, version,
+    repository and screenshot — so what a search result shows and what a visitor
+    reads cannot drift apart.
+    """
+    return {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "GentStore",
+        "url": f"{site}/{language}",
+        "description": content["meta"]["description"],
+        "applicationCategory": "DeveloperApplication",
+        "operatingSystem": "Gentoo Linux",
+        "softwareVersion": content["header"]["version"],
+        "codeRepository": LINKS["github"],
+        "license": "https://www.gnu.org/licenses/gpl-2.0.html",
+        "isAccessibleForFree": True,
+        "offers": {"@type": "Offer", "price": "0", "priceCurrency": "EUR"},
+        "inLanguage": language,
+        "screenshot": f"{site}/screenshots/search-and-install.png",
+        "author": {"@type": "Person", "name": "JamJan05", "url": LINKS["github"]},
+    }
 
 
 def _page(request: Request, language: str, status_code: int = 200) -> Response:
@@ -79,6 +130,7 @@ def _page(request: Request, language: str, status_code: int = 200) -> Response:
             "other": other_language(language),
             "version": __version__,
             "base_url": base_url(),
+            "structured_data": _structured_data(content, language, base_url()),
         },
         status_code=status_code,
     )
@@ -123,7 +175,27 @@ def api_content(language: str) -> JSONResponse:
 
 @app.api_route("/robots.txt", methods=PAGE_METHODS, include_in_schema=False)
 def robots() -> PlainTextResponse:
-    return PlainTextResponse("User-agent: *\nAllow: /\n")
+    """Nothing here is hidden, and the sitemap is named for a crawler that
+    arrives at the root: this file is the only place it is told about it."""
+    lines = ["User-agent: *", "Allow: /"]
+    site = base_url()
+    if site:
+        # The line has to carry an absolute URL, so it appears only where the
+        # deployment knows the address it answers on.
+        lines.append(f"Sitemap: {site}/sitemap.xml")
+    return PlainTextResponse("\n".join(lines) + "\n")
+
+
+@app.api_route("/sitemap.xml", methods=PAGE_METHODS, include_in_schema=False)
+def sitemap() -> Response:
+    """Both pages, listed once each, with the other language beside them.
+
+    The site is two pages linked from one another, so a crawler would find them
+    anyway; the sitemap exists so that a new deployment can be submitted rather
+    than waited for, and so the pair is declared as translations of each other
+    in the place Google reads that from.
+    """
+    return Response(content=sitemap_xml(base_url()), media_type="application/xml")
 
 
 @app.api_route("/favicon.ico", methods=PAGE_METHODS, include_in_schema=False)

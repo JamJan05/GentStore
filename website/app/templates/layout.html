@@ -19,7 +19,18 @@
   <meta property="og:description" content="{{ c.meta.description }}">
   <meta property="og:image" content="{{ base_url }}/screenshots/search-and-install.png">
   <meta property="og:url" content="{{ base_url }}/{{ lang }}">
+  <meta property="og:locale" content="{{ locales[lang] }}">
+  {%- for code in languages if code != lang %}
+  <meta property="og:locale:alternate" content="{{ locales[code] }}">
+  {%- endfor %}
   <meta name="twitter:card" content="summary_large_image">
+
+  {#- What the page is about, said again in the vocabulary a search engine
+      indexes rather than the one a reader sees. Built in the application from
+      the same content, so it cannot say something the page does not. -#}
+  {% if structured_data %}
+  <script type="application/ld+json">{{ structured_data|tojson }}</script>
+  {% endif %}
 
   {# Three formats, because the crawlers do not agree: Google reads the .ico
      at the root, a browser prefers the SVG, and iOS wants the PNG. -#}

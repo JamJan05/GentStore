@@ -124,6 +124,7 @@ def build(destination: Path, base_url: str = "") -> list[Path]:
         write("404.html", missing.text)
 
         write("robots.txt", client.get("/robots.txt").text)
+        write("sitemap.xml", client.get("/sitemap.xml").text)
 
     write(
         "index.html",
@@ -164,7 +165,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     written = build(args.out, args.base_url)
-    pages = sum(1 for path in written if path.suffix in {".html", ".json", ".txt"})
+    pages = sum(1 for path in written if path.suffix in {".html", ".json", ".txt", ".xml"})
     print(f"{args.out}: {len(written)} files, {pages} of them rendered")
     if not args.base_url:
         print("no --base-url: the canonical and preview links are relative", file=sys.stderr)

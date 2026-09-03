@@ -34,6 +34,11 @@ ICON_DIR = REPO_ROOT / "data" / "icons"
 LANGUAGES: tuple[str, ...] = ("pl", "en")
 DEFAULT_LANGUAGE = "pl"
 
+#: What ``og:locale`` calls each of them. A link unfurler that is told nothing
+#: assumes ``en_US``, which is wrong for half the site. The English is written
+#: with British spelling — "licences" — so it is ``en_GB``.
+LOCALES: dict[str, str] = {"pl": "pl_PL", "en": "en_GB"}
+
 
 def base_url() -> str:
     """The origin the page is reachable at, or ``""`` when it is not deployed.

@@ -40,6 +40,7 @@ def test_every_url_the_site_needs_is_a_file(site: Path) -> None:
         "index.html",
         "404.html",
         "robots.txt",
+        "sitemap.xml",
         "_redirects",
         "_headers",
         "static/site.css",
@@ -75,6 +76,12 @@ def test_a_built_page_is_the_page_the_application_serves(site: Path) -> None:
 def test_the_built_page_carries_the_deployed_address(site: Path) -> None:
     page = (site / "pl.html").read_text(encoding="utf-8")
     assert f'<link rel="canonical" href="{BASE_URL}/pl">' in page
+
+
+def test_what_a_crawler_is_pointed_at_is_absolute(site: Path) -> None:
+    """Both files are read from the root of the deployment, not from a page."""
+    assert f"Sitemap: {BASE_URL}/sitemap.xml" in (site / "robots.txt").read_text("utf-8")
+    assert f"<loc>{BASE_URL}/pl</loc>" in (site / "sitemap.xml").read_text("utf-8")
 
 
 def test_the_api_files_match_the_content(site: Path) -> None:
