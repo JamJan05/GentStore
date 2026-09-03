@@ -192,3 +192,40 @@ person's credentials, and nothing checks it ran); tagging by hand and letting th
 generating the release ebuild from the live one (the two differ by four comment blocks, and a
 transformation that pattern-matches prose breaks the first time somebody rewords one — copying
 the previous release ebuild is exact, because a release ebuild carries no version of its own).
+
+---
+
+### D-13 · The search index is kept in the runtime directory, not rebuilt every start
+
+**Decision:** `core/index_cache.py` writes the finished `SearchIndex` to
+`$XDG_RUNTIME_DIR/gentstore/search-index.json` and reads it back on the next start. It is used
+only when `fingerprint()` — the set of repositories, each one's location, and the modification
+time of every directory directly inside it — is the same as when it was written. Without
+`$XDG_RUNTIME_DIR` the file falls back to `~/.cache/gentstore/`. `GENTSTORE_INDEX_CACHE=0`
+builds from Portage every time, and so does `cli --no-cache`.
+
+**Reason:** building the index is 3.1 s on the development machine and reading it is 0.07 s, and
+the answer is the same one until the tree changes. It was the longest thing the application did
+before it could answer anything, and it did it again for every start of the day.
+
+The runtime directory is the decision inside the decision. It is a tmpfs the system creates at
+login and removes when the last session ends, so a cached index cannot outlive the boot that
+produced it — the coarse invalidation rule is the operating system's, and nothing here has to
+implement it. The fingerprint is the fine one, and it is what makes the `~/.cache` fallback
+harmless rather than a second rule to reason about: a sync rewrites `metadata/` and `profiles/`,
+a new `cat/pkg` in a local overlay writes its category directory, and either one moves a
+timestamp the check reads.
+
+**Consequence:** a description edited in place in an ebuild inside an existing package directory
+is not noticed, because no directory above it is written. That is a local-development case, and
+it already has an answer: rebuilding the index after a sync deletes the file
+(`AppContext.reload_index`). What is *not* cached is the installed set — one `cpv_all()`, re-read
+on load, because it changes after every install and the rest of the file does not.
+
+**Alternatives:** pickle instead of JSON (faster to load by tens of milliseconds, and a file
+format that executes what it reads, for a saving nobody can feel); Portage's own `md5-cache`
+timestamps as the fingerprint (only the main repository keeps one, so every overlay would need
+the directory scan anyway); an mtime check on the repository root alone (misses a package added
+to a category, which is exactly the local-overlay case the check exists for); keeping the cache
+in `~/.cache` only (survives a reboot, which is more than the user asked for and more than the
+fingerprint was designed to be the only guard against).

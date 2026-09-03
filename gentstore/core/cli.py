@@ -30,6 +30,7 @@ plain — the translated, designed presentation is the graphical interface's job
     python -m gentstore.core.cli repos
     python -m gentstore.core.cli world
     python -m gentstore.core.cli index --json
+    python -m gentstore.core.cli --no-cache index   # time a build, ignoring the cache
 """
 
 from __future__ import annotations
@@ -43,9 +44,9 @@ import time
 from datetime import datetime
 from typing import Any
 
+from . import index_cache, worldset
 from . import packages as pkgs
 from . import repos as repos_mod
-from . import worldset
 from .portage_env import PortageUnavailableError
 from .portage_env import env as _env
 
@@ -151,7 +152,16 @@ def cmd_repos(args: argparse.Namespace) -> int:
 
 
 def _index(args: argparse.Namespace) -> pkgs.SearchIndex:
-    return pkgs.SearchIndex.build(_env(), _progress if getattr(args, "progress", False) else None)
+    """The index the command works on — from the cache unless told otherwise.
+
+    A search from the shell is worth as little waiting as one from the window,
+    and both read the same cache file, so one of them warms it for the other.
+    ``--no-cache`` is how you find out what building actually costs.
+    """
+    progress = _progress if getattr(args, "progress", False) else None
+    if getattr(args, "no_cache", False):
+        return pkgs.SearchIndex.build(_env(), progress)
+    return index_cache.cached_index(_env(), progress)
 
 
 def _progress(done: int, total: int) -> None:
@@ -161,21 +171,31 @@ def _progress(done: int, total: int) -> None:
 
 
 def cmd_index(args: argparse.Namespace) -> int:
+    started = time.time()
     index = _index(args)
+    # An index built during this run is stamped with now; anything older than
+    # the moment the command started came out of the cache file.
+    cached = index.built_at < started
     data = {
         "packages": len(index),
         "repositories": list(index.repos),
         "installed": len(index.installed),
         "build_seconds": round(index.build_seconds, 3),
+        "seconds": round(time.time() - started, 3),
+        "cached": cached,
+        "cache_file": str(index_cache.path()),
     }
     if args.json:
         _emit(data)
         return 0
+    source = "read from the cache" if cached else "built"
     print(
         f"{data['packages']} packages from {', '.join(data['repositories'])} "
-        f"in {data['build_seconds']:.2f} s "
+        f"{source} in {data['seconds']:.2f} s "
         f"({data['installed']} of them installed)"
     )
+    if cached:
+        print(f"the cached index took {data['build_seconds']:.2f} s to build")
     return 0
 
 
@@ -310,6 +330,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--json", action="store_true", help="machine-readable output")
     parser.add_argument("--debug", action="store_true", help="log what the core layer is doing")
+    parser.add_argument(
+        "--no-cache",
+        action="store_true",
+        help="build the search index from Portage instead of reading the cached one",
+    )
     sub = parser.add_subparsers(dest="command", required=True)
 
     sub.add_parser("info", help="environment summary").set_defaults(func=cmd_info)
@@ -319,7 +344,7 @@ def build_parser() -> argparse.ArgumentParser:
     repos_parser.add_argument("-v", "--verbose", action="store_true", help="show sync settings")
     repos_parser.set_defaults(func=cmd_repos)
 
-    index_parser = sub.add_parser("index", help="build the search index and time it")
+    index_parser = sub.add_parser("index", help="load the search index and time it")
     index_parser.add_argument("--progress", action="store_true")
     index_parser.set_defaults(func=cmd_index)
 

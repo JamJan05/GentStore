@@ -21,7 +21,10 @@ Three things belong here so far.
 The **search index** takes a couple of seconds to build and every screen that
 lists packages will want the same one; rebuilding it per screen would be both
 slow and a source of disagreement between screens. It is built once, in the
-background, and handed out through :attr:`index_ready`.
+background, and handed out through :attr:`index_ready`. Between runs it is kept
+on disk — :mod:`gentstore.core.index_cache` decides whether the copy there is
+still true — so most starts hand out a list that was ready before the window
+was.
 
 The **"only ::gentoo" state** lives here for the opposite reason: it is set in
 the toolbar but read by the screens, and routing it through the window would
@@ -40,7 +43,7 @@ import logging
 
 from PyQt6.QtCore import QObject, pyqtSignal
 
-from ..core import portage_env, useflags
+from ..core import index_cache, portage_env, useflags
 from ..core.backup import BackupTracker, latest
 from ..core.packages import SearchIndex
 from ..runner.command import Command, CommandError, CommandSpec
@@ -108,12 +111,21 @@ class AppContext(QObject):
             return
         self._loading = True
         self._error = None
-        log.info("Building the package index")
-        run_async(SearchIndex.build, self._on_ready, self._on_failed, None, self._reporter.report)
+        log.info("Loading the package index")
+        run_async(
+            index_cache.cached_index, self._on_ready, self._on_failed, None, self._reporter.report
+        )
 
     def reload_index(self) -> None:
-        """Throw the index away and build it again — after a sync, say."""
+        """Throw the index away and build it again — after a sync, say.
+
+        The cached copy goes with it. The fingerprint would almost always have
+        noticed the change on its own, but this is the path taken by somebody
+        who has just told the application the tree is different, and the one
+        answer they must not get is the old one.
+        """
         self._index = None
+        index_cache.discard()
         self.ensure_index()
 
     def install_index(self, index: SearchIndex) -> None:

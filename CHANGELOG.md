@@ -9,6 +9,20 @@ tag was made.
 
 ## [Unreleased]
 
+### Added
+
+- **The package list is ready when the window is.** Building the search index — every `cat/pkg`
+  in every repository, with a description for each — is 3.1 s on this machine, and it happened
+  again on every start, which is the longest anybody waited for anything here. The finished index
+  is now written to `$XDG_RUNTIME_DIR/gentstore/` and read back in 0.07 s, so only the first run
+  after a boot pays for it. The runtime directory is a tmpfs the system clears when the session
+  ends, which is the coarse invalidation rule; the fine one is a fingerprint of the repositories —
+  which are configured, where they are, and when each of their directories was last written —
+  checked in about a millisecond before the file is used, so a sync, an enabled overlay or a new
+  ebuild in a local repository all rebuild rather than answer from yesterday. The diagnostic CLI
+  reads the same file, so `cli search` is as quick from the shell.
+  `GENTSTORE_INDEX_CACHE=0`, or `--no-cache`, builds from Portage every time.
+
 ## [1.3.1] — 2026-09-03
 
 ### Changed

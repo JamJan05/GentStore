@@ -52,6 +52,7 @@ Gentstore/
 │   │   ├── cli.py             # the diagnostic tool: python -m gentstore.core.cli
 │   │   ├── portage_env.py     # one shared portage.config + dbapi (porttree, vartree, bintree)
 │   │   ├── packages.py        # searching, atoms, versions, package metadata
+│   │   ├── index_cache.py    # the search index kept between runs, and what invalidates it
 │   │   ├── useflags.py        # IUSE, use.desc/use.local.desc, metadata.xml, force/mask, flag origin
 │   │   ├── required_use.py    # the REQUIRED_USE parser and validator (^^, ??, ||, conditions)
 │   │   ├── depgraph_hints.py  # pulling conditional "flag? ( ... )" dependencies out of DEPEND/RDEPEND
@@ -153,6 +154,14 @@ what lets the same function serve both the GUI and the diagnostic CLI.
   overlay it has to be rebuilt. The one exception is the “installed” bit itself:
   `SearchIndex.refresh_installed()` refreshes it separately and cheaply, because it changes
   after every installation.
+- That index is also written to disk (`core/index_cache.py`) and read back on the next start:
+  **3.1 s to build, 0.07 s to read** on the same machine, so the second run of the day has its
+  package list before the window is on screen. The file lives in `$XDG_RUNTIME_DIR/gentstore/`,
+  a tmpfs the system clears when the session ends, and it is only used if
+  `index_cache.fingerprint()` still matches — the set of repositories, where each one is, and the
+  modification time of every directory directly inside it, which is about a millisecond to
+  compute. `GENTSTORE_INDEX_CACHE=0` turns the whole thing off; see
+  [06-decisions.md D-13](06-decisions.md).
 - `repositories.xml` (459 entries) is **not downloaded by us**. `eselect repository` already
   fetches it and keeps it in `~/.cache/eselect-repo/`; we read that copy, and “Refresh” runs
   `eselect repository list` through the runner. The reason is in
