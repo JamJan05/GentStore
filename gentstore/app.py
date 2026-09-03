@@ -26,7 +26,7 @@ from pathlib import Path
 from PyQt6.QtCore import QLibraryInfo, QLocale, QTranslator
 from PyQt6.QtWidgets import QApplication
 
-from . import APP_NAME, ORG_DOMAIN, ORG_NAME, __version__
+from . import APP_NAME, DESKTOP_ID, ORG_DOMAIN, ORG_NAME, __version__
 from .logging_setup import setup_logging
 from .settings import FONT_SCALES, Settings
 from .ui.main_window import MainWindow
@@ -51,6 +51,14 @@ class GentstoreApplication(QApplication):
         self.setApplicationVersion(__version__)
         self.setOrganizationName(ORG_NAME)
         self.setOrganizationDomain(ORG_DOMAIN)
+        # Both of these are about how the desktop, rather than the user, sees
+        # us. The desktop file name becomes the Wayland app_id, which is what
+        # the panel and the task switcher look our entry up by; the window icon
+        # is what they fall back on when there is no entry to find. Both have to
+        # be set before the first window exists, because the app_id is sent once
+        # when the surface is created and never again.
+        self.setDesktopFileName(DESKTOP_ID)
+        self.setWindowIcon(icons.application_icon())
         self.setStyle("Fusion")
         self.setPalette(build_palette())
 

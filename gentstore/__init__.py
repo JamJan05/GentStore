@@ -20,3 +20,14 @@ __version__ = "1.3.0"
 APP_NAME = "Gentstore"
 ORG_NAME = "Gentstore"
 ORG_DOMAIN = "gentstore.gentoo.org"
+
+#: The basename of our installed desktop entry, without the extension. Qt hands
+#: this to the compositor as the Wayland ``app_id``; without it Qt falls back to
+#: the basename of ``/proc/self/exe``, which for anything started through a
+#: Python entry point is the interpreter — the window announced itself as
+#: "python3.14" and the desktop, finding no ``python3.14.desktop``, had no name
+#: and no icon to show for it. Must stay equal to ``data/gentstore.desktop``.
+DESKTOP_ID = "gentstore"
+
+#: ``Icon=`` in that entry, and the basename under ``hicolor/scalable/apps``.
+ICON_NAME = "gentstore"

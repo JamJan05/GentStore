@@ -31,6 +31,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 import pytest  # noqa: E402
 from PyQt6.QtWidgets import QApplication  # noqa: E402
 
+from gentstore import DESKTOP_ID  # noqa: E402
 from gentstore.app import GentstoreApplication  # noqa: E402
 from gentstore.ui.main_window import MainWindow  # noqa: E402
 from gentstore.ui.pages import PAGES  # noqa: E402
@@ -42,6 +43,20 @@ from gentstore.ui.theme.qss import build_qss  # noqa: E402
 def window(app: GentstoreApplication) -> MainWindow:
     app.apply_language("en")
     return MainWindow(app.settings)
+
+
+def test_the_application_introduces_itself_to_the_desktop(
+    app: GentstoreApplication,
+) -> None:
+    """The two things a panel needs to show a window as Gentstore.
+
+    Without the first, Qt names the Wayland surface after ``/proc/self/exe`` —
+    the Python interpreter, for anything started through an entry point. Without
+    the second, a session whose compositor cannot find our entry has no icon of
+    ours to fall back on.
+    """
+    assert app.desktopFileName() == DESKTOP_ID
+    assert not app.windowIcon().isNull(), "the application has no icon of its own"
 
 
 def test_stylesheet_builds_at_every_scale() -> None:

@@ -32,12 +32,14 @@ from pathlib import Path
 
 import pytest
 
+from gentstore import DESKTOP_ID, ICON_NAME
 from gentstore.runner import privilege
 
 ROOT = Path(__file__).resolve().parent.parent
 PACKAGING = ROOT / "packaging"
 EBUILD = PACKAGING / "app-portage" / "gentstore" / "gentstore-9999.ebuild"
 SCRIPT = PACKAGING / "make-overlay.sh"
+DESKTOP = ROOT / "data" / f"{DESKTOP_ID}.desktop"
 
 
 @pytest.fixture(scope="module")
@@ -441,3 +443,52 @@ def test_the_live_ebuild_lands_in_portages_live_rebuild_set(ebuild: str) -> None
     package out of the one set that rebuilds it.
     """
     assert "git-r3" in ebuild, "the live ebuild no longer inherits git-r3"
+
+
+# -- the desktop entry and the running application agree --------------------
+
+def desktop_entry() -> dict[str, str]:
+    """``[Desktop Entry]`` as a mapping, localised keys and comments dropped."""
+    keys = {}
+    for line in DESKTOP.read_text().splitlines():
+        if "=" in line and not line.startswith("#") and "[" not in line.split("=", 1)[0]:
+            name, value = line.split("=", 1)
+            keys[name] = value
+    return keys
+
+
+def test_the_entry_is_named_what_the_application_announces() -> None:
+    """On Wayland the two are joined by a filename and nothing else.
+
+    There is no WM_CLASS to fall back on: the compositor takes the app_id Qt
+    sends, appends ``.desktop``, and looks for that file. Qt builds the app_id
+    from ``setDesktopFileName``, so if this constant and this filename ever
+    drift the window loses its name and its icon together and nothing else
+    breaks — which is how it went unnoticed before 1.3.0, where the app_id was
+    left unset and came out as the interpreter's own name.
+    """
+    assert DESKTOP.is_file(), f"there is no {DESKTOP.name} for the app_id to find"
+
+
+def test_the_entry_names_an_icon_that_ships() -> None:
+    assert desktop_entry()["Icon"] == ICON_NAME
+    assert (ROOT / "data" / "icons" / f"{ICON_NAME}.svg").is_file()
+
+
+def test_the_icon_is_looked_for_where_the_installers_put_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``make install-desktop`` and :func:`app_icon_search_paths` are one path.
+
+    The ebuild's ``doicon -s scalable`` lands in the same place; the Makefile is
+    checked here because it spells the directory out and so can drift on its own.
+    """
+    from gentstore.ui.theme.icons import app_icon_search_paths  # noqa: PLC0415 - needs Qt
+
+    line = re.search(r"^ICONS\s*:=\s*(.+)$", (ROOT / "Makefile").read_text(), re.M)
+    assert line, "the Makefile no longer says where the icon goes"
+    installed = line.group(1).replace("$(DESTDIR)", "").replace("$(PREFIX)", "/usr")
+
+    monkeypatch.setenv("XDG_DATA_DIRS", "/usr/share")
+    monkeypatch.delenv("XDG_DATA_HOME", raising=False)
+    assert Path(installed) / f"{ICON_NAME}.svg" in set(app_icon_search_paths())
