@@ -302,17 +302,19 @@ jobs:
         continue-on-error: true
         run: |
           set -euo pipefail
-          # Dispatched rather than written to from here: the content files and
-          # the script that rewrites them are that branch's business, and this
-          # is the one way to reach it at all. A workflow triggered by
-          # `push: tags` is read from the tagged commit, which is on main and
-          # holds no website — and the tag this run pushed raised no event,
-          # because a push made with GITHUB_TOKEN never does. workflow_dispatch
-          # is the exception to that rule.
+          # website-version.yml checks the website branch out and rewrites the
+          # numbers there. Dispatched rather than done inline: it is worth
+          # running by hand between releases, when the test count changes and
+          # the version has not.
+          #
+          # The tag this run pushed raised no event of its own — a push made
+          # with GITHUB_TOKEN never does — so nothing reaches the website unless
+          # this line does it. workflow_dispatch is one of the two events that
+          # token may raise, which is the whole reason that file is shaped the
+          # way it is; its header has the rest.
           #
           # The test count is not passed. It is only known to a machine that has
-          # run the whole suite, which this runner is not — see the header of
-          # website-version.yml.
+          # run the whole suite, which this runner is not.
           gh workflow run website-version.yml --ref "${WEBSITE_BRANCH}" -f version="${VERSION}"
           echo "dispatched Website version on ${WEBSITE_BRANCH} for ${VERSION}"
 

@@ -1,0 +1,129 @@
+# The numbers the website states about the application, moved by the release
+# that changed them.
+#
+# The site lives on the `Web` branch: no tag in its history, and nothing a
+# release touches. That is what 1.3.1 cost — the page went on announcing 1.3.0
+# to everybody who visited it, and the only thing that would ever have caught it
+# was somebody looking.
+#
+# This file is on `main` rather than beside the website it edits, and both
+# halves of that are GitHub's rules rather than a preference:
+#
+#   - workflow_dispatch reaches a file only if it exists on the default branch.
+#     The ref then chooses which copy runs, but the lookup is against `main`, so
+#     a workflow living only on `Web` answers 404 to every dispatch.
+#   - a workflow triggered by `push: tags` is read from the tagged commit, which
+#     is on `main` and holds no website at all. And the tag release.yml pushes
+#     raises no event in the first place: a push made with GITHUB_TOKEN never
+#     does. workflow_dispatch is one of the two events that token may raise,
+#     which is why release.yml ends by dispatching this.
+#
+# So the trigger is here and the knowledge is there: website/set_version.py, on
+# the branch that owns the content, is what actually rewrites anything. This
+# checks that branch out and runs it.
+#
+#   Actions -> Website version -> Run workflow -> 1.3.1
+#
+# is the same thing by hand, which is what the test count needs. A count is not
+# derivable from a tag — it is only known to a machine that has run the whole
+# suite, which this runner is not — so a release passes only the version, and
+# the count is given here when it changes.
+
+name: Website version
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "The release the page should state, e.g. 1.3.1"
+        required: false
+      tests:
+        description: "How many tests pass — leave empty to keep the number that is there"
+        required: false
+
+permissions:
+  contents: write
+
+# Two releases close together would race over the branch. Never cancel one in
+# flight: there is a push at the end and nothing that repairs a half-run.
+concurrency:
+  group: website-version
+  cancel-in-progress: false
+
+env:
+  WEBSITE_BRANCH: Web
+
+jobs:
+  state-the-numbers:
+    runs-on: ubuntu-latest
+    steps:
+      # The website, not this branch: the workflow is the only part of this that
+      # lives on main.
+      - uses: actions/checkout@v5
+        with:
+          ref: Web
+
+      - name: Identity for the commit this makes
+        run: |
+          git config user.name  "${{ vars.RELEASE_GIT_NAME  || 'JamJan05' }}"
+          git config user.email "${{ vars.RELEASE_GIT_EMAIL || 'janek2ko@gmail.com' }}"
+
+      - name: Write them into the content files
+        env:
+          # Through the environment rather than interpolated into the script:
+          # ${{ }} is substituted before bash ever sees the line, so a value with
+          # a quote in it would not be a bad version, it would be code.
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_TESTS: ${{ inputs.tests }}
+        run: |
+          set -euo pipefail
+          version="${INPUT_VERSION#v}"
+          if [[ -z ${version} && -z ${INPUT_TESTS} ]]; then
+            echo "::error::give a version, a test count, or both"; exit 1
+          fi
+
+          # Built as ifs rather than as `[[ ... ]] && args+=(...)`: under
+          # `set -e` an and-list whose test is false returns 1 and takes the step
+          # with it, so the empty case would fail rather than skip.
+          args=()
+          message="The page states"
+          if [[ -n ${version} ]]; then
+            args+=("${version}")
+            message="${message} ${version}"
+          fi
+          if [[ -n ${INPUT_TESTS} ]]; then
+            args+=(--tests "${INPUT_TESTS}")
+            if [[ -n ${version} ]]; then message="${message}, and"; fi
+            message="${message} ${INPUT_TESTS} tests"
+          fi
+
+          # The script refuses a version that is not X.Y.Z and a count that is
+          # not a number, and stops rather than rewriting nothing if the wording
+          # around either has moved.
+          python3 website/set_version.py "${args[@]}"
+
+          # Read back what was written, so a run cannot report success over a
+          # file it only half changed.
+          check=(--check)
+          if [[ -n ${version} ]]; then check+=("${version}"); fi
+          python3 website/set_version.py "${check[@]}"
+
+          echo "MESSAGE=${message}" >> "${GITHUB_ENV}"
+          git diff --stat
+
+      - name: Commit and push
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo "::notice::the page already said this — nothing to commit"
+            echo "### ${MESSAGE} — already" >> "${GITHUB_STEP_SUMMARY}"
+          else
+            git commit -a -m "${MESSAGE}"
+            git push origin "HEAD:${WEBSITE_BRANCH}"
+            {
+              echo "### ${MESSAGE}"
+              echo
+              echo "Committed to \`${WEBSITE_BRANCH}\`. The site is built from that branch, so it"
+              echo "reaches visitors with the next deploy."
+            } >> "${GITHUB_STEP_SUMMARY}"
+          fi
