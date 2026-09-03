@@ -308,12 +308,17 @@ Before the **first** modification in a given run of the application, a copy is m
 - The copy is made **in the same privileged call as the change** (the `ensure_backup` field in
   the request), not in a separate one. That means one password prompt instead of two and, more
   importantly, that the state “the change went in, the copy did not” cannot arise.
-- We keep the last **10** copies and delete older ones (with a visible message).
+- Two changes inside the same minute get a `-1`, `-2` suffix: the timestamp alone is not unique.
+- We keep the last **10** copies by default and delete older ones (with a visible message). The
+  count is a setting — “How many copies of `/etc/portage` to keep”, between 1 and 100 — so a
+  machine with more than ten of them has been told to keep more than ten.
 - The sidebar always shows the name of the current copy and a **“Restore…”** link.
 - Restoring shows a `diff` between the copy and the current state **before** it runs — restoring
   is a change to the system too, and falls under the same “nothing quietly” principle.
-- Alternatively (an option in Settings) the copy can be a `tar.zst` in
-  `/var/backups/gentstore/`, for people who do not want clutter in `/etc`.
+- Alternatively (an option in Settings) each copy is a single `portage.bak-….tar.gz` instead of
+  a directory, for people who would rather not have ten directory trees in `/etc`. It is still
+  written to `/etc`: the helper's reach is bounded by constants in its own source, and a second
+  destination would be a second thing to justify.
 
 ## 6. Risky operations — always confirmed
 
