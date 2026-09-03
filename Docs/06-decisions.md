@@ -229,3 +229,121 @@ the directory scan anyway); an mtime check on the repository root alone (misses 
 to a category, which is exactly the local-overlay case the check exists for); keeping the cache
 in `~/.cache` only (survives a reboot, which is more than the user asked for and more than the
 fingerprint was designed to be the only guard against).
+
+---
+
+### D-14 · The privileged programs allow what Gentstore does, not everything that is not obviously dangerous
+
+**Decision:** both privileged programs check against a list of what this application produces.
+The helper's `append_line`, `replace_line` and `remove_line` reach six files — `package.use`,
+`package.accept_keywords`, `package.license`, `package.unmask`, `package.mask` and `make.conf`
+— one directory level deep, and for `make.conf` the line has to be an assignment to one of the
+nine variables the settings screen offers. The launcher matches a table of the eleven whole
+`emerge` command lines `runner/emerge.py` builds, rather than checking that each option is on a
+permitted list.
+
+**Reason:** both had been written the other way round, and both leaked in the same shape. The
+helper could write a line into any regular file under `/etc/portage`, and `/etc/portage` is not
+a directory of inert settings: `bashrc` is sourced by every merge, `package.env` names files in
+`env/` that set any variable a build sees, `postsync.d` holds programs run after a sync. The
+launcher's permitted options allowed every combination of themselves, and `--unmerge` and
+`@world` are each unremarkable alone.
+
+A list of what looks dangerous can only ever cover what somebody has thought of. A list of what
+the application does is finite, is already written down somewhere else in the code, and covers
+the mechanisms nobody has thought of yet by not mentioning them.
+
+**Consequence:** adding a screen that writes a new file, or a button that runs a new command,
+means editing the privileged half too. That is the cost and it is the point: those two files are
+the list of what one authentication buys, and it should not be possible to widen it by accident
+in a UI file.
+
+**Alternatives:** a blacklist of the files and options known to be dangerous (covers today and
+nothing after it); validating arguments by shape rather than by whole command (what was there,
+and what let `--unmerge @world` through); letting `emerge` refuse what it does not like (it
+would not have refused any of this — every one of these commands is a command it is happy to
+run).
+
+---
+
+### D-15 · Every privileged step asks · supersedes the `auth_admin_keep` in D-04
+
+**Decision:** both polkit actions are `auth_admin`. A six-step system update asks for the
+password six times.
+
+**Reason:** `auth_admin_keep` remembers, for a few minutes, that *this user has authenticated
+for this action* — not that this window may carry on. Anything else running as that user reaches
+the same two programs inside that window with no dialog of its own. The two programs are narrow
+on purpose (D-14), but narrow is not nothing.
+
+**Consequence:** the thing people notice first about this application is that it asks a lot. The
+answer to that is smaller capabilities, not a remembered answer: an action for "change the
+Portage configuration" and one for "install packages" are already two, and `eselect repository
+add` — an arbitrary URL whose ebuilds run as root on every build — deserves a third. It has not
+been split, because polkit binds an action to an executable path and has nothing to say about
+its arguments, so a third action means a third program in `/usr/libexec/gentstore`.
+
+**Alternatives:** `auth_admin_keep` (what was there); one authentication for a whole update
+cycle (there is no such thing in polkit that is not the keep form); running the six steps as one
+privileged command (a single opaque operation, and the update screen exists to be the opposite
+of that).
+
+---
+
+### D-16 · Gentstore's `emerge` commands ignore `EMERGE_DEFAULT_OPTS`
+
+**Decision:** every command `runner/emerge.py` builds carries `--ignore-default-opts`, and the
+launcher's table requires it rather than tolerating it.
+
+**Reason:** `emerge` reads that variable out of `make.conf` and puts it in front of the argument
+list before working out what it has been asked to do (`_emerge/main.py`: `if
+"--ignore-default-opts" not in myopts`). Everything in this project that checks a command looks
+at the argv Gentstore built — the string on screen, the table in the launcher — so all of them
+were checking a prefix of the real command. Some of what could arrive that way is not a matter
+of degree: `--root`, `--config-root` and `--sysroot` there are read early and put straight into
+the environment of the `emerge` process.
+
+**Consequence:** the variable is still editable on the make.conf screen and now means one thing
+rather than two — it applies to the `emerge` the user runs in a terminal. That is said in the
+README and on the page, because it is a difference somebody will otherwise find by wondering why
+their `--jobs` did nothing. `emaint sync` parses the same variable for itself and has no
+equivalent flag; its reach there is narrower (the action is fixed before the parse) and it is
+recorded in 04-privileges.md §2a rather than solved.
+
+**Alternatives:** clearing the variable in the child environment (it does not have to come from
+the environment — `make.conf` is where it usually lives); validating its contents (a second,
+weaker copy of the launcher's table, in a file the user edits); merging the default options into
+the templates before matching (the templates would then describe commands the interface never
+builds, which is the property D-14 exists to keep).
+
+---
+
+### D-17 · Two private Portage attributes, because the public list is a different list
+
+**Decision:** `PortageEnv.configured()` fetches a package's metadata with `aux_get(myrepo=…)`
+and hands it to `setcpv()` as a mapping. Which keys to ask for is read at runtime from
+`config._setcpv_aux_keys` and `portdbapi._aux_cache_keys`, both private, with a copy in
+`core/portage_env.py` as the fallback and a warning when the fallback is what answers.
+
+**Reason:** `setcpv(mydb=portdb)` asks `aux_get` without a repository, so Portage answers from
+whichever repository it ranks higher. A package chosen from `::guru` could be described with
+`::guru`'s `IUSE` and `::gentoo`'s repository-level `package.use`, and the second half is what
+decides where the flags in the window sit — which makes D-10 true of the list and not of the
+panel beside it.
+
+The public list, `portage.auxdbkeys`, is not the same set: it does not contain `repository`, and
+that is the one key this arrangement exists to carry, since `setcpv()` pops it and uses it to
+pick the repository-level `package.use`, `use.stable` and `make.defaults`. Using the public name
+would be a stabler source for an answer that no longer works.
+
+**Consequence:** a compatibility risk after a Portage upgrade rather than a defect now. If the
+private names move, the fallback list answers and a key added upstream since would be missing
+from the mapping — the package described with a piece missing rather than wrongly, which is
+invisible, so it warns once per process. A contract test keeps the fallback a superset of what
+`setcpv()` asks for.
+
+**Alternatives:** `portage.auxdbkeys` (missing `repository`, see above); building a `Package`
+object to pass instead of a mapping (the same private surface plus a constructor with more
+required arguments); leaving `configured()` repo-blind and correcting the answers afterwards
+(there is nothing to correct them with — the configuration is where the answer comes from).
+

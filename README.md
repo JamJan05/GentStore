@@ -11,16 +11,16 @@ the five principles below costs in practice — is at
 **[www.gentstore.dev](https://www.gentstore.dev/en)**, and
 [po polsku](https://www.gentstore.dev/pl).
 
-> **Version 1.3.1 — beta.** All nine screens work, and both halves have been exercised on a
-> live system: the read-only side — search, USE flags, masks, repositories, the update preview,
-> configuration files, `make.conf`, elog and `@world` — and the privileged one, which has
+> **Version 1.3.1.** Beta — the package announces itself as `Development Status :: 4 - Beta`
+> and the ebuild is keyworded `~amd64`, which is one statement made twice. All nine screens
+> work, and both halves have been exercised on a live system: the read-only side — search, USE
+> flags, masks, repositories, the update preview, configuration files, `make.conf`, elog and
+> `@world` — and the privileged one, which has
 > written real `package.use`, `package.license` and `package.accept_keywords` entries through
 > `pkexec` and run `emerge`, `emaint sync` and `eselect` through the launcher. 797 tests pass.
 >
-> What that does not claim: this has run on **one** machine, amd64 only. The ebuild is
-> keyworded `~amd64` and the package announces itself as `Development Status :: 4 - Beta`,
-> which is the same statement said twice on purpose. Bug reports from other setups are the
-> fastest way to make the next release better.
+> What that does not claim: this has run on **one** machine, amd64 only. Bug reports from
+> other setups are the fastest way to make the next release better.
 >
 > Two things to know before installing, because both are deliberate and both are noticed on
 > the first day: **you are asked for your password at every privileged step**, and
