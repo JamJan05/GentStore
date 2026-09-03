@@ -73,6 +73,8 @@ HEADERS = """/*
   Cache-Control: public, max-age=86400
 /icons/*
   Cache-Control: public, max-age=86400
+/favicon.ico
+  Cache-Control: public, max-age=86400
 """
 
 
@@ -137,6 +139,11 @@ def build(destination: Path, base_url: str = "") -> list[Path]:
     for name, source in ASSET_TREES.items():
         shutil.copytree(source, destination / name)
         written.extend(sorted((destination / name).rglob("*")))
+
+    # A file, not a route: the built site has no application behind it, and a
+    # crawler that asks for /favicon.ico and gets the 404 page shows a globe.
+    shutil.copyfile(ICON_DIR / "favicon.ico", destination / "favicon.ico")
+    written.append(destination / "favicon.ico")
 
     return written
 

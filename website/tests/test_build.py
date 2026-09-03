@@ -45,6 +45,8 @@ def test_every_url_the_site_needs_is_a_file(site: Path) -> None:
         "static/site.css",
         "static/site.js",
         "icons/gentstore.svg",
+        "icons/apple-touch-icon.png",
+        "favicon.ico",
     ]
     expected += [f"{language}.html" for language in LANGUAGES]
     expected += [f"api/content/{language}.json" for language in LANGUAGES]

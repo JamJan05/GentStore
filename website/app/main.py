@@ -128,7 +128,8 @@ def robots() -> PlainTextResponse:
 
 @app.api_route("/favicon.ico", methods=PAGE_METHODS, include_in_schema=False)
 def favicon() -> FileResponse:
-    return FileResponse(ICON_DIR / "gentstore.svg", media_type="image/svg+xml")
+    """A real .ico at the root: it is the only icon some crawlers look for."""
+    return FileResponse(ICON_DIR / "favicon.ico", media_type="image/x-icon")
 
 
 @app.api_route("/{language}", methods=PAGE_METHODS, include_in_schema=False)

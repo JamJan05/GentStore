@@ -2,7 +2,7 @@
   "lang": "pl",
   "label": "Polski",
   "meta": {
-    "title": "GentStore — Portage z widokiem na to, co się zaraz stanie",
+    "title": "GentStore - GUI dla Portage",
     "description": "Graficzna nakładka na Portage dla Gentoo Linux: wyszukiwanie pakietów, flagi USE z wyjaśnieniem, maski i licencje, overlaye i cały cykl aktualizacji systemu."
   },
   "header": {

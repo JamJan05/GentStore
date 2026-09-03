@@ -2,7 +2,7 @@
   "lang": "en",
   "label": "English",
   "meta": {
-    "title": "GentStore — Portage, with a view of what is about to happen",
+    "title": "GentStore - GUI for Portage",
     "description": "A graphical front-end for Portage on Gentoo Linux: package search, USE flags with explanations, masks and licences, overlays, and the full system update cycle."
   },
   "header": {

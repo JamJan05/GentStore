@@ -222,7 +222,8 @@ def test_assets_are_served_from_the_repository(client: TestClient) -> None:
     assert client.get("/static/site.css").status_code == 200
     assert client.get("/screenshots/search-and-install.png").status_code == 200
     assert client.get("/icons/gentstore.svg").status_code == 200
-    assert client.get("/favicon.ico").headers["content-type"] == "image/svg+xml"
+    assert client.get("/icons/apple-touch-icon.png").status_code == 200
+    assert client.get("/favicon.ico").headers["content-type"] == "image/x-icon"
     assert client.get("/robots.txt").text.startswith("User-agent: *")
 
 
