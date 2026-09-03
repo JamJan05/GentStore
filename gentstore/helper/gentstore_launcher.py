@@ -25,8 +25,13 @@ Three things this does that plain ``pkexec emerge …`` does not.
 the handful of programs Gentstore drives, looked up in a fixed list of
 directories rather than through ``PATH`` (under ``sudo`` the caller controls
 part of the environment), and then only the command lines Gentstore actually
-builds: a closed set of options, and arguments that have to look like package
-atoms, repository names or advisory numbers.
+builds: a table of whole commands, with arguments that have to look like
+package atoms, repository names or advisory numbers.
+
+A table rather than a set of permitted options, because a set permits every
+combination of its members. ``--unmerge`` and ``@world`` were both on the old
+list and neither was wrong on its own; together they are a command that removes
+the system.
 
 That second half is the point. ``emerge`` with arbitrary options is root by
 another name — ``--config`` runs a package's own configuration script,
@@ -109,28 +114,6 @@ def resolve(program: str) -> Path:
 # gentstore/runner/eselect.py. Adding a command to the interface means adding it
 # here too, on purpose: this file is the list of what one authentication buys.
 
-#: Options ``emerge`` may be given. An exact-string set, so ``--color=n`` is
-#: allowed and ``--color=y`` is not — a value is a place to hide something.
-EMERGE_OPTIONS = frozenset(
-    {
-        "--color=n",
-        "--nospinner",
-        "--verbose",
-        "--pretend",
-        "--oneshot",
-        "--getbinpkg",
-        "--update",
-        "--deep",
-        "--newuse",
-        "--changed-use",
-        "--unmerge",
-        "--deselect",
-        "--select",
-        "--noreplace",
-        "--depclean",
-    }
-)
-
 #: ``media-video/mpv``, ``=media-video/mpv-0.41.0-r2``, ``media-video/*``.
 #:
 #: Not a full Portage atom parser — this file stays standard-library only and
@@ -153,9 +136,6 @@ _ATOM = re.compile(
 #: ``emerge`` reads an argument ending in one of these as a file to merge, which
 #: would be a way to hand it something the user never chose.
 _PACKAGE_SUFFIXES = (".ebuild", ".tbz2", ".xpak", ".gpkg", ".gpkg.tar")
-
-#: ``@world``, ``@preserved-rebuild``.
-_SET = re.compile(r"^@[a-z][a-z0-9-]*$")
 
 #: The same convention ``gentstore/core/overlays.py`` validates against.
 _REPOSITORY = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_+.-]*$")
@@ -205,10 +185,18 @@ def _is_everything(token: str) -> bool:
     return body == "*/*"
 
 
-def _is_atom(token: str) -> bool:
+def _is_package_atom(token: str) -> bool:
+    """One package, and never a set.
+
+    ``@world`` and ``@preserved-rebuild`` are literals in the two rows of
+    :data:`EMERGE_COMMANDS` that take one, so they arrive here only where they
+    were never meant to — as the thing to unmerge, most of all. ``emerge
+    --unmerge @world`` is a command that removes the system, and the interface
+    has no button for it.
+    """
     if token.endswith(_PACKAGE_SUFFIXES) or _is_everything(token):
         return False
-    return bool(_ATOM.match(token) or _SET.match(token))
+    return bool(_ATOM.match(token))
 
 
 def _is_repository(token: str) -> bool:
@@ -230,6 +218,9 @@ def _is_index(token: str) -> bool:
 #: Placeholders in the tables below. Strings, so that a table reads as the
 #: command it stands for; angle brackets, so they cannot collide with a literal.
 REPOSITORY, SYNC_TYPE, URI, INDEX = "<repository>", "<sync-type>", "<uri>", "<index>"
+
+#: One or more package atoms, and only ever at the end of a row.
+ATOMS = "<atoms>"
 
 _VALIDATORS = {
     REPOSITORY: _is_repository,
@@ -258,18 +249,103 @@ EMAINT_COMMANDS = (
     ("sync", "-r", REPOSITORY),
 )
 
+#: The two options on every command ``gentstore/runner/emerge.py`` builds, in
+#: the order that file puts them in.
+_EMERGE_BASE = ("--color=n", "--nospinner")
+
+#: Every ``emerge`` command line Gentstore builds — one row per function in
+#: gentstore/runner/emerge.py, in that file's order.
+#:
+#: Whole commands, not a set of permitted options. A set permits every
+#: combination of its members and the interface builds eleven of them; the ones
+#: it does not build include ``--unmerge @world``, ``--depclean`` with a package
+#: named beside it, and ``--getbinpkg`` on a removal. ``emerge`` accepts all
+#: three, and this program is the boundary that decides what one authentication
+#: buys — so it is the one that has to be narrower than ``emerge``.
+#:
+#: A trailing ``?`` marks an option that may or may not be there: the two the
+#: interface decides at the point of use, ``--getbinpkg`` and ``--oneshot``.
+#: :data:`ATOMS` stands for one or more package atoms and may only end a row.
+#: The two commands that operate on a set name it literally, which is what makes
+#: a set unreachable everywhere else.
+EMERGE_COMMANDS = (
+    # pretend(), which the interface runs unprivileged — a preview changes
+    # nothing, and being in this table costs nothing but says what it is.
+    (*_EMERGE_BASE, "--pretend", "--verbose", "--oneshot?", ATOMS),
+    # install()
+    (*_EMERGE_BASE, "--verbose", "--getbinpkg?", "--oneshot?", ATOMS),
+    # unmerge_pretend()
+    (*_EMERGE_BASE, "--pretend", "--verbose", "--unmerge", ATOMS),
+    # unmerge()
+    (*_EMERGE_BASE, "--unmerge", ATOMS),
+    # deselect()
+    (*_EMERGE_BASE, "--deselect", ATOMS),
+    # select()
+    (*_EMERGE_BASE, "--select", "--noreplace", ATOMS),
+    # update_world_pretend()
+    (
+        *_EMERGE_BASE,
+        "--pretend",
+        "--verbose",
+        "--update",
+        "--deep",
+        "--newuse",
+        "--changed-use",
+        "--getbinpkg?",
+        "@world",
+    ),
+    # update_world()
+    (
+        *_EMERGE_BASE,
+        "--verbose",
+        "--update",
+        "--deep",
+        "--newuse",
+        "--getbinpkg?",
+        "@world",
+    ),
+    # depclean_pretend()
+    (*_EMERGE_BASE, "--pretend", "--depclean"),
+    # depclean(): it works out for itself what is orphaned, and is given
+    # nothing. A package beside it means something else entirely.
+    (*_EMERGE_BASE, "--depclean"),
+    # preserved_rebuild()
+    (*_EMERGE_BASE, "--verbose", "@preserved-rebuild"),
+)
+
 
 def _matches(template: tuple[str, ...], arguments: list[str]) -> bool:
-    if len(template) != len(arguments):
-        return False
-    for expected, actual in zip(template, arguments, strict=True):
-        validator = _VALIDATORS.get(expected)
-        if validator is None:
-            if expected != actual:
-                return False
-        elif not validator(actual):
+    """Whether *arguments* is the command *template* describes.
+
+    Three kinds of entry: a literal, which has to be there exactly; a literal
+    with a ``?`` after it, which may be skipped; and a placeholder, which is
+    checked by shape. :data:`ATOMS` ends a row and takes everything left, which
+    has to be at least one package and nothing but packages.
+    """
+    position = 0
+    for item in template:
+        if item == ATOMS:
+            rest = arguments[position:]
+            return bool(rest) and all(_is_package_atom(token) for token in rest)
+
+        optional = item.endswith("?")
+        expected = item[:-1] if optional else item
+        if position >= len(arguments):
+            if optional:
+                continue
             return False
-    return True
+
+        actual = arguments[position]
+        validator = _VALIDATORS.get(expected)
+        if validator is not None:
+            if not validator(actual):
+                return False
+        elif expected != actual:
+            if optional:
+                continue
+            return False
+        position += 1
+    return position == len(arguments)
 
 
 def _check_against(
@@ -278,29 +354,6 @@ def _check_against(
     if not any(_matches(template, arguments) for template in commands):
         line = " ".join([program, *arguments])
         raise LauncherError(f"not a command Gentstore runs: {line!r}")
-
-
-def _check_emerge(arguments: list[str]) -> None:
-    """Known options in any order, then things that look like packages.
-
-    Order is not enforced because ``emerge`` does not care about it and the
-    interface would only be describing its own habits. What is enforced is that
-    every token is one or the other: an option nobody can extend, or a name.
-    """
-    atoms = 0
-    for argument in arguments:
-        if argument.startswith("-"):
-            if argument not in EMERGE_OPTIONS:
-                raise LauncherError(f"emerge option not allowed here: {argument!r}")
-        elif _is_atom(argument):
-            atoms += 1
-        else:
-            raise LauncherError(f"not a package atom: {argument!r}")
-
-    # --depclean and --unmerge-style runs decide for themselves what to touch,
-    # so an empty list is meaningful for them and nowhere else.
-    if not atoms and "--depclean" not in arguments:
-        raise LauncherError("emerge was given no package to work on")
 
 
 def _check_glsa_check(arguments: list[str]) -> None:
@@ -315,7 +368,7 @@ def _check_glsa_check(arguments: list[str]) -> None:
 
 
 _CHECKERS = {
-    "emerge": _check_emerge,
+    "emerge": lambda arguments: _check_against("emerge", EMERGE_COMMANDS, arguments),
     "emaint": lambda arguments: _check_against("emaint", EMAINT_COMMANDS, arguments),
     "eselect": lambda arguments: _check_against("eselect", ESELECT_COMMANDS, arguments),
     "glsa-check": _check_glsa_check,

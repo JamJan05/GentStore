@@ -86,7 +86,20 @@ def test_the_launcher_accepts_every_command_the_interface_builds() -> None:
     launcher too. That file is the list of what one authentication buys.
     """
     for spec in (
+        emerge.install(["media-video/mpv"]),
         emerge.install(["media-video/mpv"], oneshot=True, binaries=True),
+        emerge.install(["media-video/mpv"], binaries=True),
+        emerge.install(["media-video/mpv", "www-client/firefox"], oneshot=True),
+        # Unprivileged, so these never reach the launcher today. They are here
+        # because the table describes what the interface builds, and a preview
+        # that started needing root would otherwise fail at the last moment.
+        emerge.pretend(["media-video/mpv"]),
+        emerge.pretend(["media-video/mpv"], oneshot=True),
+        emerge.unmerge_pretend(["media-video/mpv"]),
+        emerge.update_world_pretend(),
+        emerge.update_world_pretend(binaries=True),
+        emerge.depclean_pretend(),
+        emerge.update_world(),
         emerge.unmerge(["media-video/mpv"]),
         emerge.deselect(["media-video/mpv"]),
         emerge.select(["media-video/mpv"]),
@@ -139,6 +152,54 @@ def test_the_launcher_refuses_arguments_the_interface_never_builds(
     """
     with pytest.raises(launcher.LauncherError):
         launcher.check_arguments(program, arguments)
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        # Removing the system. A set is a literal in the two rows that take
+        # one, so it cannot appear where a package is expected.
+        ["--color=n", "--nospinner", "--unmerge", "@world"],
+        ["--color=n", "--nospinner", "--unmerge", "@system"],
+        ["--color=n", "--nospinner", "--unmerge", "@preserved-rebuild"],
+        ["--color=n", "--nospinner", "--pretend", "--verbose", "--unmerge", "@world"],
+        # --depclean works out for itself what is orphaned. Given a package it
+        # means something else, and the update screen never asks for it.
+        ["--color=n", "--nospinner", "--depclean", "media-video/mpv"],
+        ["--color=n", "--nospinner", "--pretend", "--depclean", "media-video/mpv"],
+        ["--color=n", "--nospinner", "--depclean", "@world"],
+        # Options the interface never puts together, each one allowed on its
+        # own by the old set of permitted options.
+        ["--color=n", "--nospinner", "--unmerge", "--getbinpkg", "media-video/mpv"],
+        ["--color=n", "--nospinner", "--deselect", "--oneshot", "media-video/mpv"],
+        ["--color=n", "--nospinner", "--select", "media-video/mpv"],
+        ["--color=n", "--nospinner", "--unmerge", "--deselect", "media-video/mpv"],
+        ["--color=n", "--nospinner", "--verbose", "--depclean", "media-video/mpv"],
+        # The right options in an order nothing builds.
+        ["--color=n", "--nospinner", "--verbose", "--oneshot", "--getbinpkg", "media-video/mpv"],
+        ["--nospinner", "--color=n", "--verbose", "media-video/mpv"],
+        # A world update has to be a world update.
+        ["--color=n", "--nospinner", "--verbose", "--update", "--deep", "--newuse"],
+        ["--color=n", "--nospinner", "--verbose", "--update", "--deep", "--newuse", "@system"],
+        # Nothing to work on.
+        ["--color=n", "--nospinner", "--verbose"],
+        ["--color=n", "--nospinner", "--unmerge"],
+    ],
+)
+def test_the_launcher_refuses_emerge_commands_the_interface_never_builds(
+    arguments: list[str],
+) -> None:
+    """The whole point of a table of commands rather than a set of options.
+
+    Every option in these lines was on the old permitted list, and every one of
+    these lines was therefore allowed. ``emerge --unmerge @world`` is the one
+    that matters — it is not "remove packages", it is "remove the system" — but
+    ``--depclean`` with a package beside it is a different operation from the
+    one the update screen previews, and neither is something a button here can
+    produce.
+    """
+    with pytest.raises(launcher.LauncherError):
+        launcher.check_arguments("emerge", arguments)
 
 
 def test_the_child_gets_an_unbuffered_environment() -> None:
@@ -661,11 +722,18 @@ def test_the_launcher_refuses_every_package_there_is() -> None:
     ``package.mask``, and that goes to the helper.
     """
     for atom in ("*/*", "*/*::guru", "=*/*-1", "!*/*", "*/*:0", "*/*[python]"):
-        with pytest.raises(launcher.LauncherError, match="not a package atom"):
-            launcher.check_arguments("emerge", ["--unmerge", "--color=n", atom])
+        # The command Gentstore itself builds, with only the atom changed, so
+        # the refusal can be about the atom and nothing else.
+        assert launcher._is_package_atom(atom) is False, atom
+        with pytest.raises(launcher.LauncherError):
+            launcher.check_arguments(
+                "emerge", ["--color=n", "--nospinner", "--unmerge", atom]
+            )
 
     # A wildcard on one side is still an ordinary atom and stays allowed.
-    launcher.check_arguments("emerge", ["--pretend", "media-video/*"])
+    launcher.check_arguments(
+        "emerge", ["--color=n", "--nospinner", "--pretend", "--verbose", "media-video/*"]
+    )
 
 
 def test_the_overlay_dialog_and_the_launcher_agree_on_url_schemes() -> None:
