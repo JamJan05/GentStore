@@ -446,6 +446,80 @@ def test_the_live_ebuild_lands_in_portages_live_rebuild_set(ebuild: str) -> None
     assert "git-r3" in ebuild, "the live ebuild no longer inherits git-r3"
 
 
+# -- which python runs as root ----------------------------------------------
+
+PRIVILEGED_SOURCES = (
+    ROOT / "gentstore" / "helper" / "gentstore_helper.py",
+    ROOT / "gentstore" / "helper" / "gentstore_launcher.py",
+)
+
+
+@pytest.mark.parametrize("path", PRIVILEGED_SOURCES, ids=lambda p: p.name)
+def test_the_privileged_programs_do_not_ask_path_which_python_they_are(
+    path: Path,
+) -> None:
+    """``#!/usr/bin/env python3`` resolves through ``PATH``, and these run as root.
+
+    pkexec sanitises the environment it passes on and the ``sudo`` fallback has
+    a secure_path of its own, so this was never the easy hole it looks like. It
+    is still one fewer thing between an authentication dialog and the program
+    the user agreed to run, and it costs a line.
+    """
+    first = path.read_text(encoding="utf-8").splitlines()[0]
+    assert first == "#!/usr/bin/python3", first
+
+
+def test_the_live_ebuild_pins_the_interpreter_the_gentoo_way(ebuild: str) -> None:
+    """``python_fix_shebang`` is the mechanism, not a hardcoded path.
+
+    It rewrites ``#!/usr/bin/python3`` to the exact interpreter the package was
+    built for, so what root executes does not move when somebody runs
+    ``eselect python set``. Hardcoding a version here instead would break
+    multi-python packaging, which is the thing the eclass exists to get right.
+    """
+    body = phase_body(ebuild, "python_install_all")
+    # Comments in this phase name both functions while explaining them; what is
+    # being checked is the order they are called in.
+    calls = "\n".join(
+        line for line in body.splitlines() if not line.lstrip().startswith("#")
+    )
+
+    assert "python_fix_shebang" in calls, "the installed programs keep a generic shebang"
+    for name in ("gentstore-helper", "gentstore-launcher"):
+        assert name in calls.split("python_fix_shebang", 1)[1], name
+    # python_fix_shebang reads EPYTHON, which the all-phase does not set on its own.
+    assert calls.index("python_setup") < calls.index("python_fix_shebang")
+
+
+def test_a_rewritten_shebang_is_not_mistaken_for_an_out_of_date_install(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The other half of pinning it: the interface must not then cry stale.
+
+    ``installed_status()`` compares the installed copy with the source. A
+    correctly installed copy differs from the source in exactly one line — the
+    one the eclass rewrote — and reporting that as "from an older version of
+    Gentstore, run sudo make install-system" would send everybody chasing a
+    problem that is the install working.
+    """
+    source = PRIVILEGED_SOURCES[0]
+    installed_dir = tmp_path / "libexec"
+    installed_dir.mkdir()
+    installed = installed_dir / privilege.HELPER_NAME
+    body = source.read_text(encoding="utf-8").split("\n", 1)[1]
+    installed.write_text(f"#!/usr/bin/python3.12\n{body}", encoding="utf-8")
+
+    monkeypatch.setattr(privilege, "INSTALL_DIR", installed_dir)
+    status = privilege.installed_status(privilege.HELPER_NAME, refresh=True)
+
+    assert status.installed
+    assert status.is_stale is False
+
+    # A change anywhere else is still a change.
+    installed.write_text(f"#!/usr/bin/python3.12\n{body}\n# and one more thing\n", "utf-8")
+    assert privilege.installed_status(privilege.HELPER_NAME, refresh=True).is_stale
+
+
 # -- the polkit policy ------------------------------------------------------
 
 POLICY = ROOT / "data" / "org.gentoo.gentstore.policy"

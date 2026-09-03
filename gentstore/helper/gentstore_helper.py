@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/python3
 # GentStore — graphical frontend for Portage
 # Copyright (C) 2026  JamJan05
 #

@@ -58,6 +58,16 @@ python_install_all() {
 	newexe gentstore/helper/gentstore_helper.py gentstore-helper
 	newexe gentstore/helper/gentstore_launcher.py gentstore-launcher
 
+	# Both run as root through pkexec. python_fix_shebang replaces the generic
+	# #!/usr/bin/python3 with the exact interpreter this package was built for,
+	# so what root ends up executing is not decided by eselect-python later on.
+	# They import nothing outside the standard library, so any of the supported
+	# interpreters will do — python_setup picks one.
+	python_setup
+	python_fix_shebang \
+		"${ED}/usr/libexec/gentstore/gentstore-helper" \
+		"${ED}/usr/libexec/gentstore/gentstore-launcher"
+
 	insinto /usr/share/polkit-1/actions
 	doins data/org.gentoo.gentstore.policy
 

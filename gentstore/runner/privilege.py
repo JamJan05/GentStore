@@ -328,6 +328,21 @@ _STAMPS: dict[str, tuple[int, int, int, int] | None] = {}
 _PROGRAMS = {HELPER_NAME: _SOURCE_HELPER, LAUNCHER_NAME: _SOURCE_LAUNCHER}
 
 
+def _body(data: bytes) -> bytes:
+    """*data* without its ``#!`` line.
+
+    The installed copy's first line is not ours to compare. Gentoo's
+    ``python_fix_shebang`` rewrites it to the exact interpreter the package was
+    built for — ``/usr/bin/python3.12`` rather than ``/usr/bin/python3`` — which
+    is the point of running it, and without this the installed helper would
+    report itself out of date from the moment it was correctly installed.
+    """
+    if not data.startswith(b"#!"):
+        return data
+    _shebang, newline, rest = data.partition(b"\n")
+    return rest if newline else b""
+
+
 def _stamp(path: Path) -> tuple[int, int, int, int] | None:
     """Enough of *path* to notice it being replaced, without reading it.
 
@@ -344,6 +359,8 @@ def _stamp(path: Path) -> tuple[int, int, int, int] | None:
 
 def installed_status(name: str, *, refresh: bool = False) -> InstalledStatus:
     """Compare the installed copy of *name* with the source it came from.
+
+    The ``#!`` line is left out of the comparison — see :func:`_body`.
 
     The answer is remembered, but only for as long as the file it describes has
     not moved. Without that the memo outlived its subject, and in the one way
@@ -362,7 +379,7 @@ def installed_status(name: str, *, refresh: bool = False) -> InstalledStatus:
 
     if status.installed and source is not None:
         try:
-            same = installed.read_bytes() == source.read_bytes()
+            same = _body(installed.read_bytes()) == _body(source.read_bytes())
         except OSError:  # pragma: no cover - unreadable while being replaced
             same = True
         status = InstalledStatus(
