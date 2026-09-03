@@ -29,6 +29,7 @@ import re
 import shutil
 import subprocess
 from pathlib import Path
+from xml.etree import ElementTree
 
 import pytest
 
@@ -443,6 +444,56 @@ def test_the_live_ebuild_lands_in_portages_live_rebuild_set(ebuild: str) -> None
     package out of the one set that rebuilds it.
     """
     assert "git-r3" in ebuild, "the live ebuild no longer inherits git-r3"
+
+
+# -- the polkit policy ------------------------------------------------------
+
+POLICY = ROOT / "data" / "org.gentoo.gentstore.policy"
+
+
+def test_every_privileged_action_asks_every_time() -> None:
+    """No ``auth_admin_keep`` anywhere in the policy.
+
+    What the "keep" form remembers is not "this window may carry on" but "this
+    user has authenticated for this action", so for the length of the window
+    anything else running as that user reaches the same two programs with no
+    dialog of its own. The two programs are narrow on purpose, but narrow is not
+    nothing, and a six-step update asking six times is the honest description of
+    a six-step update.
+    """
+    actions = ElementTree.parse(POLICY).getroot().findall("action")
+    assert actions, "the policy declares no actions at all"
+    for action in actions:
+        defaults = action.find("defaults")
+        assert defaults is not None, action.get("id")
+        granted = {element.text for element in defaults}
+        assert granted == {"auth_admin"}, f'{action.get("id")} grants {granted}'
+
+
+def test_the_policy_names_the_programs_the_code_runs() -> None:
+    """The exec path in the policy is what picks the action for a dialog.
+
+    A path that does not exist is not an error anywhere — polkit simply falls
+    back to the generic "run a program as another user" wording, and the whole
+    point of naming the actions is lost quietly.
+    """
+    paths = {
+        annotation.text
+        for annotation in ElementTree.parse(POLICY).getroot().iter("annotate")
+        if annotation.get("key") == "org.freedesktop.policykit.exec.path"
+    }
+    expected = {
+        str(privilege.INSTALL_DIR / name)
+        for name in (privilege.HELPER_NAME, privilege.LAUNCHER_NAME)
+    }
+    assert paths == expected
+
+
+def test_the_policy_points_at_somewhere_that_exists() -> None:
+    """The vendor URL is what the dialog's "vendor" link opens."""
+    url = ElementTree.parse(POLICY).getroot().findtext("vendor_url")
+    assert url is not None and "Gentstore-alpha" not in url, "that repository was renamed"
+    assert url == "https://www.gentstore.dev"
 
 
 # -- the desktop entry and the running application agree --------------------

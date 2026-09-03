@@ -99,21 +99,29 @@ users are.
    “installing and updating packages”. So the launcher knows exactly the commands
    `runner/emerge.py` and `runner/eselect.py` build:
 
-   - `emerge` — a closed set of options compared **verbatim** (`--color=n` is allowed,
-     `--color=y` is not: the value attached to an option is a place to hide something), and
-     every remaining argument has to have the shape of an atom (`category/package`,
-     `=cat/pkg-1.2`) or of a set (`@world`). Names ending in `.ebuild`, `.tbz2`, `.gpkg` or
+   - `emerge` — a table of the whole command lines `runner/emerge.py` builds, one row per
+     function in it, matched token by token. Options are compared **verbatim** (`--color=n` is
+     allowed, `--color=y` is not: the value attached to an option is a place to hide something),
+     two of them are marked optional because the interface decides them at the point of use
+     (`--getbinpkg`, `--oneshot`), and a row may end in one or more package atoms
+     (`category/package`, `=cat/pkg-1.2`). Names ending in `.ebuild`, `.tbz2`, `.gpkg` or
      `.xpak` are rejected — `emerge` reads those as a file to merge, not as a package to look
-     up;
+     up.
+
+     A table and not a set of permitted options, because a set permits every combination of its
+     members. `--unmerge` and `@world` were both on the old list and neither is wrong on its
+     own; together they are a command that removes the system. The two commands that do work on
+     a set (`@world` for the update, `@preserved-rebuild` for the rebuild) name it literally,
+     which is what keeps a set out of every other row;
    - `emaint`, `eselect` — a table of complete command templates (`repository add <name> <type>
      <url>`, `profile set <number>` and so on), matched token by token;
    - `glsa-check` — `-l` or `-f`, and after that nothing but GLSA numbers or the word
      `affected`.
 
-   Why this is not overkill: polkit remembers the answer for a few minutes
-   (`auth_admin_keep`, §3), so within that window **any other process running as that user** can
-   reach this program without a dialog of its own. What it finds there must not be worth more
-   than the dialog said.
+   Why this is not overkill: this program is reachable by anything running as that user, and a
+   dialog only ever says as much as the action it names. What is behind it must not be worth
+   more than the dialog said — and that has to hold whether or not polkit is remembering an
+   earlier answer (§3).
 
    `dispatch-conf` and `etc-update` **have gone from the list**. They are interactive, they
    start an editor, and Gentstore settles `._cfg` files through `cfg_apply` in the helper —
@@ -145,11 +153,24 @@ diagnosing the wrong problem.
 
 | Action | The description in the authentication dialog | Default |
 |---|---|---|
-| `org.gentoo.gentstore.modify-config` | “Changing the Portage configuration” | `auth_admin_keep` |
-| `org.gentoo.gentstore.run-emerge` | “Installing and updating packages” | `auth_admin_keep` |
+| `org.gentoo.gentstore.modify-config` | “Changing the Portage configuration” | `auth_admin` |
+| `org.gentoo.gentstore.run-emerge` | “Installing and updating packages” | `auth_admin` |
 
-`auth_admin_keep` means: ask for a password, but remember it for a while — otherwise a six-step
-update cycle would ask six times.
+`auth_admin` means: ask an administrator for a password, every time. It used to be
+`auth_admin_keep`, which remembers the answer for a few minutes — and what it remembers is not
+“this window may carry on” but “this user has authenticated for this action”, so during that
+window anything else running as that user reached the same two programs with no dialog of its
+own.
+
+The cost is a six-step update cycle asking six times. That is the honest description of what is
+happening, and being asked for something you did not start is the signal worth having.
+
+**A third action would be better still.** `eselect repository add` puts an arbitrary URL into
+`repos.conf` and is a larger thing to consent to than installing a package that is already in a
+repository you trust — but polkit binds an action to an **executable path**, not to its
+arguments, so a third action means a third program in `/usr/libexec/gentstore`. That is a
+change worth making deliberately rather than as a side effect of tightening the defaults, and
+it has not been made.
 
 The message of the `modify-config` action mentions **both** `/etc/portage` **and** `/etc`.
 Settling `._cfg` files belongs to that action, and Portage leaves those wherever

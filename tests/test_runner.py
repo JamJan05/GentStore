@@ -145,10 +145,9 @@ def test_the_launcher_refuses_arguments_the_interface_never_builds(
 ) -> None:
     """One authentication buys the commands Gentstore runs, and no others.
 
-    polkit remembers the answer for a few minutes (``auth_admin_keep``), so
-    during that window anything else running as the user reaches this program
-    without a dialog of its own. What it finds here has to be worth no more
-    than what the dialog said it would be.
+    Anything running as the user can reach this program, and the dialog in front
+    of it says only "install, update or remove packages". What is behind it has
+    to be worth no more than that.
     """
     with pytest.raises(launcher.LauncherError):
         launcher.check_arguments(program, arguments)
@@ -716,10 +715,9 @@ def test_the_launcher_refuses_every_package_there_is() -> None:
 
     The atom shape allows a wildcard in either half and had nothing to say about
     both at once, so one command line got past every other check in the file —
-    and past it without a dialog of its own, for as long as polkit's
-    ``auth_admin_keep`` remembers the last answer. Nothing Gentstore runs needs
-    it: the one place ``*/*`` is written is ``*/*::<overlay>`` into
-    ``package.mask``, and that goes to the helper.
+    behind a dialog that said "install, update or remove packages". Nothing
+    Gentstore runs needs it: the one place ``*/*`` is written is
+    ``*/*::<overlay>`` into ``package.mask``, and that goes to the helper.
     """
     for atom in ("*/*", "*/*::guru", "=*/*-1", "!*/*", "*/*:0", "*/*[python]"):
         # The command Gentstore itself builds, with only the atom changed, so

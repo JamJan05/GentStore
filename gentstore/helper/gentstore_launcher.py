@@ -36,10 +36,9 @@ the system.
 That second half is the point. ``emerge`` with arbitrary options is root by
 another name — ``--config`` runs a package's own configuration script,
 ``--root`` moves the whole operation somewhere else — and the authentication
-dialog promised "install and update packages". Polkit's ``auth_admin_keep``
-remembers the answer for a few minutes, so anything else running as the user
-can reach this program without a dialog of its own during that window. What it
-finds here has to be worth no more than what the dialog said.
+dialog promised "install and update packages". Anything running as the user can
+reach this program, and a dialog says only as much as the action it names, so
+what is found here has to be worth no more than what the dialog said.
 
 **It can be stopped.** The interface runs unprivileged, so it cannot signal a
 root process at all. Instead it writes ``abort`` on this program's standard
@@ -171,11 +170,15 @@ def _is_everything(token: str) -> bool:
     The atom shape above allows a wildcard in either half, and both at once is
     still a valid atom, so ``emerge --unmerge --color=n '*/*'`` used to pass
     every other check in this file. That is the whole system, and the dialog
-    said "install, update or remove packages"; during the ``auth_admin_keep``
-    window anything running as the user could have asked for it without a
-    dialog of its own. Nothing here needs it either — the one place Gentstore
+    said "install, update or remove packages", and anything running as the user
+    can ask this program for a command. Nothing here needs it — the one place
+    Gentstore
     writes ``*/*`` is ``*/*::<overlay>`` into ``package.mask``, and that goes
     to the helper and never reaches this program.
+
+    Kept as its own check even though :data:`EMERGE_COMMANDS` now decides which
+    commands exist at all: every row that ends in atoms would otherwise take
+    this one.
 
     Matched on the package name alone, so an operator, a slot, a repository or
     a USE list cannot smuggle it past.

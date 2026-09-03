@@ -8,14 +8,23 @@
   authentication dialog says what is about to happen rather than "an
   application wants to run a program as root".
 
-  auth_admin_keep, not auth_admin: a system update runs six steps in a row, and
-  being asked for the password six times teaches people to type it without
-  reading the dialog.
+  auth_admin, not auth_admin_keep. The "keep" form remembers the answer for a
+  few minutes, and what it remembers is not "this window may continue" but "this
+  user has authenticated for this action" — so anything else running as that
+  user reaches the same two programs during that window without a dialog of its
+  own. Both of them are narrow on purpose (see the two files in
+  /usr/libexec/gentstore), but narrow is not the same as nothing, and the
+  window is the part nobody asked for.
+
+  The cost is real and is the reason it was the other way round: a system update
+  runs six steps and now asks six times. Being asked once per privileged step is
+  the honest version of what is happening, and being asked repeatedly for
+  something you did not start is the signal that matters.
 -->
 <policyconfig>
 
   <vendor>Gentstore</vendor>
-  <vendor_url>https://github.com/JamJan05/Gentstore-alpha</vendor_url>
+  <vendor_url>https://www.gentstore.dev</vendor_url>
 
   <action id="org.gentoo.gentstore.modify-config">
     <description>Change the Portage configuration</description>
@@ -32,7 +41,7 @@
     <defaults>
       <allow_any>auth_admin</allow_any>
       <allow_inactive>auth_admin</allow_inactive>
-      <allow_active>auth_admin_keep</allow_active>
+      <allow_active>auth_admin</allow_active>
     </defaults>
     <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/gentstore/gentstore-helper</annotate>
     <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
@@ -47,7 +56,7 @@
     <defaults>
       <allow_any>auth_admin</allow_any>
       <allow_inactive>auth_admin</allow_inactive>
-      <allow_active>auth_admin_keep</allow_active>
+      <allow_active>auth_admin</allow_active>
     </defaults>
     <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/gentstore/gentstore-launcher</annotate>
     <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
