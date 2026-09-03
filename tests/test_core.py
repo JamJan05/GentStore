@@ -341,6 +341,58 @@ def test_without_a_repository_the_database_still_answers(
     assert portdb.asked == []
 
 
+def test_the_public_list_is_not_the_one_this_needs() -> None:
+    """Why two private attributes are read instead of ``portage.auxdbkeys``.
+
+    The public list is the metadata the cache stores. ``setcpv()`` asks for a
+    different set, and the difference is ``repository`` — the key this whole
+    arrangement exists to carry, since it is what decides which repository-level
+    ``package.use`` applies. Swapping to the public name would be a stabler
+    source for an answer that no longer works, so this records the reason rather
+    than leaving the next reader to rediscover it.
+    """
+    portage = pytest.importorskip("portage")
+    config = pytest.importorskip("portage.package.ebuild.config")
+
+    if not hasattr(portage, "auxdbkeys"):  # pragma: no cover - older Portage
+        pytest.skip("this Portage has no public auxdbkeys list")
+
+    assert "repository" in set(config.config._setcpv_aux_keys)
+    assert "repository" not in set(portage.auxdbkeys)
+
+
+def test_a_portage_without_the_private_list_says_so(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The fallback degrades quietly, so it does not get to be quiet.
+
+    A key Portage has added since, and this file has not, would simply be absent
+    from the mapping: the package would be described with a piece missing rather
+    than wrongly. That is the kind of thing nobody notices without being told,
+    and it can only happen after a Portage upgrade — long after anybody would
+    connect the two.
+    """
+    from gentstore.core import portage_env  # noqa: PLC0415
+
+    portage = pytest.importorskip("portage")
+    env, _portdb = _two_repo_env(monkeypatch)
+    monkeypatch.delattr(portage.config, "_setcpv_aux_keys", raising=False)
+    monkeypatch.setattr(portage_env, "_WARNED", set())
+
+    with caplog.at_level("WARNING", logger="gentstore.core.portage_env"):
+        keys = env._aux_keys()
+
+    assert set(keys) <= set(portage_env._AUX_KEYS)
+    assert "repository" in keys, "the fallback still has to carry the one that matters"
+    assert "_setcpv_aux_keys" in caplog.text
+
+    # Once per process: this is a fact about the installation, and the question
+    # is asked every time somebody clicks a package.
+    caplog.clear()
+    env._aux_keys()
+    assert caplog.text == ""
+
+
 def test_the_keys_asked_for_are_the_ones_portage_reads() -> None:
     """A key added to ``setcpv()`` must not go missing from the fallback list.
 

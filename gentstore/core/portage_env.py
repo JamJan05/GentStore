@@ -49,6 +49,12 @@ log = logging.getLogger(__name__)
 #: when they are there — a key added to Portage is then picked up without an
 #: edit here — and this copy is the answer when they are not.
 #:
+#: There is a public list, ``portage.auxdbkeys``, and it is not the same thing:
+#: it does not contain ``repository``. That is the one key this whole
+#: arrangement exists for, so the public name would be a stabler source for an
+#: answer that no longer works. The private ones stay, with a contract test on
+#: the copy below and a warning when the fallback is what answers.
+#:
 #: ``repository`` is the one that does the work. ``setcpv()`` pops it and uses it
 #: to pick the repository-level ``package.use``, ``use.stable`` and
 #: ``make.defaults`` that apply, which is the whole reason for handing over
@@ -75,6 +81,19 @@ _AUX_KEYS = (
 #: How many per-repository metadata mappings one environment keeps. See
 #: :meth:`PortageEnv._metadata` for why they are kept at all.
 _METADATA_CACHE_MAX = 256
+
+#: What has already been said about this Portage not being shaped as expected.
+#:
+#: Once per process, not once per package: it is a fact about the installation,
+#: and the questions below are asked every time somebody clicks a package.
+_WARNED: set[str] = set()
+
+
+def _warn_once(subject: str, message: str) -> None:
+    if subject in _WARNED:
+        return
+    _WARNED.add(subject)
+    log.warning(message)
 
 
 class PortageUnavailableError(RuntimeError):
@@ -152,10 +171,33 @@ class PortageEnv:
         """
         import portage  # noqa: PLC0415 — slow import, deferred
 
-        wanted = set(getattr(portage.config, "_setcpv_aux_keys", None) or _AUX_KEYS)
+        asked_for = getattr(portage.config, "_setcpv_aux_keys", None)
+        if asked_for is None:
+            # Worth saying out loud. The failure this produces is not a crash:
+            # a key Portage has added since and this file has not would simply
+            # be absent from the mapping, and the package would be described
+            # with a piece missing rather than wrongly. That is the kind of
+            # thing nobody notices without being told.
+            _warn_once(
+                "setcpv_aux_keys",
+                "This Portage does not expose config._setcpv_aux_keys. Falling back to "
+                "Gentstore's own copy of the list (gentstore/core/portage_env.py, "
+                "_AUX_KEYS); if Portage has added a metadata key since, the per-package "
+                "view will not carry it.",
+            )
+            asked_for = _AUX_KEYS
+
+        wanted = set(asked_for)
         available = getattr(self._portdb, "_aux_cache_keys", None)
         if available:
             wanted &= set(available)
+        else:
+            _warn_once(
+                "aux_cache_keys",
+                "This Portage does not expose portdbapi._aux_cache_keys. Asking the "
+                "repository cache for every key Gentstore knows about, which it may "
+                "refuse rather than answer.",
+            )
         return sorted(wanted)
 
     def _metadata(self, cpv: str, repo: str) -> dict[str, str]:
