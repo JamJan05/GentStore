@@ -6,6 +6,11 @@ system update cycle.
 
 Written in Python 3 with PyQt6. Bilingual: **Polish and English**.
 
+The page about it — every screen at full size, the installation in order, and what each of
+the five principles below costs in practice — is at
+**[www.gentstore.dev](https://www.gentstore.dev/en)**, and
+[po polsku](https://www.gentstore.dev/pl).
+
 > **Version 1.3.1.** All nine screens work, and both halves have been exercised on a live
 > system: the read-only side — search, USE flags, masks, repositories, the update preview,
 > configuration files, `make.conf`, elog and `@world` — and the privileged one, which has
@@ -361,6 +366,10 @@ Architecture, the theme, the bilingualism rules, the privilege model and the wor
 [`Docs/`](Docs/README.md).
 
 What changed between one release and the next: [`CHANGELOG.md`](CHANGELOG.md).
+
+The same ground for somebody who has not installed it yet, with the screenshots readable:
+[www.gentstore.dev](https://www.gentstore.dev/en). The site is built from the `Web` branch of
+this repository.
 
 ## Licence
 
