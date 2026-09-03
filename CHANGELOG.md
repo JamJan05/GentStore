@@ -9,6 +9,8 @@ tag was made.
 
 ## [Unreleased]
 
+## [1.3.1] — 2026-09-03
+
 ### Changed
 
 - **Nothing ran the test suite except this machine and the ebuild on a user's.** That is what
@@ -339,7 +341,8 @@ comes from the `portage` API rather than from parsing ebuilds. Everything privil
 Bilingual (Polish and English) through Qt's own translation system; the documentation and the
 source strings are English.
 
-[Unreleased]: https://github.com/JamJan05/GentStore/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/JamJan05/GentStore/compare/v1.3.1...HEAD
+[1.3.1]: https://github.com/JamJan05/GentStore/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/JamJan05/GentStore/compare/v1.1.2...v1.3.0
 [1.1.2]: https://github.com/JamJan05/GentStore/compare/6dd751f...v1.1.2
 [1.1.1]: https://github.com/JamJan05/GentStore/compare/v1.1.0...6dd751f
