@@ -42,7 +42,7 @@
       "PyQt6",
       "GPL-2+",
       "pl · en",
-      "576 testy"
+      "797 testów"
     ]
   },
   "figures": {
@@ -127,7 +127,7 @@
       {
         "n": "03",
         "title": "Repozytoria",
-        "body": "To, co masz skonfigurowane, z sekcją `repos.conf` dosłownie — i katalog 459 repozytoriów Gentoo w drugiej zakładce. Włączenie overlaya to jedno kliknięcie."
+        "body": "To, co masz skonfigurowane, z sekcją `repos.conf` dosłownie — i katalog repozytoriów Gentoo w drugiej zakładce. Włączenie overlaya to jedno kliknięcie."
       },
       {
         "n": "04",
@@ -142,7 +142,7 @@
       {
         "n": "06",
         "title": "make.conf",
-        "body": "Dwie wartości dla każdej zmiennej: ta zapisana w pliku i ta, której Portage faktycznie używa. Zmiana podmienia jedną linię. `MAKEOPTS` dostaje podpowiedź z liczby rdzeni i pamięci."
+        "body": "Dwie wartości dla każdej zmiennej: ta zapisana w pliku i ta, której Portage faktycznie używa. Zmiana podmienia jedną linię. `MAKEOPTS` dostaje podpowiedź z liczby rdzeni i pamięci. `EMERGE_DEFAULT_OPTS` można tu edytować i dotyczy `emerge`, które uruchamiasz w terminalu — a nie tych, które uruchamia to okno; te go ignorują, żeby pokazana komenda była całą komendą."
       },
       {
         "n": "07",
@@ -175,6 +175,7 @@
     "paragraphs": [
       "Uruchomiony przez `sudo` mówi to w okienku i prosi o zamknięcie. Wszystko, co wymaga uprawnień, przechodzi przez `pkexec` i dwa małe programy w `/usr/libexec`.",
       "Oba to pojedyncze pliki korzystające wyłącznie z biblioteki standardowej, bez importów z reszty projektu — napisane tak, żeby dały się przeczytać od początku do końca, zanim zostaną dopuszczone w pobliże roota. Warto to zrobić.",
+      "Każdy uprzywilejowany krok pyta o hasło. Obie akcje polkit to `auth_admin`, a nie ta forma, która pamięta odpowiedź przez kilka minut, więc sześciokrokowa aktualizacja systemu pyta sześć razy. Tamta forma pamięta nie **to okno może kontynuować**, tylko **ten użytkownik uwierzytelnił się do tej akcji** — a skorzystać z tego może wszystko, co działa na Twoim koncie.",
       "Bez części uprzywilejowanej aplikacja nadal działa — tylko do czytania: szukanie, przeglądanie flag, `emerge --pretend`. Każda próba zapisu mówi wtedy, czego brakuje."
     ],
     "install_list": {
@@ -288,7 +289,7 @@
     "body": "Wszystkie dziewięć ekranów działa, a obie połowy zostały przećwiczone na żywym systemie: strona tylko do czytania — szukanie, flagi USE, maski, repozytoria, podgląd aktualizacji, pliki konfiguracyjne, `make.conf`, elog i `@world` — i ta uprzywilejowana, która zapisała prawdziwe wpisy w `package.use`, `package.license` i `package.accept_keywords` przez `pkexec`.",
     "caveat": {
       "title": "Czego ta liczba nie obiecuje",
-      "body": "576 testy przechodzą, ale działało to na **jednej** maszynie, wyłącznie amd64 — dlatego ebuild ma keyword `~amd64`. Zgłoszenia błędów z innych konfiguracji to najszybszy sposób, żeby następne wydanie było lepsze."
+      "body": "797 testów przechodzi, ale działało to na **jednej** maszynie, wyłącznie amd64 — dlatego ebuild ma keyword `~amd64`. Pakiet ogłasza się jako `Development Status :: 4 - Beta`, co jest tym samym stwierdzeniem powiedzianym drugi raz. Zgłoszenia błędów z innych konfiguracji to najszybszy sposób, żeby następne wydanie było lepsze."
     },
     "changes_title": "Co nowego w 1.3.0",
     "changes": [

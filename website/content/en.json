@@ -42,7 +42,7 @@
       "PyQt6",
       "GPL-2+",
       "pl · en",
-      "576 tests"
+      "797 tests"
     ]
   },
   "figures": {
@@ -127,7 +127,7 @@
       {
         "n": "03",
         "title": "Repositories",
-        "body": "What you have configured, with the `repos.conf` section verbatim — and the catalogue of 459 Gentoo repositories in the second tab. Enabling an overlay is one click."
+        "body": "What you have configured, with the `repos.conf` section verbatim — and the catalogue of Gentoo repositories in the second tab. Enabling an overlay is one click."
       },
       {
         "n": "04",
@@ -142,7 +142,7 @@
       {
         "n": "06",
         "title": "make.conf",
-        "body": "Two values for each variable: the one written in the file and the one Portage actually uses. A change replaces one line. `MAKEOPTS` gets a suggestion computed from the core count and the amount of memory."
+        "body": "Two values for each variable: the one written in the file and the one Portage actually uses. A change replaces one line. `MAKEOPTS` gets a suggestion computed from the core count and the amount of memory. `EMERGE_DEFAULT_OPTS` is editable here and applies to the `emerge` you run in a terminal — not to the ones this window runs, which ignore it so that the command shown before a run is the whole of what runs."
       },
       {
         "n": "07",
@@ -175,6 +175,7 @@
     "paragraphs": [
       "Started with `sudo` it says so in a dialog and asks to be closed. Everything that needs privileges goes through `pkexec` and two small programs in `/usr/libexec`.",
       "Both are single files that use nothing but the standard library, with no imports from the rest of the project — written so that they can be read end to end before being let anywhere near root. It is worth doing.",
+      "Every privileged step asks for your password. Both polkit actions are `auth_admin`, not the form that remembers an answer for a few minutes, so a six-step system update asks six times. What that form remembers is not **this window may carry on** but **this user has authenticated for this action** — and anything else running as you could use it.",
       "Without the privileged half the application still runs — read-only: search, browsing flags, `emerge --pretend`. Every attempt to write then says what is missing."
     ],
     "install_list": {
@@ -288,7 +289,7 @@
     "body": "All nine screens work, and both halves have been exercised on a live system: the read-only side — search, USE flags, masks, repositories, the update preview, configuration files, `make.conf`, elog and `@world` — and the privileged one, which has written real `package.use`, `package.license` and `package.accept_keywords` entries through `pkexec`.",
     "caveat": {
       "title": "What that number does not claim",
-      "body": "576 tests pass, but this has run on **one** machine, amd64 only — so the ebuild is keyworded `~amd64`. Bug reports from other setups are the fastest way to make the next release better."
+      "body": "797 tests pass, but this has run on **one** machine, amd64 only — so the ebuild is keyworded `~amd64`. The package announces itself as `Development Status :: 4 - Beta`, which is the same statement said twice on purpose. Bug reports from other setups are the fastest way to make the next release better."
     },
     "changes_title": "New in 1.3.0",
     "changes": [
