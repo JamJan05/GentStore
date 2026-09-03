@@ -1,0 +1,118 @@
+# The numbers the page states about the application, moved by the release that
+# changed them.
+#
+# This branch has no tag in its history and holds nothing a release touches, so
+# until now nothing about cutting one reached it. That is what 1.3.1 cost: the
+# page went on announcing 1.3.0 to everybody who visited it, and the only thing
+# that would ever have caught it was somebody looking.
+#
+# It cannot be triggered by the tag. A workflow that runs on `push: tags` is read
+# from the tagged commit, which is on `main` and has no website in it — and a tag
+# pushed by Actions with GITHUB_TOKEN raises no event at all, so a copy of this
+# living on `main` would sit out the very release it was written for.
+# `workflow_dispatch` is one of the two events GITHUB_TOKEN may raise, and
+# release.yml on `main` dispatches this as its last act.
+#
+#   Actions -> Website version -> Run workflow -> 1.3.1
+#
+# is the same thing by hand, which is what the test count wants: it is not
+# derivable from a tag, it is only known to a machine that has run the suite, and
+# it is left alone unless this run is given one.
+#
+# What no run of this touches is `status.changes_title` — the "New in X" heading
+# over the hand-written list of a release's highlights. website/set_version.py
+# says why, and reports the heading it left behind rather than relabelling a list
+# nobody has rewritten.
+
+name: Website version
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "The release the page should state, e.g. 1.3.1"
+        required: false
+      tests:
+        description: "How many tests pass — leave empty to keep the number that is there"
+        required: false
+
+permissions:
+  contents: write
+
+# Two releases close together would race over this branch. Never cancel one in
+# flight: there is a push at the end of it and nothing that repairs a half-run.
+concurrency:
+  group: website-version
+  cancel-in-progress: false
+
+jobs:
+  state-the-numbers:
+    runs-on: ubuntu-latest
+    steps:
+      # No ref: a dispatch carries the branch it was fired at, which is this one.
+      - uses: actions/checkout@v5
+
+      - name: Identity for the commit this makes
+        run: |
+          git config user.name  "${{ vars.RELEASE_GIT_NAME  || 'JamJan05' }}"
+          git config user.email "${{ vars.RELEASE_GIT_EMAIL || 'janek2ko@gmail.com' }}"
+
+      - name: Write them into the content files
+        env:
+          # Through the environment rather than interpolated into the script:
+          # ${{ }} is substituted before bash ever sees the line, so a value with
+          # a quote in it would not be a bad version, it would be code.
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_TESTS: ${{ inputs.tests }}
+        run: |
+          set -euo pipefail
+          version="${INPUT_VERSION#v}"
+          if [[ -z ${version} && -z ${INPUT_TESTS} ]]; then
+            echo "::error::give a version, a test count, or both"; exit 1
+          fi
+
+          # Built as an if rather than as `[[ ... ]] && args+=(...)`: under
+          # `set -e` an and-list whose test is false returns 1 and takes the step
+          # with it, so the empty case would fail rather than skip.
+          args=()
+          message="The page states"
+          if [[ -n ${version} ]]; then
+            args+=("${version}")
+            message="${message} ${version}"
+          fi
+          if [[ -n ${INPUT_TESTS} ]]; then
+            args+=(--tests "${INPUT_TESTS}")
+            if [[ -n ${version} ]]; then message="${message}, and"; fi
+            message="${message} ${INPUT_TESTS} tests"
+          fi
+
+          # The script refuses a version that is not X.Y.Z and a count that is
+          # not a number, and stops rather than rewriting nothing if the wording
+          # around either has moved.
+          python3 website/set_version.py "${args[@]}"
+
+          # Read back what was written, so a run cannot report success over a
+          # file it only half changed.
+          check=(--check)
+          if [[ -n ${version} ]]; then check+=("${version}"); fi
+          python3 website/set_version.py "${check[@]}"
+
+          echo "MESSAGE=${message}" >> "${GITHUB_ENV}"
+          git diff --stat
+
+      - name: Commit and push
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo "::notice::the page already said this — nothing to commit"
+            echo "### ${MESSAGE} — already" >> "${GITHUB_STEP_SUMMARY}"
+          else
+            git commit -a -m "${MESSAGE}"
+            git push origin "HEAD:${GITHUB_REF_NAME}"
+            {
+              echo "### ${MESSAGE}"
+              echo
+              echo "Committed to \`${GITHUB_REF_NAME}\`. The site is built from this branch, so"
+              echo "it reaches visitors with the next deploy."
+            } >> "${GITHUB_STEP_SUMMARY}"
+          fi

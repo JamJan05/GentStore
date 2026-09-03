@@ -6,7 +6,7 @@
     "description": "Graficzna nakładka na Portage dla Gentoo Linux: wyszukiwanie pakietów, flagi USE z wyjaśnieniem, maski i licencje, overlaye i cały cykl aktualizacji systemu."
   },
   "header": {
-    "version": "1.3.0",
+    "version": "1.3.1",
     "keyword": "~amd64",
     "github": "GitHub",
     "skip_to_content": "Przejdź do treści",
@@ -42,7 +42,7 @@
       "PyQt6",
       "GPL-2+",
       "pl · en",
-      "572 testy"
+      "576 testy"
     ]
   },
   "figures": {
@@ -284,11 +284,11 @@
   },
   "status": {
     "eyebrow": "Stan projektu",
-    "title": "Wersja 1.3.0",
+    "title": "Wersja 1.3.1",
     "body": "Wszystkie dziewięć ekranów działa, a obie połowy zostały przećwiczone na żywym systemie: strona tylko do czytania — szukanie, flagi USE, maski, repozytoria, podgląd aktualizacji, pliki konfiguracyjne, `make.conf`, elog i `@world` — i ta uprzywilejowana, która zapisała prawdziwe wpisy w `package.use`, `package.license` i `package.accept_keywords` przez `pkexec`.",
     "caveat": {
       "title": "Czego ta liczba nie obiecuje",
-      "body": "572 testy przechodzą, ale działało to na **jednej** maszynie, wyłącznie amd64 — dlatego ebuild ma keyword `~amd64`. Zgłoszenia błędów z innych konfiguracji to najszybszy sposób, żeby następne wydanie było lepsze."
+      "body": "576 testy przechodzą, ale działało to na **jednej** maszynie, wyłącznie amd64 — dlatego ebuild ma keyword `~amd64`. Zgłoszenia błędów z innych konfiguracji to najszybszy sposób, żeby następne wydanie było lepsze."
     },
     "changes_title": "Co nowego w 1.3.0",
     "changes": [

@@ -102,6 +102,35 @@ a page.
 External links live in `LINKS` in `app/content.py` and are referenced by key,
 so a moved repository is one edit.
 
+### The numbers about the application
+
+Two of the things the copy states are facts about `main` rather than prose: the
+version in `header.version` and `status.title`, and the test count in
+`hero.badges` and `status.caveat.body`. Both used to be hand edits made after a
+release, which is how the page came to announce 1.3.0 while `emerge` was already
+installing 1.3.1.
+
+```sh
+python set_version.py --check          # every place agrees, and on what
+python set_version.py 1.3.1            # move the version
+python set_version.py --tests 576      # move the count
+```
+
+`--check` is what the test suite runs, so the two language files cannot drift
+apart from each other. The release workflow on `main` dispatches
+`.github/workflows/website-version.yml`, which runs the same script with the
+version it just tagged — a tag cannot trigger a workflow on this branch itself,
+and the header of that file explains why.
+
+The count is not passed automatically: it is only known to a machine that has
+run the whole suite, which the release runner is not. Give it by hand, from the
+same run whose number the README on `main` quotes.
+
+What the script never rewrites is `status.changes_title` — the "New in X"
+heading over a hand-written list of highlights. It reports the heading it left
+behind instead, because relabelling that list would be claiming a release nobody
+has written a word about.
+
 ## Tests
 
 ```sh

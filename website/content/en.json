@@ -6,7 +6,7 @@
     "description": "A graphical front-end for Portage on Gentoo Linux: package search, USE flags with explanations, masks and licences, overlays, and the full system update cycle."
   },
   "header": {
-    "version": "1.3.0",
+    "version": "1.3.1",
     "keyword": "~amd64",
     "github": "GitHub",
     "skip_to_content": "Skip to content",
@@ -42,7 +42,7 @@
       "PyQt6",
       "GPL-2+",
       "pl · en",
-      "572 tests"
+      "576 tests"
     ]
   },
   "figures": {
@@ -284,11 +284,11 @@
   },
   "status": {
     "eyebrow": "Where the project stands",
-    "title": "Version 1.3.0",
+    "title": "Version 1.3.1",
     "body": "All nine screens work, and both halves have been exercised on a live system: the read-only side — search, USE flags, masks, repositories, the update preview, configuration files, `make.conf`, elog and `@world` — and the privileged one, which has written real `package.use`, `package.license` and `package.accept_keywords` entries through `pkexec`.",
     "caveat": {
       "title": "What that number does not claim",
-      "body": "572 tests pass, but this has run on **one** machine, amd64 only — so the ebuild is keyworded `~amd64`. Bug reports from other setups are the fastest way to make the next release better."
+      "body": "576 tests pass, but this has run on **one** machine, amd64 only — so the ebuild is keyworded `~amd64`. Bug reports from other setups are the fastest way to make the next release better."
     },
     "changes_title": "New in 1.3.0",
     "changes": [
