@@ -40,7 +40,7 @@ operations:
 
 | Operation | Meaning |
 |---|---|
-| `append_line` | append a line to a file (if an identical one is already there — do nothing and report it) |
+| `append_line` | append a line to one of the files listed in rule 1a (if an identical one is already there — do nothing and report it) |
 | `replace_line` | replace **one** line matching a pattern (e.g. `USE=` in `make.conf`) |
 | `remove_line` | remove a line matching verbatim |
 | `write_file` | write a whole file — only for files the application created itself (`repos.conf/<repo>`) |
@@ -53,6 +53,19 @@ Hard rules inside the helper, enforced regardless of what the GUI sent:
 
 1. After `realpath()`, the destination path has to fall within `/etc/portage` (or be a `._cfg`
    file in a directory Portage actually reported). Anything else → refused.
+1a. Inside `/etc/portage`, **which file** matters as well. `append_line`, `replace_line` and
+   `remove_line` reach `package.use`, `package.accept_keywords`, `package.license`,
+   `package.unmask`, `package.mask` and `make.conf`, and nothing else — one level deep for the
+   `package.*` names, which may be a file or a directory of one file per package, and no deeper,
+   because nothing here builds a deeper path. `write_file` and `delete_file` reach `repos.conf`
+   and `binrepos.conf`, which are the files the application creates whole.
+
+   A list of what Gentstore writes, not a list of what looks dangerous. `/etc/portage` is not a
+   directory of inert settings: `bashrc` is sourced by every merge, `package.env` names files in
+   `env/` that set any variable a build sees, `postsync.d` holds programs run after a sync. A
+   line appended to any of them is code running as root later on, and none of them is a file
+   this application has ever needed to write. Naming what is allowed also covers the ones nobody
+   has thought of, which a list of forbidden names cannot do.
 2. It refuses to follow symbolic links that lead outside the permitted area.
 3. Atomic writes: a temporary file in the same directory → `fsync` → `os.replace`. A file is
    never left damaged halfway through a write.

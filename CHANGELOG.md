@@ -23,6 +23,64 @@ tag was made.
   reads the same file, so `cli search` is as quick from the shell.
   `GENTSTORE_INDEX_CACHE=0`, or `--no-cache`, builds from Portage every time.
 
+### Security
+
+- **The helper wrote lines into any file under `/etc/portage`.** `/etc/portage` is not a
+  directory of inert settings: `bashrc` is sourced by every merge, `package.env` names files in
+  `env/` that set any variable a build sees, `postsync.d` holds programs run after a sync. A line
+  appended to one of those is code running as root later on, bought with one authentication that
+  said “change the Portage configuration”. `append_line`, `replace_line` and `remove_line` now
+  reach the six files the interface actually writes — the five `package.*` names and `make.conf`
+  — and nothing else. A list of what Gentstore writes rather than of what looks dangerous, which
+  is the half that also covers the files nobody has thought of.
+
+- **The launcher allowed combinations of options nothing here builds.** A set of permitted
+  options permits every combination of its members: `--unmerge` and `@world` were both on the
+  list and neither is wrong on its own, but together they are a command that removes the system,
+  and `--depclean` with a package beside it is a different operation from the one the update
+  screen previews. Replaced with a table of the eleven whole command lines `runner/emerge.py`
+  builds, matched token by token. A package set can no longer appear where a package is expected.
+
+- **Polkit asked once and remembered.** `auth_admin_keep` remembers, for a few minutes, that this
+  user authenticated for this action — not that this window may carry on — so anything else
+  running as that user reached the same two programs inside that window with no dialog of its
+  own. Both actions are now `auth_admin`. A six-step update asks six times, which is what a
+  six-step update is.
+
+- **`ROOT=/mnt/gentoo` described one system and would have changed another.** Portage honours
+  `ROOT`, `PORTAGE_CONFIGROOT`, `SYSROOT` and `EPREFIX`, so the window described whatever they
+  pointed at; nothing privileged followed, because the helper's root is a constant and the
+  launcher's child gets a fixed environment. Privileged operations are now refused outright while
+  any of the four points somewhere else, with a message saying why. Reading a chroot still works.
+
+- **A value typed into the settings screen could change the syntax of `make.conf`.** It went
+  between two quotes as it stood, so a line break wrote a second assignment and a quote ended the
+  first. Values are now limited to what the nine editable variables actually hold — flags,
+  keywords, licence groups, option strings, locale codes, `make` options. The cost is that
+  `MAKEOPTS="-j$(nproc)"` can no longer be written from the screen; it can still be read, shown
+  and left alone.
+
+- **The two privileged programs asked `PATH` which Python they were.** `#!/usr/bin/env python3`
+  for something started as root, where pkexec sanitises the environment and `sudo` has a
+  secure_path — never the easy hole it looks like, and one fewer thing between the dialog and what
+  runs. The ebuild now calls `python_fix_shebang`, which pins the exact interpreter the package
+  was built for.
+
+### Fixed
+
+- **Picking a `::repo` narrowed the metadata but not the configuration.** Every `aux_get` already
+  carried `myrepo=`, but the per-package configuration beside it came from `setcpv(mydb=portdb)`,
+  which takes no repository and gets whichever one Portage ranks higher. A package chosen from
+  `::guru` could be described with `::guru`'s `IUSE` and `::gentoo`'s repository-level
+  `package.use` — and the second half decides where the flags in the window sit. The metadata is
+  now fetched with `myrepo=` and handed to `setcpv()` as a mapping, which is the branch Portage's
+  own `Package` objects go through.
+
+### Changed
+
+- The package announces itself as `Development Status :: 4 - Beta`. One machine, amd64 only, and
+  an ebuild keyworded `~amd64`: `5 - Production/Stable` was claiming more than the keyword does.
+
 ## [1.3.1] — 2026-09-03
 
 ### Changed
