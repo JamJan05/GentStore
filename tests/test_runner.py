@@ -280,6 +280,74 @@ def test_no_way_to_become_root_at_all(monkeypatch: pytest.MonkeyPatch) -> None:
     assert not escalation.is_available
 
 
+# -- an alternate root ------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("ROOT", "/mnt/gentoo"),
+        ("PORTAGE_CONFIGROOT", "/mnt/gentoo"),
+        ("SYSROOT", "/mnt/gentoo"),
+        ("EPREFIX", "/opt/prefix"),
+    ],
+)
+def test_nothing_runs_as_root_while_portage_describes_another_system(
+    monkeypatch: pytest.MonkeyPatch, name: str, value: str
+) -> None:
+    """The preview and the change have to be about the same machine.
+
+    ``create_trees(env=os.environ)`` honours all four of these, so the interface
+    would describe whatever they point at. Nothing privileged follows them: the
+    helper's root is the constant ``/etc/portage`` and the launcher's child gets
+    a fixed environment. Showing a change to one system and making it to another
+    is the failure this refuses.
+    """
+    for variable in privilege.ALTERNATE_ROOT_VARIABLES:
+        monkeypatch.delenv(variable, raising=False)
+    monkeypatch.setenv(name, value)
+
+    escalation = privilege.detect()
+
+    assert escalation.is_available is False
+    assert escalation.problem is not None
+    assert name in escalation.problem
+    assert value in escalation.problem
+
+
+def test_the_refusal_reaches_both_privileged_paths(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    """One check, because both paths ask :func:`detect` the same question."""
+    from gentstore.runner import helper_client
+
+    for variable in privilege.ALTERNATE_ROOT_VARIABLES:
+        monkeypatch.delenv(variable, raising=False)
+    monkeypatch.setenv("ROOT", "/mnt/gentoo")
+
+    answer = helper_client.request("append_line", path="/etc/portage/package.use/x", line="y")
+
+    assert answer.ok is False
+    assert answer.code == "no_privilege"
+    assert "ROOT" in answer.error
+
+
+@pytest.mark.parametrize(
+    "environ",
+    [
+        {},
+        {"ROOT": "/"},
+        {"ROOT": "//"},
+        {"ROOT": "/."},
+        {"PORTAGE_CONFIGROOT": "/", "SYSROOT": "/", "EPREFIX": ""},
+        {"ROOT": ""},
+    ],
+)
+def test_an_ordinary_system_is_not_mistaken_for_a_chroot(environ: dict) -> None:
+    """``ROOT=/`` is what a normal Gentoo sets; refusing it would refuse everybody."""
+    assert privilege.alternate_root(environ) is None
+
+
 def test_the_helper_is_found_where_it_is_installed() -> None:
     """Installed is the case that works without anybody asking for it."""
     program = privilege.helper_command()

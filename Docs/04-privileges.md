@@ -197,6 +197,24 @@ the development loop there is `GENTSTORE_DEV_HELPER=1` — and even then the fil
 directory above it must be unwritable by group and others (a sticky-bit directory such as `/tmp`
 counts: you cannot replace somebody else's file in one).
 
+### One machine, or none
+
+`core/portage_env.py` builds Portage's configuration with `create_trees(env=os.environ)`, so
+`ROOT`, `PORTAGE_CONFIGROOT`, `SYSROOT` and `EPREFIX` are honoured and the interface then
+describes whatever they point at. The privileged half does not follow: the helper's
+configuration root is the constant `/etc/portage`, and the launcher hands its child a fixed
+environment with none of those four in it, so every command runs against the machine it is
+running on.
+
+That combination is the failure worth preventing — not a wrong answer on screen, but the right
+answer about the wrong machine followed by a change nobody previewed. So
+`runner/privilege.detect()` refuses outright when any of the four is set to anything but this
+system, and both privileged paths ask it the same question. Reading stays available: describing
+a chroot is useful and changes nothing.
+
+Supporting an alternate root properly means teaching the helper and the launcher about it too.
+Until that is done, refusing is the honest answer.
+
 ## 4. The “never overwrite” principle
 
 The files in `/etc/portage` belong to the user and often carry their comments. Therefore:

@@ -49,6 +49,67 @@ _SOURCE_HELPER = _SOURCE_DIR / "gentstore_helper.py"
 _SOURCE_LAUNCHER = _SOURCE_DIR / "gentstore_launcher.py"
 
 
+#: Environment variables that move Portage's idea of which system it describes.
+#:
+#: ``core/portage_env.py`` builds its trees with ``create_trees(env=os.environ)``,
+#: so Portage honours all four and the interface then describes whatever they
+#: point at. Nothing privileged follows: the helper's configuration root is the
+#: constant ``/etc/portage``, and the launcher hands its child a fixed
+#: environment with none of these in it, so every command runs against the
+#: machine it is running on.
+#:
+#: The two halves disagreeing is the failure worth preventing. A preview built
+#: from ``ROOT=/mnt/gentoo`` describing a change that would then be written to
+#: this system is not a wrong answer on screen — it is the right answer about
+#: the wrong machine, followed by a change nobody previewed.
+ALTERNATE_ROOT_VARIABLES = ("ROOT", "PORTAGE_CONFIGROOT", "SYSROOT", "EPREFIX")
+
+#: What each of them says when it is not pointing anywhere unusual. ``EPREFIX``
+#: is empty on an ordinary installation; the other three are the root itself.
+_ORDINARY = {"ROOT": "/", "PORTAGE_CONFIGROOT": "/", "SYSROOT": "/", "EPREFIX": ""}
+
+
+def alternate_root(environ: dict[str, str] | None = None) -> str | None:
+    """Why nothing may be run as root here, or ``None`` when something may.
+
+    Supporting an alternate root properly means teaching the helper and the
+    launcher about it as well, and until that is done the honest thing is to
+    refuse the privileged half rather than to run it against the wrong system.
+    Reading stays available: describing a chroot is useful and changes nothing.
+    """
+    environ = os.environ if environ is None else environ
+    unusual = []
+    for name in ALTERNATE_ROOT_VARIABLES:
+        value = environ.get(name)
+        if value is None:
+            continue
+        # A trailing slash and a doubled one are the same directory; "" is only
+        # the same as "/" for the three that name one.
+        normal = os.path.normpath(value) if value else value
+        # normpath collapses three slashes but keeps exactly two, because POSIX
+        # leaves "//" to the implementation. A path that is nothing but slashes
+        # is still the root, and "" means the root for the three that name one.
+        if normal and set(normal) == {"/"}:
+            normal = "/"
+        if name != "EPREFIX" and normal == "":
+            normal = "/"
+        if normal != _ORDINARY[name]:
+            unusual.append(f"{name}={value}")
+    if not unusual:
+        return None
+
+    return (
+        "Portage is pointed at another system by "
+        + ", ".join(unusual)
+        + ". Gentstore can read that configuration, but everything it writes "
+        "goes to /etc/portage on this machine and every command it runs would "
+        "run against this machine — so the preview and the change would be "
+        "about two different systems. Unset "
+        + " and ".join(entry.split("=", 1)[0] for entry in unusual)
+        + " and start Gentstore again."
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class Escalation:
     """How this system raises privileges."""
@@ -101,7 +162,19 @@ def detect() -> Escalation:
     Honours :data:`preferred`, but never invents a program that is not there:
     asking for ``sudo`` on a system without it still reports that nothing is
     available rather than failing later with a confusing message.
+
+    Refuses outright when the environment points Portage at another system —
+    see :func:`alternate_root`. This is the one choke point both privileged
+    paths go through, the helper's and the launcher's, which is why the check
+    lives here rather than in each of them.
     """
+    blocked = alternate_root()
+    if blocked is not None:
+        # Before anything else, including the already-root case: what makes this
+        # unsafe is the mismatch between the two halves, not how the second one
+        # would have become root.
+        return Escalation("none", None, blocked)
+
     if os.geteuid() == 0:
         # Running the whole application as root is a bad idea and Gentstore
         # says so at start-up, but if somebody does it anyway the privileged
