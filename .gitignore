@@ -21,6 +21,8 @@ gentstore/i18n/*.qm
 # in this tree written in Polish; what they establish belongs in the commit
 # message or in Docs/, where it can be found without them.
 Gentoo portage UI prototype.zip
+# Same again: an export of the site, which lives on the Web branch as files.
+Web/
 prompt-*.md
 *.dc.html
 
