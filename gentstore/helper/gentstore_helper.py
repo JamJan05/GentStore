@@ -26,6 +26,12 @@ facts together mean nothing arriving on stdin may be taken on trust.
              "line": "media-video/mpv vulkan"}' | gentstore-helper
     {"ok": true, "op": "append_line", "changed": true, ...}
 
+What it may touch is narrower than ``/etc/portage``: whole-file writes reach
+:data:`OWNED_SUBTREES` and line edits reach :data:`LINE_EDITABLE`, which between
+them are the files Gentstore itself produces. Everything else under there —
+``bashrc``, ``package.env``, ``env/``, ``postsync.d`` — is refused, and refused
+by not being on a list rather than by being on one.
+
 Standard library only, single file, no imports from the rest of Gentstore — so
 that reading it is a matter of reading one file.
 """
@@ -53,6 +59,38 @@ from typing import Any
 #: tests replace this attribute after importing the module, which the installed
 #: program has no way to do.
 CONFIG_ROOT = Path("/etc/portage")
+
+#: The files ``append_line``, ``replace_line`` and ``remove_line`` may touch,
+#: and nothing else under :data:`CONFIG_ROOT`.
+#:
+#: A list of what Gentstore writes, not a list of what looks dangerous. Half of
+#: ``/etc/portage`` is code by another name — ``bashrc`` is sourced during every
+#: merge, ``package.env`` names files in ``env/`` that set any variable a build
+#: sees, ``postsync.d`` holds programs run after a sync — and none of them is a
+#: file this application has ever needed to write a line to. Naming what is
+#: allowed keeps out the ones nobody has thought of yet, which a list of
+#: forbidden names cannot do.
+#:
+#: Every entry here is produced by gentstore/core/confedit.py or
+#: gentstore/core/makeconf.py; adding a file to this tuple means the interface
+#: has learned to write one, and is a decision to make on purpose.
+LINE_EDITABLE = (
+    "package.use",
+    "package.accept_keywords",
+    "package.license",
+    "package.unmask",
+    "package.mask",
+    "make.conf",
+)
+
+#: How deep under :data:`CONFIG_ROOT` each of those may go.
+#:
+#: A ``package.*`` name is either a file or a directory holding one file per
+#: package, which is as far as Gentstore ever looks or writes; Portage would
+#: read a deeper tree, but nothing here builds a path into one. ``make.conf`` is
+#: a file and only a file.
+LINE_EDITABLE_DEPTH = 2
+MAKE_CONF_DEPTH = 1
 
 #: ``write_file`` and ``delete_file`` are limited to these subtrees — the only
 #: files Gentstore creates whole rather than adding a line to. Both hold one
@@ -259,6 +297,35 @@ def check_path(
     if must_exist and not resolved.exists():
         raise HelperError("missing", f"{resolved} does not exist")
     return resolved
+
+
+def _require_line_target(path: Path) -> None:
+    """Only the configuration files Gentstore edits one line at a time.
+
+    Runs after :func:`check_path`, so "inside the root" is already settled and
+    what is left is which file inside it. The order matters for what a refusal
+    says: a symlink out of the tree is reported as a symlink, not as a file that
+    happens not to be on this list.
+    """
+    root = _root()
+    try:
+        relative = path.relative_to(root)
+    except ValueError as exc:  # pragma: no cover - check_path ran first
+        raise HelperError("outside_root", str(path)) from exc
+
+    name = relative.parts[0] if relative.parts else ""
+    if name not in LINE_EDITABLE:
+        allowed = ", ".join(LINE_EDITABLE)
+        raise HelperError(
+            "not_editable",
+            f"line edits are limited to {allowed}; {path} is none of them",
+        )
+
+    depth = MAKE_CONF_DEPTH if name == "make.conf" else LINE_EDITABLE_DEPTH
+    if len(relative.parts) > depth:
+        raise HelperError(
+            "not_editable", f"{path} is deeper than anything Gentstore writes"
+        )
 
 
 def _require_owned(path: Path) -> None:
@@ -473,6 +540,7 @@ def restore_backup(name: str) -> Path:
 
 def op_append_line(request: dict[str, Any]) -> dict[str, Any]:
     path = check_path(_string(request, "path"))
+    _require_line_target(path)
     line = _string(request, "line").rstrip("\n")
     if "\n" in line:
         raise HelperError("multiline", "append_line takes exactly one line")
@@ -490,6 +558,7 @@ def op_append_line(request: dict[str, Any]) -> dict[str, Any]:
 
 def op_replace_line(request: dict[str, Any]) -> dict[str, Any]:
     path = check_path(_string(request, "path"), must_exist=True)
+    _require_line_target(path)
     line = _string(request, "line").rstrip("\n")
     if "\n" in line:
         # One line in, one line out. Otherwise the ``previous`` and ``line``
@@ -529,6 +598,7 @@ def op_replace_line(request: dict[str, Any]) -> dict[str, Any]:
 
 def op_remove_line(request: dict[str, Any]) -> dict[str, Any]:
     path = check_path(_string(request, "path"), must_exist=True)
+    _require_line_target(path)
     line = _string(request, "line").rstrip("\n")
 
     lines = _lines(_read(path))

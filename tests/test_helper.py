@@ -111,6 +111,101 @@ def test_a_directory_is_not_a_file(portage: Path) -> None:
     assert call("append_line", path=str(portage / "repos.conf"), line="x")["code"] == "not_a_file"
 
 
+#: Files that live under /etc/portage on a real system and that Gentstore has
+#: no business writing a line to. The first three are the ones that matter:
+#: bashrc is sourced by every merge, package.env points at env/ files that set
+#: any variable a build sees, and postsync.d holds programs run after a sync —
+#: a line appended to any of them is code running as root later on.
+FORBIDDEN = [
+    "bashrc",
+    "package.env",
+    "env/hardened.conf",
+    "postsync.d/whatever",
+    "sets/mine",
+    "color.map",
+    "make.profile",
+    "profile/package.use.mask",
+    "repos.conf/gentoo.conf",
+    "package.use.bak",
+]
+
+
+@pytest.mark.parametrize("name", FORBIDDEN)
+@pytest.mark.parametrize("op", ["append_line", "replace_line", "remove_line"])
+def test_line_edits_are_refused_outside_the_files_gentstore_writes(
+    portage: Path, op: str, name: str
+) -> None:
+    """Being inside /etc/portage is not enough; the file has to be one of ours.
+
+    ``/etc/portage`` is not a directory of inert configuration. Several files in
+    it are executed, directly or otherwise, and the helper is root — so the
+    question it answers is not "is this path inside the root" but "is this one
+    of the files the interface writes".
+    """
+    target = portage / name
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("original\n", encoding="utf-8")
+
+    answer = call(op, path=str(target), line="original", match="^original")
+
+    assert answer["ok"] is False
+    assert answer["code"] == "not_editable", answer
+    assert target.read_text(encoding="utf-8") == "original\n"
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "package.use",
+        "package.use/mpv",
+        "package.accept_keywords/mpv",
+        "package.license/mpv",
+        "package.unmask/mpv",
+        "package.mask/guru",
+        "make.conf",
+    ],
+)
+def test_the_files_gentstore_writes_are_still_writable(portage: Path, name: str) -> None:
+    """The other half of the whitelist: it has to let the interface work."""
+    target = portage / name
+    target.parent.mkdir(parents=True, exist_ok=True)
+
+    answer = call("append_line", path=str(target), line="media-video/mpv vulkan")
+
+    assert answer["ok"] and answer["changed"], answer
+
+
+def test_a_package_use_file_may_not_be_a_whole_tree(portage: Path) -> None:
+    """Portage would read a deeper tree; nothing here ever builds a path into one."""
+    target = portage / "package.use" / "sub" / "deeper"
+    target.parent.mkdir(parents=True)
+
+    answer = call("append_line", path=str(target), line="x/y flag")
+
+    assert answer["code"] == "not_editable"
+    assert not target.exists()
+
+
+def test_a_symlink_out_of_the_root_is_still_named_a_symlink(
+    portage: Path, tmp_path: Path
+) -> None:
+    """The whitelist runs after the path checks, so refusals keep their reason.
+
+    A file inside a ``package.use`` directory that is a link to somewhere else
+    is refused for being a link. Reporting it as "not one of the files we write"
+    would be true and would hide what is actually going on.
+    """
+    victim = tmp_path / "outside.conf"
+    victim.write_text("original\n", encoding="utf-8")
+    (portage / "package.use").mkdir()
+    (portage / "package.use" / "mpv").symlink_to(victim)
+
+    answer = call("append_line", path=str(portage / "package.use" / "mpv"), line="added")
+
+    assert answer["code"] == "outside_root"
+    assert victim.read_text(encoding="utf-8") == "original\n"
+
+
 def test_an_unknown_operation_is_refused(portage: Path) -> None:
     assert call("chmod", path=str(portage / "x"))["code"] == "unknown_op"
 
