@@ -25,6 +25,8 @@ arguments still returns *something*), and skips itself when there is none.
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 
 from gentstore.core import packages as pkgs
@@ -194,6 +196,166 @@ def test_a_missing_world_file_is_not_an_error(tmp_path) -> None:
     assert worldset._read_lines(tmp_path / "absent") == ()
 
 
+# -- which repository the per-package view describes -------------------------
+
+#: One version, carried by two repositories that disagree about it. The shape of
+#: the problem: ``::guru`` routinely carries the same version as ``::gentoo``
+#: with flags of its own, and picking a repository in the interface has to mean
+#: picking it everywhere.
+TWO_REPOS = {
+    ("media-video/mpv-0.41.0", "gentoo"): {
+        "IUSE": "vulkan",
+        "REQUIRED_USE": "",
+        "LICENSE": "GPL-2",
+        "SLOT": "0",
+        "EAPI": "8",
+        "KEYWORDS": "amd64",
+        "repository": "gentoo",
+    },
+    ("media-video/mpv-0.41.0", "guru"): {
+        "IUSE": "vulkan wayland +cuda",
+        "REQUIRED_USE": "|| ( vulkan wayland )",
+        "LICENSE": "GPL-2 NVIDIA-CUDA",
+        "SLOT": "0",
+        "EAPI": "8",
+        "KEYWORDS": "~amd64",
+        "repository": "guru",
+    },
+}
+
+
+class _TwoRepoPortdb:
+    """A ``portdbapi`` that answers differently depending on ``myrepo``.
+
+    Without one, the mistake is invisible: a real ``aux_get`` called with no
+    repository still returns a perfectly good answer — the higher-priority
+    repository's — and every assertion about it passes.
+    """
+
+    _aux_cache_keys = set(next(iter(TWO_REPOS.values())))
+
+    def __init__(self) -> None:
+        self.asked: list[str | None] = []
+
+    def aux_get(self, cpv: str, keys, myrepo: str | None = None) -> list[str]:
+        self.asked.append(myrepo)
+        if myrepo is None:
+            # What Portage does when nobody says: the one it ranks higher.
+            myrepo = "gentoo"
+        values = TWO_REPOS[(cpv, myrepo)]
+        return [values[key] for key in keys]
+
+
+class _RecordingConfig:
+    """Stands in for ``portage.config``; remembers what ``setcpv`` was handed."""
+
+    def __init__(self) -> None:
+        self.seen: object = None
+
+    def setcpv(self, cpv: str, mydb=None) -> None:  # noqa: ANN001 - Portage's signature
+        self.seen = mydb
+
+
+def _two_repo_env(monkeypatch: pytest.MonkeyPatch) -> tuple[object, _TwoRepoPortdb]:
+    portage = pytest.importorskip("portage")
+    from gentstore.core.portage_env import PortageEnv  # noqa: PLC0415
+
+    portdb = _TwoRepoPortdb()
+    node = {
+        "vartree": SimpleNamespace(settings=object(), dbapi=object()),
+        "porttree": SimpleNamespace(dbapi=portdb),
+        "bintree": SimpleNamespace(dbapi=object()),
+    }
+    monkeypatch.setattr(portage, "config", lambda clone: _RecordingConfig())
+    return PortageEnv({"/": node}, "/"), portdb
+
+
+def test_the_chosen_repository_decides_the_whole_per_package_view(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Picking ``::repo`` has to mean picking it everywhere, metadata included.
+
+    ``aux_get(myrepo=...)`` was already being used for the metadata, but the
+    configuration beside it came from ``setcpv(mydb=portdb)``, which takes no
+    repository and gets whichever one Portage ranks higher. So a package chosen
+    from ``::guru`` could be described with ``::guru``'s IUSE and ``::gentoo``'s
+    repository-level ``package.use`` — and the second half decides what the
+    flags in the window are set to.
+    """
+    env, portdb = _two_repo_env(monkeypatch)
+
+    with env.configured("media-video/mpv-0.41.0", "guru") as settings:
+        from_guru = settings.seen
+    with env.configured("media-video/mpv-0.41.0", "gentoo") as settings:
+        from_gentoo = settings.seen
+
+    assert from_guru["repository"] == "guru"
+    assert from_guru["IUSE"] == "vulkan wayland +cuda"
+    assert from_guru["LICENSE"] == "GPL-2 NVIDIA-CUDA"
+
+    assert from_gentoo["repository"] == "gentoo"
+    assert from_gentoo["IUSE"] == "vulkan"
+    assert from_gentoo["LICENSE"] == "GPL-2"
+
+    assert portdb.asked == ["guru", "gentoo"], "the repository never reached aux_get"
+
+
+def test_two_repositories_do_not_collapse_into_one_answer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The same package asked for twice, and the second answer is its own.
+
+    ``setcpv()`` skips its work when ``(cpv, id(mydb))`` matches the last call.
+    A mapping built fresh each time is freed at the end of the block and CPython
+    hands the next one the address it just released, so the second repository
+    could be answered with the first repository's metadata — the same identity,
+    by accident. The mappings are kept for that reason and this is the test that
+    says so.
+    """
+    env, _portdb = _two_repo_env(monkeypatch)
+
+    for repo in ("guru", "gentoo", "guru"):
+        with env.configured("media-video/mpv-0.41.0", repo) as settings:
+            assert settings.seen["repository"] == repo
+
+    first = env._metadata("media-video/mpv-0.41.0", "guru")
+    second = env._metadata("media-video/mpv-0.41.0", "guru")
+    assert first is second, "the same question has to give back the same object"
+    assert first is not env._metadata("media-video/mpv-0.41.0", "gentoo")
+
+
+def test_without_a_repository_the_database_still_answers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Callers with no repository in hand keep the behaviour they had.
+
+    Most of them have none — the update screen is about the system, not about
+    one repository — and inventing one would be a worse answer than Portage's
+    own ranking.
+    """
+    env, portdb = _two_repo_env(monkeypatch)
+
+    with env.configured("media-video/mpv-0.41.0") as settings:
+        assert settings.seen is portdb
+
+    assert portdb.asked == []
+
+
+def test_the_keys_asked_for_are_the_ones_portage_reads() -> None:
+    """A key added to ``setcpv()`` must not go missing from the fallback list.
+
+    The runtime path reads Portage's own two private lists and intersects them,
+    so it follows a new key on its own. This is about the copy that answers when
+    those lists are not where they are expected: it has to be a superset, or the
+    fallback would quietly describe a package with a piece missing.
+    """
+    config = pytest.importorskip("portage.package.ebuild.config")
+    from gentstore.core import portage_env  # noqa: PLC0415
+
+    wanted = set(config.config._setcpv_aux_keys)
+    assert wanted <= set(portage_env._AUX_KEYS), wanted - set(portage_env._AUX_KEYS)
+
+
 # -- against the real system ------------------------------------------------
 
 
@@ -355,3 +517,25 @@ def test_an_ambiguous_name_is_not_resolved_to_a_guess(live_index) -> None:
 def test_the_diagnostic_cli_runs(portage_env, argv, capsys) -> None:
     assert cli_main(argv) == 0
     assert capsys.readouterr().out
+
+
+def test_the_real_setcpv_takes_the_repository_from_the_metadata(portage_env) -> None:
+    """The branch this depends on, against the Portage installed here.
+
+    The fake databases above are what prove the right repository is chosen; they
+    can be made to disagree, and a real machine usually has no one version
+    carried by two repositories to point at. What this adds is the half they
+    cannot check: that Portage accepts a mapping where a database is normally
+    passed, that the keys handed over are enough for it — a missing one raises
+    rather than degrades — and that it takes ``repository`` out of the mapping
+    and puts it where the repository-level ``package.use`` is read from.
+    """
+    cpv = str(portage_env.portdb.xmatch("bestmatch-visible", "sys-apps/portage"))
+    assert cpv, "this machine has no visible sys-apps/portage"
+    repo = portage_env.portdb.aux_get(cpv, ["repository"])[0]
+
+    with portage_env.configured(cpv, repo) as settings:
+        assert settings["PORTAGE_REPO_NAME"] == repo
+        # setcpv() did the work rather than returning early: USE is resolved
+        # only at the end of it.
+        assert settings.get("PORTAGE_USE") is not None

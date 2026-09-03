@@ -408,6 +408,10 @@ class _StubEnv:
         self.portage_use = portage_use
         self.settings = SimpleNamespace(_license_manager=manager, get=self._no_such_key)
         self.portdb = SimpleNamespace(aux_get=self._aux_get)
+        #: Which repository the per-package view was asked for, so a test can
+        #: check the licence check and the metadata are talking about one
+        #: package rather than two with the same name.
+        self.repo_seen: str | None = None
 
     @staticmethod
     def _no_such_key(key: str, default: object = None) -> object:
@@ -423,16 +427,21 @@ class _StubEnv:
         return [values[key] for key in keys]
 
     @contextmanager
-    def configured(self, cpv: str):  # noqa: ANN201 - stands in for portage.config
+    def configured(self, cpv: str, repo: str = ""):  # noqa: ANN201 - portage.config
+        self.repo_seen = repo
         yield {"PORTAGE_USE": self.portage_use}
 
 
 def test_a_conditional_licence_is_judged_against_the_packages_own_use() -> None:
     with_cuda = _StubManager()
-    assert licenses.missing_for("x/y-1", "overlay-nuda", _StubEnv(with_cuda, "cuda")) == (
+    env = _StubEnv(with_cuda, "cuda")
+    assert licenses.missing_for("x/y-1", "overlay-nuda", env) == (
         "LM-Studio-EULA",
         "NVIDIA-CUDA",
     )
+    # The USE that decided the conditional came from the same repository as the
+    # LICENSE string it was applied to.
+    assert env.repo_seen == "overlay-nuda"
     assert with_cuda.use_seen == "cuda"
 
     without = _StubManager()
@@ -550,7 +559,7 @@ class _ConditionEnv:
         return [values[key] for key in keys]
 
     @contextmanager
-    def configured(self, cpv: str):  # noqa: ANN201 - stands in for portage.config
+    def configured(self, cpv: str, repo: str = ""):  # noqa: ANN201 - portage.config
         yield {"PORTAGE_USE": self.portage_use}
 
 

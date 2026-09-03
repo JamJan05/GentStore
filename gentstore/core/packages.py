@@ -224,7 +224,7 @@ def _masking_status(env: PortageEnv, cpv: str, repo: str) -> tuple[tuple[str, ..
     import portage  # noqa: PLC0415 — slow import, deferred
 
     try:
-        with env.configured(cpv) as settings:
+        with env.configured(cpv, repo) as settings:
             status = portage.getmaskingstatus(
                 cpv, settings=settings, portdb=env.portdb, myrepo=repo or None
             )

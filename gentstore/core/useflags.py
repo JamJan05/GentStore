@@ -206,7 +206,10 @@ def collect(cpv: str, repo: str = "", env: PortageEnv | None = None) -> UseState
     env = env or _default_env()
     cp = _cp_of(cpv)
 
-    with env.configured(cpv) as settings:
+    # The same repository the metadata below is read from: two repositories
+    # carrying this version describe it differently, down to which
+    # package.use applies.
+    with env.configured(cpv, repo) as settings:
         iuse_raw, required_use = env.portdb.aux_get(
             cpv, ["IUSE", "REQUIRED_USE"], myrepo=repo or None
         )

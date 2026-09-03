@@ -137,7 +137,7 @@ def missing_for(
         licence, slot, repository = env.portdb.aux_get(
             cpv, ["LICENSE", "SLOT", "repository"], myrepo=repo or None
         )
-        with env.configured(cpv) as settings:
+        with env.configured(cpv, repo) as settings:
             use = settings.get("PORTAGE_USE", "")
         missing = manager.getMissingLicenses(
             cpv, use, licence, slot.partition("/")[0], repo or repository
@@ -230,7 +230,7 @@ def conditions_for(
     where = repo or repository
     short_slot = slot.partition("/")[0]
     try:
-        with env.configured(cpv) as settings:
+        with env.configured(cpv, repo) as settings:
             use = (settings.get("PORTAGE_USE") or "").split()
         now = tuple(manager.getMissingLicenses(cpv, " ".join(use), expression, short_slot, where))
 

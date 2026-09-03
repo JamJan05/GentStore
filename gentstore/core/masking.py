@@ -198,7 +198,7 @@ def inspect(cpv: str, repo: str = "", env: PortageEnv | None = None) -> Blockage
 
     env = env or _default_env()
     try:
-        with env.configured(cpv) as settings:
+        with env.configured(cpv, repo) as settings:
             statuses = portage.getmaskingstatus(
                 cpv, settings=settings, portdb=env.portdb, myrepo=repo or None
             )

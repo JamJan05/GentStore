@@ -42,6 +42,40 @@ if TYPE_CHECKING:  # pragma: no cover - typing only, never imported at runtime
 
 log = logging.getLogger(__name__)
 
+#: The metadata keys ``config.setcpv()`` reads out of whatever it is given.
+#:
+#: Portage keeps the same list twice, as ``config._setcpv_aux_keys`` and as
+#: ``portdbapi._aux_cache_keys``, and both are private. Both are read at runtime
+#: when they are there — a key added to Portage is then picked up without an
+#: edit here — and this copy is the answer when they are not.
+#:
+#: ``repository`` is the one that does the work. ``setcpv()`` pops it and uses it
+#: to pick the repository-level ``package.use``, ``use.stable`` and
+#: ``make.defaults`` that apply, which is the whole reason for handing over
+#: metadata instead of the database.
+_AUX_KEYS = (
+    "BDEPEND",
+    "DEFINED_PHASES",
+    "DEPEND",
+    "EAPI",
+    "IDEPEND",
+    "INHERITED",
+    "IUSE",
+    "KEYWORDS",
+    "LICENSE",
+    "PDEPEND",
+    "PROPERTIES",
+    "RDEPEND",
+    "REQUIRED_USE",
+    "RESTRICT",
+    "SLOT",
+    "repository",
+)
+
+#: How many per-repository metadata mappings one environment keeps. See
+#: :meth:`PortageEnv._metadata` for why they are kept at all.
+_METADATA_CACHE_MAX = 256
+
 
 class PortageUnavailableError(RuntimeError):
     """Raised when the ``portage`` module cannot be imported or configured.
@@ -64,6 +98,7 @@ class PortageEnv:
         "_clone",
         "_clone_depth",
         "_clone_lock",
+        "_metadata_cache",
         "_portdb",
         "_root",
         "_settings",
@@ -82,6 +117,7 @@ class PortageEnv:
         self._clone: Any = None
         self._clone_lock = threading.RLock()
         self._clone_depth = 0
+        self._metadata_cache: dict[tuple[str, str], dict[str, str]] = {}
 
     # -- handles -----------------------------------------------------------
 
@@ -107,8 +143,55 @@ class PortageEnv:
 
     # -- the per-package view ----------------------------------------------
 
+    def _aux_keys(self) -> list[str]:
+        """The keys to ask for: what ``setcpv()`` reads, that the cache can answer.
+
+        Portage intersects the two itself in the branch that takes a database,
+        and asking a repository cache for a key it does not carry is an error
+        rather than an empty string, so the same intersection is done here.
+        """
+        import portage  # noqa: PLC0415 — slow import, deferred
+
+        wanted = set(getattr(portage.config, "_setcpv_aux_keys", None) or _AUX_KEYS)
+        available = getattr(self._portdb, "_aux_cache_keys", None)
+        if available:
+            wanted &= set(available)
+        return sorted(wanted)
+
+    def _metadata(self, cpv: str, repo: str) -> dict[str, str]:
+        """*cpv*'s metadata as *repo* carries it, for :meth:`configured`.
+
+        Kept rather than rebuilt, and the reason is not speed. ``setcpv()``
+        remembers the last call as ``(cpv, id(mydb))`` and returns early when the
+        next one matches. A mapping built fresh each time is freed as soon as the
+        block ends, and CPython hands the next one of the same size the address
+        it just released — so asking for the same package in a second repository
+        could produce the same pair, and the answer for the first repository
+        would be returned for the second. Handing back the same object for the
+        same question makes that pair mean what it says.
+        """
+        key = (cpv, repo)
+        found = self._metadata_cache.get(key)
+        if found is not None:
+            return found
+
+        keys = self._aux_keys()
+        values = self._portdb.aux_get(cpv, keys, myrepo=repo)
+        metadata = dict(zip(keys, values, strict=True))
+
+        if len(self._metadata_cache) >= _METADATA_CACHE_MAX:
+            # Oldest first, which for a dict is insertion order. The cache exists
+            # for identity, not for hit rate, so a plain bound is enough.
+            del self._metadata_cache[next(iter(self._metadata_cache))]
+        self._metadata_cache[key] = metadata
+        return metadata
+
+    def _describe(self, cpv: str, repo: str) -> Any:
+        """What to hand ``setcpv()``: one repository's metadata, or the database."""
+        return self._metadata(cpv, repo) if repo else self._portdb
+
     @contextmanager
-    def configured(self, cpv: str) -> Iterator[Any]:
+    def configured(self, cpv: str, repo: str = "") -> Iterator[Any]:
         """The configuration as it looks *for one package*, borrowed under a lock.
 
         Several of Portage's own entry points call ``config.setcpv()`` on
@@ -129,11 +212,27 @@ class PortageEnv:
         — one package's blocks are also a question about its licences — and a
         plain lock would turn that into a deadlock rather than an answer.
 
-        *cpv* alone identifies the package: ``setcpv()`` reads its metadata
-        through ``dbapi.aux_get()``, which takes no repository hint, so a
-        package carried by two repositories is described by whichever of them
-        Portage ranks higher. Callers that need a specific repository pass it
-        to the query itself, not here.
+        *repo* is which repository's copy of *cpv* to describe, and matters
+        whenever two repositories carry the same version. Handed the database,
+        ``setcpv()`` calls ``aux_get()`` without a repository hint and Portage
+        answers from whichever repository it ranks higher — so the metadata a
+        caller had already fetched with ``myrepo=`` and the configuration
+        described here could be two different packages with one name. It is not
+        only ``IUSE`` that diverges: ``setcpv()`` pops ``repository`` out of the
+        metadata and uses it to pick the repository-level ``package.use``,
+        ``use.stable`` and ``make.defaults`` that apply, so the repository
+        decides the answer twice over.
+
+        So when *repo* is given, the metadata is fetched with ``myrepo=`` and
+        handed over as a mapping. Portage's own ``setcpv()`` has a branch for
+        that — it takes each key it wants straight out of the mapping instead of
+        querying a database — and it is the branch ``Package`` objects go
+        through, so this is the supported way to say which one is meant rather
+        than a way round the question.
+
+        Left empty, the old behaviour: the database, and whichever repository
+        Portage ranks higher. That is right for the callers that have no
+        repository in hand and would otherwise have to invent one.
         """
         import portage  # noqa: PLC0415 — slow import, deferred
 
@@ -148,7 +247,7 @@ class PortageEnv:
                 # asked after the nested one returned. Rare enough to pay for a
                 # clone of its own.
                 nested = portage.config(clone=self._settings)
-                nested.setcpv(cpv, mydb=self._portdb)
+                nested.setcpv(cpv, mydb=self._describe(cpv, repo))
                 yield nested
                 return
             if self._clone is None:
@@ -159,7 +258,7 @@ class PortageEnv:
                 self._clone = portage.config(clone=self._settings)
             self._clone_depth += 1
             try:
-                self._clone.setcpv(cpv, mydb=self._portdb)
+                self._clone.setcpv(cpv, mydb=self._describe(cpv, repo))
                 yield self._clone
             finally:
                 self._clone_depth -= 1
