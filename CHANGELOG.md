@@ -36,6 +36,22 @@ tag was made.
   into the Configured tab's filter and photograph an empty list — and `overlay-filter.png`, which
   nothing has referred to since 0.1.0, is gone.
 
+### Fixed
+
+- **The window called itself "python 3.14" and wore the compositor's fallback icon.** On Wayland a
+  panel identifies a window by its `app_id` and nothing else — there is no `WM_CLASS` to fall back
+  on — and Qt, given no desktop file name to work from, built one out of the reversed organisation
+  domain and the basename of `/proc/self/exe`, which for anything started through a Python entry
+  point is the interpreter. The surface announced itself as `org.gentoo.gentstore.python3`, Plasma
+  went looking for a desktop entry of that name and found none, so the window had neither a label
+  nor an icon to show. Both the entry and the icon have shipped since 1.0.0; nothing connected
+  either of them to the window. `setDesktopFileName` settles the `app_id`, and the application now
+  sets its own window icon for the session that fails to find the entry anyway — looking the file
+  up along `XDG_DATA_DIRS` itself, because with Fusion on a session that exposes no icon theme
+  Qt's search paths are `:/icons` alone and the file sitting in `hicolor` is invisible to
+  `QIcon.fromTheme`. X11 was never affected: there the class name comes from `applicationName`, so
+  it has read `Gentstore` all along.
+
 ## [1.3.0] — 2026-09-01
 
 ### Removed
