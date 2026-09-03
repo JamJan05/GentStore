@@ -40,8 +40,11 @@ on:
     tags: ["v[0-9]+.[0-9]+.[0-9]+"]
 
 # Commits to main, a tag, a release, and a force-push of the overlay branch.
+# actions: write is the last step alone — it dispatches the workflow that tells
+# the website which version this is.
 permissions:
   contents: write
+  actions: write
 
 # Two releases at once would race over main and over the overlay branch. Never
 # cancel one in flight: a run killed between the tag and the Manifest leaves a
@@ -53,6 +56,8 @@ concurrency:
 env:
   ATOM_DIR: packaging/app-portage/gentstore
   GH_TOKEN: ${{ github.token }}
+  # The website is a branch of its own, with no tag in its history.
+  WEBSITE_BRANCH: Web
 
 jobs:
   release:
@@ -287,6 +292,30 @@ jobs:
           GENTSTORE_OVERLAY_REMOTE: https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git
         run: packaging/publish-overlay.sh --push
 
+      - name: Tell the website which version this is
+        if: env.DRY != 'true'
+        # Everything a user receives is already published and pushed by now, so
+        # a failure here is a stale sentence on a web page, not a broken
+        # release. Failing the run over it would invite a re-run of the whole
+        # thing, which is the wrong answer; the step goes red on its own and the
+        # workflow can be dispatched again by hand.
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          # Dispatched rather than written to from here: the content files and
+          # the script that rewrites them are that branch's business, and this
+          # is the one way to reach it at all. A workflow triggered by
+          # `push: tags` is read from the tagged commit, which is on main and
+          # holds no website — and the tag this run pushed raised no event,
+          # because a push made with GITHUB_TOKEN never does. workflow_dispatch
+          # is the exception to that rule.
+          #
+          # The test count is not passed. It is only known to a machine that has
+          # run the whole suite, which this runner is not — see the header of
+          # website-version.yml.
+          gh workflow run website-version.yml --ref "${WEBSITE_BRANCH}" -f version="${VERSION}"
+          echo "dispatched Website version on ${WEBSITE_BRANCH} for ${VERSION}"
+
       - name: Say what happened
         if: env.DRY != 'true'
         run: |
@@ -296,6 +325,7 @@ jobs:
             echo "- release: ${{ github.server_url }}/${GITHUB_REPOSITORY}/releases/tag/${TAG}"
             echo "- ebuild: \`${ATOM_DIR}/gentstore-${VERSION}.ebuild\`, committed to main"
             echo "- overlay branch republished — \`emerge --sync\` reaches it"
+            echo "- \`${WEBSITE_BRANCH}\` told to state ${VERSION} — its own run says whether it did"
             echo
             echo "On a machine with the overlay: \`sudo emaint sync -r gentstore && sudo emerge --ask --update app-portage/gentstore\`"
           } >> "${GITHUB_STEP_SUMMARY}"
