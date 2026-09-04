@@ -106,6 +106,18 @@ crawled because it exists; it is crawled because something already indexed
 links to it, so the repository, the ebuild and wherever the project is
 announced are what actually bring the crawler.
 
+One of those by-hand things cannot be a file here. `gentstore.dev` without the
+`www` answers `200` instead of redirecting, so the whole site exists at two
+addresses; the canonical links say which one is meant and a search engine will
+normally believe them, but a redirect states it rather than leaving it to be
+inferred. `_redirects` cannot do it — Workers static assets support no
+domain-level rule — so it belongs in Cloudflare under Rules -> Redirect Rules:
+hostname equals `gentstore.dev`, a dynamic redirect to
+
+    concat("https://www.gentstore.dev", http.request.uri.path)
+
+with status 301 and the query string preserved.
+
 ## Content
 
 `content/pl.json` and `content/en.json` are the whole of the site's copy. They
