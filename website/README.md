@@ -65,8 +65,12 @@ updated screenshot has to be able to reach a returning visitor.
 The one thing a file cannot answer is which language `/` should go to. The
 served site decides that from `Accept-Language`; the built one decides it in
 `dist/index.html`, from `navigator.languages`, which is the same list the
-browser puts in that header. It costs a hop, and a crawler that runs no script
-reads the meta refresh to `/pl`.
+browser puts in that header. It costs a hop. The script is in the head and
+ahead of the meta refresh so that a browser is what decides; the refresh is the
+answer for whoever runs no script, which is most of what crawls, and it leads to
+`DEFAULT_LANGUAGE`. That is English, and used to be Polish — which meant the
+page every crawler read, and every search result quoted, was the one written in
+the language this project's readers do not ask their questions in.
 
 ### On Cloudflare
 

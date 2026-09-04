@@ -16,7 +16,7 @@ import pytest
 
 pytest.importorskip("fastapi")
 
-from app.content import LANGUAGES, load  # noqa: E402
+from app.content import DEFAULT_LANGUAGE, LANGUAGES, load  # noqa: E402
 from build import build  # noqa: E402
 
 BASE_URL = "https://gentstore.example"
@@ -94,8 +94,10 @@ def test_the_index_sends_a_visitor_to_a_language(site: Path) -> None:
     """The only page whose whole job is to send you somewhere else."""
     index = (site / "index.html").read_text(encoding="utf-8")
     assert 'http-equiv="refresh"' in index
-    assert 'content="0; url=/pl"' in index
+    assert f'content="0; url=/{DEFAULT_LANGUAGE}"' in index
     assert "location.replace" in index
+    # The script has to be ahead of the refresh, or it never runs.
+    assert index.index("location.replace") < index.index("http-equiv")
 
 
 def test_building_twice_leaves_nothing_behind(site: Path) -> None:

@@ -20,7 +20,14 @@ import shutil
 import sys
 from pathlib import Path
 
-from app.content import ICON_DIR, LANGUAGES, SCREENSHOT_DIR, STATIC_DIR, WEBSITE_DIR
+from app.content import (
+    DEFAULT_LANGUAGE,
+    ICON_DIR,
+    LANGUAGES,
+    SCREENSHOT_DIR,
+    STATIC_DIR,
+    WEBSITE_DIR,
+)
 
 #: Copied verbatim: the URL they are served at, and where the files come from.
 ASSET_TREES = {
@@ -31,23 +38,29 @@ ASSET_TREES = {
 
 #: The one decision the application makes per request that a file cannot: which
 #: language "/" leads to. Served as a page rather than as a redirect, it costs a
-#: hop — a crawler reads the meta refresh, a browser runs the script and gets
-#: the same answer the server would have given from Accept-Language.
+#: hop, and the two halves answer for different visitors.
+#:
+#: The script is in the head and ahead of the refresh so that it wins: it reads
+#: the same list of languages the browser would have put in Accept-Language and
+#: lands where the server would have sent it. The refresh behind it is for
+#: whoever runs no script, which is most of what crawls, and it leads to
+#: DEFAULT_LANGUAGE. Written the other way round — refresh first — an English
+#: reader was taken to the Polish page before the script could say otherwise.
 INDEX_FALLBACK = """<!DOCTYPE html>
 <html lang="{default}">
 <head>
 <meta charset="utf-8">
 <title>GentStore</title>
-<meta http-equiv="refresh" content="0; url=/{default}">
-<link rel="canonical" href="{base_url}/{default}">
-</head>
-<body>
 <script>
   var wanted = (navigator.languages || [navigator.language || ""])
     .map(function (tag) {{ return String(tag).toLowerCase().split("-")[0]; }})
     .filter(function (code) {{ return {languages}.indexOf(code) !== -1; }})[0];
   location.replace("/" + (wanted || "{default}"));
 </script>
+<meta http-equiv="refresh" content="0; url=/{default}">
+<link rel="canonical" href="{base_url}/{default}">
+</head>
+<body>
 <p><a href="/{default}">GentStore</a></p>
 </body>
 </html>
@@ -129,7 +142,7 @@ def build(destination: Path, base_url: str = "") -> list[Path]:
     write(
         "index.html",
         INDEX_FALLBACK.format(
-            default=LANGUAGES[0],
+            default=DEFAULT_LANGUAGE,
             base_url=base_url.rstrip("/"),
             languages=json.dumps(list(LANGUAGES)),
         ),

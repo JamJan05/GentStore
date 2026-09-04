@@ -208,6 +208,11 @@ def test_a_page_offers_the_other_language(client: TestClient) -> None:
 
 
 def test_unknown_language_is_a_page_not_a_traceback(client: TestClient) -> None:
+    # A visitor who has said nothing. The client is shared across this module and
+    # a page above it left a `lang` cookie behind, which negotiate() honours
+    # before anything else — so without this the test asserts about whichever
+    # page happened to run first, not about the default.
+    client.cookies.clear()
     response = client.get("/de")
     assert response.status_code == 404
     assert "text/html" in response.headers["content-type"]

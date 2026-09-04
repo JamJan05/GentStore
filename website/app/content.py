@@ -32,7 +32,14 @@ SCREENSHOT_DIR = REPO_ROOT / "Docs" / "screenshots"
 ICON_DIR = REPO_ROOT / "data" / "icons"
 
 LANGUAGES: tuple[str, ...] = ("pl", "en")
-DEFAULT_LANGUAGE = "pl"
+
+#: Where a visitor goes when nothing about them asks for anything: no
+#: Accept-Language header, or one that names neither of our languages. English
+#: rather than the first of LANGUAGES, because the visitor who sends no header
+#: is usually a crawler, and the page it should index for "portage gui" is the
+#: one written in the language that question is asked in. Anybody whose browser
+#: does say `pl` still gets Polish — that is what negotiate() is for.
+DEFAULT_LANGUAGE = "en"
 
 #: What ``og:locale`` calls each of them. A link unfurler that is told nothing
 #: assumes ``en_US``, which is wrong for half the site. The English is written
