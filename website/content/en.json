@@ -15,7 +15,7 @@
   "hero": {
     "eyebrow": "app-portage/gentstore",
     "title_lines": [
-      "A graphical Portage.",
+      "A GUI for Portage.",
       "It shows, then it acts."
     ],
     "lead": "A graphical front-end for Portage on Gentoo Linux. Searching for and installing packages, USE flags with an explanation of what each one does, masks and licences, overlays, and the full system update cycle.",

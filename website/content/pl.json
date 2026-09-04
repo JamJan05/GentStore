@@ -15,7 +15,7 @@
   "hero": {
     "eyebrow": "app-portage/gentstore",
     "title_lines": [
-      "Graficzny Portage.",
+      "GUI dla Portage.",
       "Pokazuje, potem robi."
     ],
     "lead": "Graficzna nakładka na Portage dla Gentoo Linux. Wyszukiwanie i instalacja pakietów, flagi USE z wyjaśnieniem, do czego każda służy, maski i licencje, overlaye i cały cykl aktualizacji systemu.",
