@@ -6,7 +6,7 @@
     "description": "It shows what it will do before it does it. Package search, USE flags with explanations, masks, licences and overlays — in one window, never as root."
   },
   "header": {
-    "version": "1.3.1",
+    "version": "1.3.5",
     "keyword": "~amd64",
     "github": "GitHub",
     "skip_to_content": "Skip to content",
@@ -285,7 +285,7 @@
   },
   "status": {
     "eyebrow": "Where the project stands",
-    "title": "Version 1.3.1",
+    "title": "Version 1.3.5",
     "body": "All nine screens work, and both halves have been exercised on a live system: the read-only side — search, USE flags, masks, repositories, the update preview, configuration files, `make.conf`, elog and `@world` — and the privileged one, which has written real `package.use`, `package.license` and `package.accept_keywords` entries through `pkexec`.",
     "caveat": {
       "title": "What that number does not claim",
