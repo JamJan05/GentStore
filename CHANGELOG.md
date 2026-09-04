@@ -23,6 +23,12 @@ tag was made.
   reads the same file, so `cli search` is as quick from the shell.
   `GENTSTORE_INDEX_CACHE=0`, or `--no-cache`, builds from Portage every time.
 
+- **The project has a page.** <https://www.gentstore.dev> — every screen at full size, the
+  installation in order, and what each principle costs in practice, in Polish and English. It is
+  built from the `Web` branch of this repository, which carries the site and nothing else, and a
+  release now tells it which version it is instead of leaving the number to be noticed later. The
+  README and the repository's own Website field link to it; nothing in here pointed at it before.
+
 ### Security
 
 - **The helper wrote lines into any file under `/etc/portage`.** `/etc/portage` is not a
@@ -103,6 +109,17 @@ tag was made.
 
 - The package announces itself as `Development Status :: 4 - Beta`. One machine, amd64 only, and
   an ebuild keyworded `~amd64`: `5 - Production/Stable` was claiming more than the keyword does.
+
+- **The documentation describes the privileged half as it is now.** `Docs/04-privileges.md` says
+  which files the helper writes and which lines it will take for `make.conf`, why every step asks
+  for a password, and what `--ignore-default-opts` is for. `Docs/06-decisions.md` gained four
+  entries for the decisions those two passes made, including the ones deliberately not made.
+
+  One of those corrections is worth reading if you went looking for something: the backup section
+  said the alternative form is a `tar.zst` in `/var/backups/gentstore/`. It is a `tar.gz`, and it
+  goes to `/etc` beside the directories. The ten-copy limit is also a default and not a rule —
+  it is a setting between 1 and 100, which is why a machine can hold more than ten of them and
+  nothing be wrong.
 
 ## [1.3.1] — 2026-09-03
 
