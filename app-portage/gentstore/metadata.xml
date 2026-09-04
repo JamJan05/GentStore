@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE pkgmetadata SYSTEM "https://www.gentoo.org/dtd/metadata.dtd">
+<pkgmetadata>
+	<maintainer type="person">
+		<email>janek3ko@gmail.com</email>
+		<name>JamJan05</name>
+	</maintainer>
+	<longdescription lang="en">
+		Gentstore is a graphical front-end for Portage: searching and installing
+		packages, USE flags with an explanation of what each one pulls in, masks
+		and licences with the reason attached, overlays, and the full system
+		update cycle. The interface never runs as root; every change to
+		/etc/portage is previewed before it is written and reported afterwards.
+	</longdescription>
+	<longdescription lang="pl">
+		Gentstore to graficzna nakładka na Portage: wyszukiwanie i instalowanie
+		pakietów, flagi USE z wyjaśnieniem, co dokładnie pociągają za sobą,
+		maski i licencje wraz z powodem, overlaye oraz pełny cykl aktualizacji
+		systemu. Interfejs nigdy nie działa jako root; każda zmiana w
+		/etc/portage jest pokazywana przed zapisem i raportowana po nim.
+	</longdescription>
+	<upstream>
+		<bugs-to>https://github.com/JamJan05/GentStore/issues</bugs-to>
+		<remote-id type="github">JamJan05/GentStore</remote-id>
+	</upstream>
+</pkgmetadata>
