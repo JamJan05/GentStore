@@ -290,6 +290,41 @@ def test_the_workflow_only_calls_subcommands_that_exist(workflow: str) -> None:
     assert called <= set(known), f"the workflow calls {called - set(known)}"
 
 
+def test_the_website_is_told_on_a_branch_that_has_the_workflow(workflow: str) -> None:
+    """``--ref`` names where the workflow *file* is read from, not what it edits.
+
+    ``website-version.yml`` lives here and checks the website branch out for
+    itself; it is deliberately not on that branch, because a workflow_dispatch
+    only reaches a file on the default branch. Dispatching it on the website
+    branch is what 1.3.5 did, and GitHub answered 422 — correctly, since there
+    is no such file there. The release went out green because the step is
+    continue-on-error, and the page went on announcing the previous version.
+    """
+    dispatch = re.search(r"gh workflow run website-version\.yml[^\n]*", workflow)
+    assert dispatch, "the release no longer tells the website anything"
+
+    ref = re.search(r"--ref (\S+)", dispatch.group(0))
+    assert ref, f"no --ref in: {dispatch.group(0)}"
+    assert "WEBSITE_BRANCH" not in ref.group(1), (
+        "dispatched on the website branch, where the workflow file does not exist"
+    )
+
+    assert (ROOT / ".github" / "workflows" / "website-version.yml").is_file(), (
+        "the workflow being dispatched is not in this branch either"
+    )
+
+
+def test_a_website_that_cannot_be_told_says_so(workflow: str) -> None:
+    """continue-on-error reports the step's conclusion as success.
+
+    So the only thing that reaches anybody looking at the run is what the step
+    prints. Without this the failure is in the log and nowhere else, which is
+    how a release published a page announcing the version before it.
+    """
+    step = workflow.split("Tell the website which version this is", 1)[1]
+    assert "::warning::" in step.split("- name:", 1)[0]
+
+
 def test_the_workflow_tags_what_the_release_ebuild_fetches(workflow: str) -> None:
     """``SRC_URI`` names a tag by name. Disagree, and every fetch is a 404.
 
