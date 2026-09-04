@@ -9,6 +9,8 @@ tag was made.
 
 ## [Unreleased]
 
+## [1.3.5] — 2026-09-04
+
 ### Added
 
 - **The package list is ready when the window is.** Building the search index — every `cat/pkg`
@@ -453,7 +455,8 @@ comes from the `portage` API rather than from parsing ebuilds. Everything privil
 Bilingual (Polish and English) through Qt's own translation system; the documentation and the
 source strings are English.
 
-[Unreleased]: https://github.com/JamJan05/GentStore/compare/v1.3.1...HEAD
+[Unreleased]: https://github.com/JamJan05/GentStore/compare/v1.3.5...HEAD
+[1.3.5]: https://github.com/JamJan05/GentStore/compare/v1.3.1...v1.3.5
 [1.3.1]: https://github.com/JamJan05/GentStore/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/JamJan05/GentStore/compare/v1.1.2...v1.3.0
 [1.1.2]: https://github.com/JamJan05/GentStore/compare/6dd751f...v1.1.2

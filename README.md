@@ -11,7 +11,7 @@ the five principles below costs in practice — is at
 **[www.gentstore.dev](https://www.gentstore.dev/en)**, and
 [po polsku](https://www.gentstore.dev/pl).
 
-> **Version 1.3.1.** Beta — the package announces itself as `Development Status :: 4 - Beta`
+> **Version 1.3.5.** Beta — the package announces itself as `Development Status :: 4 - Beta`
 > and the ebuild is keyworded `~amd64`, which is one statement made twice. All nine screens
 > work, and both halves have been exercised on a live system: the read-only side — search, USE
 > flags, masks, repositories, the update preview, configuration files, `make.conf`, elog and
@@ -122,7 +122,7 @@ yourself — the script only prints the command.
 ```
 Which one should Portage install?
 
-  1) 1.3.1 — the release. Tagged, and replaced by the next one on an
+  1) 1.3.5 — the release. Tagged, and replaced by the next one on an
      ordinary "emerge --sync && emerge --update @world". Recommended.
   2) 9999 — the live ebuild. Rebuilt from the newest commit whenever you
      run "emerge @live-rebuild". Newer, and occasionally broken.
