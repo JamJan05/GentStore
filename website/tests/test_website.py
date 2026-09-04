@@ -16,6 +16,7 @@ import pytest
 pytest.importorskip("fastapi")
 
 from fastapi.testclient import TestClient  # noqa: E402
+from markupsafe import escape  # noqa: E402
 
 from app.content import (  # noqa: E402
     CONTENT_DIR,
@@ -59,6 +60,54 @@ def test_every_screenshot_the_content_names_exists() -> None:
     for language in LANGUAGES:
         for name, figure in load(language)["figures"].items():
             assert (SCREENSHOT_DIR / figure["file"]).is_file(), f"{language}/{name}"
+
+
+def test_every_figure_the_content_declares_reaches_the_page(client: TestClient) -> None:
+    """A screenshot that exists on disk is not the same as one that is shown.
+
+    ``c.figures.update`` looked like every other reference in the template and
+    was not one: Jinja resolves an attribute before a key, ``dict`` has an
+    ``update`` method, and the ``.file`` on that method is undefined — which
+    renders as nothing. What reached the page was an empty frame with an empty
+    caption next to a real screenshot, and every other check passed: the file
+    existed, the content had the caption, the shapes matched.
+    """
+    for language in LANGUAGES:
+        page = client.get(f"/{language}").text
+        for name, figure in load(language)["figures"].items():
+            assert f'/screenshots/{figure["file"]}' in page, f"{language}: {name} has no image"
+            # Escaped, because the captions carry apostrophes and the template
+            # escapes them; comparing the raw text would fail on the wrong thing.
+            caption = str(escape(figure["caption"]))
+            assert caption in page, f"{language}: {name} has no caption"
+        assert 'src="/screenshots/"' not in page, f"{language}: an empty figure is on the page"
+
+
+def test_no_content_key_is_shadowed_by_a_dict_method() -> None:
+    """The trap above, closed for the keys nobody has written a template for yet.
+
+    Any key that is also an attribute of ``dict`` — ``update``, ``items``,
+    ``keys``, ``values``, ``get``, ``copy``, ``pop`` — will silently be the
+    method when a template reaches it with a dot. The subscript form works and
+    is what the one existing case uses, but nothing makes a later template use
+    it, so the safer rule is not to have such a key.
+    """
+    def walk(node: object, path: str = "") -> list[str]:
+        found = []
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if hasattr({}, str(key)):
+                    found.append(f"{path}.{key}" if path else str(key))
+                found.extend(walk(value, f"{path}.{key}" if path else str(key)))
+        elif isinstance(node, list):
+            for index, value in enumerate(node):
+                found.extend(walk(value, f"{path}[{index}]"))
+        return found
+
+    for language in LANGUAGES:
+        shadowed = walk(load(language))
+        # ``figures.update`` is the one that exists; the template subscripts it.
+        assert shadowed == ["figures.update"], f"{language}: {shadowed}"
 
 
 def test_footer_links_resolve_to_a_known_url() -> None:

@@ -108,7 +108,11 @@
 
   <section class="wrap section--tight">
     <div class="figure-pair">
-      {{ figure(c.figures.update) }}
+      {# Subscripted, not dotted. Jinja tries attribute access first, and a dict
+         has an ``update`` method — so ``c.figures.update`` is that method, ``.file``
+         on it is undefined, and undefined renders as nothing. The result was an
+         empty frame with an empty caption sitting on the page. #}
+      {{ figure(c.figures["update"]) }}
       {{ figure(c.figures.repositories_available) }}
     </div>
   </section>
