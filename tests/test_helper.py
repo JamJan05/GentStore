@@ -451,6 +451,305 @@ def test_a_file_called_make_conf_somewhere_else_is_not_make_conf(portage: Path) 
     assert answer["ok"] and answer["changed"], answer
 
 
+# -- the one directory the helper creates -----------------------------------
+
+
+def test_a_missing_package_directory_is_created(portage: Path) -> None:
+    """Gentoo recommends the directory form, and the preview promises it.
+
+    ``package.unmask`` does not exist on a system that has never unmasked
+    anything, and until this existed the write was refused with a message about
+    a directory the user had just been told would appear.
+    """
+    target = portage / "package.unmask" / "hyprland"
+    answer = call("append_line", path=str(target), line="=gui-wm/hyprland-0.56.2")
+
+    assert answer["ok"] and answer["changed"], answer
+    assert answer["created_directory"] == str(portage / "package.unmask")
+    assert target.read_text(encoding="utf-8") == "=gui-wm/hyprland-0.56.2\n"
+    assert oct(os.stat(portage / "package.unmask").st_mode)[-3:] == "755"
+
+
+def test_creating_the_directory_is_not_reported_when_it_was_there(portage: Path) -> None:
+    (portage / "package.use").mkdir()
+    answer = call("append_line", path=str(portage / "package.use" / "a"), line="cat/a flag")
+    assert answer["ok"] and "created_directory" not in answer
+
+
+def test_make_conf_never_becomes_a_directory(portage: Path) -> None:
+    """The exception that is the reason for a second list.
+
+    ``make.conf`` is on the list of files the helper may write a line to, and it
+    is a *file*. Creating a directory of that name on a system that has not got
+    one yet would leave Portage reading an empty directory where its main
+    configuration file belongs.
+    """
+    answer = call("append_line", path=str(portage / "make.conf" / "x"), line='USE="X"')
+
+    assert answer["ok"] is False and answer["code"] == "no_directory"
+    assert not (portage / "make.conf").exists()
+
+
+@pytest.mark.parametrize(
+    ("relative", "reason"),
+    [
+        ("package.use/deeper/still", "deeper than anything Gentstore writes"),
+        ("bashrc/anything", "a name that is not on the list"),
+        ("package.env/a", "a name that is not on the list"),
+    ],
+)
+def test_no_other_directory_is_ever_created(
+    portage: Path, relative: str, reason: str
+) -> None:
+    answer = call("append_line", path=str(portage / relative), line="x")
+
+    assert answer["ok"] is False, reason
+    assert not (portage / relative.partition("/")[0]).exists(), reason
+
+
+def test_a_symlink_where_the_directory_would_go_is_left_alone(
+    portage: Path, tmp_path: Path
+) -> None:
+    """Something is already there, and replacing it is not this function's job.
+
+    The link is left for ``check_path`` to refuse in the ordinary way, which is
+    what keeps "create the one missing directory" from turning into "decide what
+    to do about whatever is in its place".
+    """
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (portage / "package.unmask").symlink_to(elsewhere)
+
+    answer = call("append_line", path=str(portage / "package.unmask" / "a"), line="=cat/a-1")
+
+    assert answer["ok"] is False
+    assert list(elsewhere.iterdir()) == [], "nothing may be written through the link"
+    assert (portage / "package.unmask").is_symlink(), "and the link is still a link"
+
+
+def test_a_traversal_creates_nothing(portage: Path, tmp_path: Path) -> None:
+    answer = call("append_line", path=str(portage / ".." / ".." / "evil" / "x"), line="x")
+
+    assert answer["ok"] is False and answer["code"] == "outside_root"
+    assert not (tmp_path / "evil").exists()
+
+
+def test_a_grouped_write_creates_the_directories_it_needs(portage: Path) -> None:
+    answer = call(
+        "append_lines",
+        entries=[
+            {"path": str(portage / "package.accept_keywords" / "hyprland"),
+             "line": "=gui-wm/hyprland-0.56.2 ~amd64"},
+            {"path": str(portage / "package.unmask" / "hyprland"),
+             "line": "=gui-wm/hyprland-0.56.2"},
+        ],
+    )
+
+    assert answer["ok"] and answer["written"] == 2, answer
+    assert sorted(p.name for p in portage.iterdir() if p.is_dir()) == [
+        "package.accept_keywords",
+        "package.unmask",
+        "repos.conf",
+    ]
+
+
+def test_a_refused_batch_leaves_at_most_an_empty_directory(
+    portage: Path, tmp_path: Path
+) -> None:
+    """The all-or-nothing guarantee is about lines, and it still holds.
+
+    Validating an entry is what calls ``check_path``, and ``check_path`` cannot
+    approve a path whose parent is missing — so the directory is made during the
+    checking pass and a refused batch can leave one behind. An empty
+    ``package.unmask`` means exactly what no ``package.unmask`` means, which is
+    nothing at all; no *line* is written, and that is the promise.
+    """
+    answer = call(
+        "append_lines",
+        entries=[
+            {"path": str(portage / "package.unmask" / "a"), "line": "=cat/a-1"},
+            {"path": str(tmp_path / "shadow"), "line": "attacker:x:0:0"},
+        ],
+    )
+
+    assert answer["ok"] is False and answer["code"] == "outside_root"
+    assert list((portage / "package.unmask").iterdir()) == []
+    assert not (tmp_path / "shadow").exists()
+
+
+# -- grouped writes ---------------------------------------------------------
+
+
+@pytest.fixture
+def batchable(portage: Path) -> Path:
+    """A configuration root with the directories a real system has.
+
+    Every ``package.*`` name, including the two a grouped write must refuse, so
+    that a refusal is about the name and not about a missing directory.
+    """
+    for name in (
+        "package.accept_keywords",
+        "package.license",
+        "package.use",
+        "package.unmask",
+        "package.mask",
+        "package.env",
+    ):
+        (portage / name).mkdir()
+    return portage
+
+
+def entries(root: Path, *pairs: tuple[str, str]) -> list[dict]:
+    return [{"path": str(root / name), "line": line} for name, line in pairs]
+
+
+def test_a_grouped_write_reaches_all_four_files(batchable: Path) -> None:
+    """One request, four files, one backup — the point of the operation."""
+    answer = call(
+        "append_lines",
+        ensure_backup=True,
+        entries=entries(
+            batchable,
+            ("package.accept_keywords/hyprland", "=gui-wm/hyprland-0.56.2 ~amd64"),
+            ("package.accept_keywords/hyprland", "=gui-libs/aquamarine-0.14.0 ~amd64"),
+            ("package.unmask/hyprland", "=gui-wm/hyprland-0.56.2"),
+            ("package.use/squashfs-tools", ">=sys-fs/squashfs-tools-4.7.5 zstd"),
+            ("package.license/lmstudio", "sci-ml/lmstudio-bin LM-Studio-EULA"),
+        ),
+    )
+
+    assert answer["ok"] and answer["written"] == 5, answer
+    assert answer["backup"], "a grouped write deserves a backup like any other"
+    # Two lines into one file: the second read has to see the first write.
+    assert (batchable / "package.accept_keywords" / "hyprland").read_text(
+        encoding="utf-8"
+    ) == "=gui-wm/hyprland-0.56.2 ~amd64\n=gui-libs/aquamarine-0.14.0 ~amd64\n"
+
+
+def test_a_line_that_is_already_there_is_left_alone(batchable: Path) -> None:
+    """Running the same analysis twice is ordinary, not an error."""
+    pair = ("package.accept_keywords/mpv", "=media-video/mpv-0.41.0 ~amd64")
+    call("append_lines", entries=entries(batchable, pair))
+    answer = call("append_lines", entries=entries(batchable, pair, pair))
+
+    assert answer["ok"] and answer["changed"] is False
+    assert answer["written"] == 0 and answer["skipped"] == 2
+    assert (batchable / "package.accept_keywords" / "mpv").read_text(
+        encoding="utf-8"
+    ) == "=media-video/mpv-0.41.0 ~amd64\n"
+
+
+def test_one_bad_entry_leaves_every_file_untouched(batchable: Path, tmp_path: Path) -> None:
+    """All of it or none of it.
+
+    The third of five is wrong, and the two before it are perfectly good. A
+    write that got that far and stopped would leave the configuration in a state
+    the user never chose and could not name — which is worse than the refusal,
+    because they would have to work out what happened before they could try
+    again.
+    """
+    request = entries(
+        batchable,
+        ("package.accept_keywords/a", "=cat/a-1 ~amd64"),
+        ("package.use/a", "cat/a flag"),
+    )
+    request.append({"path": str(tmp_path / "shadow"), "line": "attacker:x:0:0"})
+    request += entries(
+        batchable,
+        ("package.license/a", "cat/a SOME-EULA"),
+        ("package.unmask/a", "=cat/a-1"),
+    )
+
+    answer = call("append_lines", entries=request)
+
+    assert answer["ok"] is False and answer["code"] == "outside_root"
+    assert "entry 3" in answer["error"], answer["error"]
+    written = [item for name in batchable.iterdir() if name.is_dir() for item in name.iterdir()]
+    assert written == [], "nothing at all should have been written"
+
+
+@pytest.mark.parametrize(
+    ("name", "line", "code"),
+    [
+        # The two names a grouped write refuses although the helper writes them
+        # one line at a time: make.conf decides what Portage does, and
+        # package.mask adds a restriction rather than lifting one.
+        ("make.conf", 'USE="X"', "not_batchable"),
+        ("package.mask/a", "=cat/a-1", "not_batchable"),
+        # And the ones nothing may write a line to at all.
+        ("package.env/a", "cat/a custom", "not_editable"),
+        ("bashrc", "id", "not_editable"),
+    ],
+)
+def test_a_grouped_write_refuses_the_files_it_is_not_for(
+    batchable: Path, name: str, line: str, code: str
+) -> None:
+    answer = call("append_lines", entries=entries(batchable, (name, line)))
+    assert answer["ok"] is False and answer["code"] == code, answer
+
+
+@pytest.mark.parametrize(
+    ("description", "payload"),
+    [
+        ("no entries at all", {}),
+        ("an empty list", {"entries": []}),
+        ("not a list", {"entries": "package.use/a"}),
+        ("an entry that is not an object", {"entries": ["a/b flag"]}),
+    ],
+)
+def test_a_malformed_grouped_request_is_refused(
+    batchable: Path, description: str, payload: dict
+) -> None:
+    answer = call("append_lines", **payload)
+    assert answer["ok"] is False and answer["code"] == "bad_request", description
+
+
+def test_an_entry_missing_a_field_is_refused(batchable: Path) -> None:
+    for entry in ({"path": str(batchable / "package.use" / "a")}, {"line": "cat/a flag"}):
+        answer = call("append_lines", entries=[entry])
+        assert answer["ok"] is False and answer["code"] == "bad_request", answer
+
+
+def test_a_second_line_cannot_ride_along_inside_the_first(batchable: Path) -> None:
+    """The oldest trick against a line-based writer, and the plainest refusal."""
+    answer = call(
+        "append_lines",
+        entries=entries(batchable, ("package.use/a", "cat/a flag\ncat/evil -*")),
+    )
+    assert answer["ok"] is False and answer["code"] == "multiline"
+
+
+def test_an_empty_line_is_refused(batchable: Path) -> None:
+    answer = call("append_lines", entries=entries(batchable, ("package.use/a", "   ")))
+    assert answer["ok"] is False and answer["code"] == "bad_request"
+
+
+def test_a_grouped_write_is_bounded(batchable: Path) -> None:
+    """Every entry is a file read and rewritten while this process is root."""
+    too_many = entries(
+        batchable, *[("package.use/a", f"cat/a-{n} flag") for n in range(helper.BATCH_MAX + 1)]
+    )
+    assert call("append_lines", entries=too_many)["code"] == "too_many"
+
+
+def test_the_helper_and_the_interface_agree_on_what_a_batch_may_touch() -> None:
+    """The narrow list is duplicated for the same reason the wide one is.
+
+    The helper imports nothing from the rest of Gentstore so that it can be read
+    as one file. That costs a second copy of the list, and this is the rent —
+    the same arrangement as
+    :func:`test_the_helper_and_the_interface_agree_on_what_is_editable`.
+    """
+    from gentstore.core import confedit  # noqa: PLC0415 - the helper must not import it
+
+    assert set(helper.BATCH_EDITABLE) == set(confedit.BATCHABLE)
+    assert set(helper.BATCH_EDITABLE) <= set(helper.LINE_EDITABLE)
+
+
+def test_a_grouped_write_deserves_a_backup_like_any_other_change() -> None:
+    assert "append_lines" in helper.MUTATING
+
+
 def test_the_helper_and_the_interface_agree_on_what_is_editable() -> None:
     """The copy in the helper is allowed to exist; it is not allowed to drift.
 
