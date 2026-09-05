@@ -9,6 +9,69 @@ tag was made.
 
 ## [Unreleased]
 
+### Added
+
+- **Everything Portage wants changed, in one screen and one password.** Installing Hyprland
+  meant meeting one refusal at a time: a keyword, then a mask, then a licence, then a USE flag,
+  with a full dependency resolution between each. The search screen now has an **Analyse
+  requirements** step that runs `emerge --pretend --autounmask` with the options the install
+  button would use, and shows everything that came back at once — grouped by the file it belongs
+  in, each line with the package that asked for it, each with a checkbox. Applying them is one
+  privileged operation and one authentication for the whole set, instead of one per line; for
+  that package it is fourteen lines, so it used to be fourteen password prompts for a decision
+  made once. The exact files and the exact lines are shown before anything is sent, and after the
+  write the analysis runs again by itself, because the plan described the system as it was before
+  it was applied.
+
+  Three things are deliberately not folded into the total. `package.unmask` undoes something a
+  developer decided on purpose, so it is graded like the block notice grades it and starts
+  unticked. A `**` keyword means nobody has tested the package on this architecture at all, and a
+  `9999` atom builds whatever upstream pushed this morning; both are marked and both start
+  unticked. And when Portage reports a conflict *beside* a block of changes, that conflict was
+  worked out before the changes existed — Portage stops resolving as soon as autounmask has
+  something to say, and says so — so the lines are still offered and the screen says why the
+  conflict may not survive them.
+
+  The `--autounmask` in that command is not decoration. Portage enables autounmask by itself for
+  keywords, masks and USE flags, but leaves `--autounmask-license` off unless asked explicitly
+  (`_emerge/create_depgraph_params.py`), so the previous preview could never mention a licence —
+  the one refusal a user has no way to guess at. `--autounmask-write` and `--autounmask-continue`
+  are refused by the launcher: the one program here that writes to `/etc/portage` is the helper,
+  after the user has read the lines.
+
+- **The install button waits for that answer.** It stays disabled until an analysis of exactly
+  the command it would run comes back with nothing to write and nothing conflicting. The gate is
+  the command line itself, so choosing another version or turning binary packages on closes it
+  without anything having to remember to. Output that could not be read keeps it shut too: a
+  check that failed must not be mistaken for a check that passed.
+
+- **`append_lines` in the privileged helper.** A list of path-and-line pairs, every one of them
+  checked exactly as if it had arrived alone, and all of them checked before the first is
+  written — one bad entry changes nothing at all. It reaches four files rather than the six
+  `append_line` reaches: `make.conf` decides what Portage *does* rather than which packages it
+  installs, and `package.mask` adds a restriction rather than lifting one, and neither has ever
+  appeared in an autounmask block. The interface keeps the same four names and a test compares
+  the two lists. `PROTOCOL_VERSION` is 2, so an interface talking to an older installed helper
+  can say so rather than reporting a malformed request. Decision D-18.
+
+### Fixed
+
+- **The directory the preview promised is now actually created.** Gentoo's recommended form for
+  `package.use` and its neighbours is a directory with one file per package, and the panel has
+  always said so before writing: *"Neither package.unmask nor a directory of that name exists
+  yet. Gentoo recommends the directory form, so that is what will be created."* Nothing created
+  it. The path check requires a target's parent to be a directory already, so on a system that
+  had never unmasked anything the write was refused with a message about a directory the user
+  had just been told would appear — and unmasking is exactly what somebody installing from an
+  overlay is most likely to be doing first.
+
+  The path check is unchanged. A separate step creates that one directory, and only where the
+  path resolves to exactly `/etc/portage/<name>/<file>` for one of the `package.*` names, with
+  nothing there yet in any form. `make.conf` is excluded by name — it is the one file on that
+  list, and a directory of that name would leave Portage reading an empty directory where its
+  main configuration file belongs. A symlink in the way is left for the path check to refuse.
+
+
 ## [1.3.5] — 2026-09-04
 
 ### Added

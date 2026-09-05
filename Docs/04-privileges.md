@@ -41,6 +41,7 @@ operations:
 | Operation | Meaning |
 |---|---|
 | `append_line` | append a line to one of the files listed in rule 1a (if an identical one is already there — do nothing and report it) |
+| `append_lines` | append several lines, to the four files in rule 1c, as one operation — all of them or none (see rule 1c) |
 | `replace_line` | replace **one** line matching a pattern (e.g. `USE=` in `make.conf`) |
 | `remove_line` | remove a line matching verbatim |
 | `write_file` | write a whole file — only for files the application created itself (`repos.conf/<repo>`) |
@@ -83,6 +84,42 @@ Hard rules inside the helper, enforced regardless of what the GUI sent:
    `core/makeconf.py`, not an import: the helper imports nothing from the rest of Gentstore so
    that reading it is reading one file. The test suite compares the two lists and runs what the
    screen produces through the helper, which is where a copy is allowed to live.
+1c. `append_lines` is narrower again: `package.accept_keywords`, `package.license`,
+   `package.use` and `package.unmask`, and nothing else. Those four are what
+   `emerge --autounmask` prints blocks of lines for, which is the only thing this operation
+   exists to apply. `make.conf` decides what Portage *does* rather than which packages it
+   installs, and `package.mask` adds a restriction rather than lifting one; neither has ever
+   appeared in such a block, and neither belongs in an operation whose argument for existing is
+   "the user agreed to all of this at once".
+
+   Every entry is checked exactly as if it had arrived on its own — the same path resolution,
+   the same file list, one line each, no newline inside it — and **all of them are checked
+   before any of them is written**. A request whose seventh entry is wrong changes nothing at
+   all, rather than leaving six files edited and the configuration in a state nobody chose. The
+   count is bounded (`BATCH_MAX`), because each entry is a file read and rewritten while this
+   process is root.
+
+   The user agreeing to a plan in one gesture is what the operation is *for*. It is not a reason
+   to believe the plan: the request arrives on stdin like every other one.
+1d. **One directory, and only one.** Gentoo's recommended form for these files is a directory
+   with one file per package, and the preview has always told the user that is what would be
+   created. Nothing created it: rule 1 requires a target's parent to be a directory already, so
+   on a system that had never unmasked anything the write was refused with a message about a
+   directory the user had just been told would appear.
+
+   `append_line` and `append_lines` now create it, through a step separate from the path check
+   rather than by relaxing it. That step approves a path only when it resolves to exactly
+   `/etc/portage/<name>/<file>` — two components, no more and no fewer — *name* is one of the
+   `package.*` names in rule 1a, and nothing is there yet in any form. `make.conf` is excluded
+   by name: it is the one entry on that list which is a file, and a directory of that name would
+   leave Portage reading an empty directory where its main configuration file belongs. A symlink
+   sitting where the directory would go is left alone for rule 2 to refuse, rather than being
+   replaced.
+
+   For a grouped write this is the one thing the checking pass can leave behind, since checking
+   is what calls the path check. An empty `package.unmask` means exactly what no
+   `package.unmask` means — nothing — so the guarantee that matters, that a refused batch writes
+   no *line*, is untouched.
 2. It refuses to follow symbolic links that lead outside the permitted area.
 3. Atomic writes: a temporary file in the same directory → `fsync` → `os.replace`. A file is
    never left damaged halfway through a write.
