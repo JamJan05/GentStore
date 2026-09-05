@@ -17,10 +17,12 @@ LC_ALL=C.UTF-8 emerge --ignore-default-opts --color=n --nospinner \
 | `pretend-autounmask-hyprland.txt` | A package needing fourteen keyword lines, alongside a blocker Portage reported after giving up backtracking early. The case the grouped write exists for. |
 | `pretend-conflict.txt` | A slot conflict with nothing to write — two versions of one package in one slot. Nothing to apply, and no line in `/etc/portage` settles it. |
 | `pretend-clean.txt` | A run with nothing to say, which is what opens the install gate. |
+| `pretend-block-satisfied.txt` | A run carrying `[blocks b ]` — a block Portage worked out for itself, `Conflict: 1 block (all satisfied)` — alongside one keyword to accept. The run that proved a listed block is not automatically a problem. |
+| `pretend-world-skipped.txt` | An ordinary `@world` update that succeeded and printed `!!!` lines anyway, saying which updates it left out. The run that proved `!!!` is not a test for anything. Recorded with `--update --deep --newuse --changed-use @world` rather than the command above. |
 
 ## One edit, and what it was
 
-The Hyprland run is the only one that has been touched. Portage explains a
+The Hyprland run and the `@world` run are the two that have been touched. Portage explains a
 blocker by listing every package that depends on the one in question, with its
 full `USE` flags — for an installed system that is a detailed inventory of the
 machine, and this repository is public. The lines naming **already installed**

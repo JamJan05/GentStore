@@ -169,6 +169,10 @@ class SearchPage(SplitPage):
         #: Set while an analysis this screen started is running, so that the
         #: output arriving in the log can be told apart from any other command's.
         self._analysing: tuple[str, ...] | None = None
+        #: The same question one step wider: the last command *this screen*
+        #: started, whatever it was. Only such a run says anything about the
+        #: package on screen, and only such a run may fill the frame below it.
+        self._ran: tuple[str, ...] | None = None
         #: The version whose flags are on screen — not necessarily the one the
         #: details panel opened with, since the version picker changes it.
         self._use_cpv: str | None = None
@@ -720,6 +724,20 @@ class SearchPage(SplitPage):
             return emerge.unmerge_pretend([info.cp])
         return emerge.select([info.cp])
 
+    def _run(self, spec: CommandSpec) -> bool:
+        """Start *spec* and remember that this screen is the one that did.
+
+        Every command in the window shares one runner and one log panel, so the
+        output arriving when a command ends is not necessarily an answer to
+        anything asked here. Clicking "Update @world" in the toolbar while a
+        package is on screen used to leave that update's report in this
+        package's frame — a conflict from a run about the whole system, shown
+        under the name of one package that had nothing to do with it.
+        """
+        started = self.context.run(spec)
+        self._ran = spec.argv if started else None
+        return started
+
     def _on_running_changed(self, running: bool) -> None:
         ready = self._details is not None and not running
         for button in (self._btn_pretend, self._btn_analyse, self._btn_secondary):
@@ -751,7 +769,7 @@ class SearchPage(SplitPage):
 
     def _on_pretend(self) -> None:
         if self._details is not None:
-            self.context.run(self._pretend_spec(self._details))
+            self._run(self._pretend_spec(self._details))
 
     def _on_analyse(self) -> None:
         """Ask Portage what it wants changed, all of it, before installing."""
@@ -764,10 +782,7 @@ class SearchPage(SplitPage):
         # is a gate that is not a gate.
         self._gate = None
         self._btn_primary.setEnabled(False)
-        if self.context.run(spec):
-            self._analysing = spec.argv
-        else:
-            self._analysing = None
+        self._analysing = spec.argv if self._run(spec) else None
 
     def _on_primary(self) -> None:
         """Install or update, after showing the command and asking."""
@@ -777,7 +792,7 @@ class SearchPage(SplitPage):
         spec = self._primary_spec(info)
         title = self.tr("Update package") if info.is_installed else self.tr("Install package")
         if self._confirm(title, spec):
-            self.context.run(spec)
+            self._run(spec)
 
     def _on_secondary(self) -> None:
         info = self._details
@@ -786,14 +801,14 @@ class SearchPage(SplitPage):
         if not info.is_installed:
             spec = emerge.select([info.cp])
             if self._confirm(self.tr("Add to @world"), spec):
-                self.context.run(spec)
+                self._run(spec)
             return
 
         # Removal is two steps on purpose: first the list of what would go,
         # then the question. Nothing disappears before it has been shown.
         cp = info.cp
         self._after_command = lambda: self._confirm_unmerge(cp)
-        if not self.context.run(emerge.unmerge_pretend([cp])):
+        if not self._run(emerge.unmerge_pretend([cp])):
             self._forget_pending()
 
     def _confirm_unmerge(self, cp: str) -> None:
@@ -809,7 +824,7 @@ class SearchPage(SplitPage):
             QMessageBox.StandardButton.Cancel,
         )
         if answer == QMessageBox.StandardButton.Yes:
-            self.context.run(spec)
+            self._run(spec)
 
     def _confirm(self, title: str, spec: CommandSpec) -> bool:
         answer = QMessageBox.question(
@@ -826,12 +841,15 @@ class SearchPage(SplitPage):
         if code == 0 and pending is not None:
             pending()
         analysed, self._analysing = self._analysing, None
-        self._absorb_required_changes(analysed)
+        ours, self._ran = self._ran, None
+        self._absorb_required_changes(analysed, ours)
         # Whatever ran may have installed or removed something.
         self._model.invalidate_states()
         self._reload_package()
 
-    def _absorb_required_changes(self, analysed: tuple[str, ...] | None) -> None:
+    def _absorb_required_changes(
+        self, analysed: tuple[str, ...] | None, ours: tuple[str, ...] | None
+    ) -> None:
         """Read back what emerge refused to proceed without.
 
         Deliberately not conditional on the exit code. A run that stops for
@@ -839,25 +857,29 @@ class SearchPage(SplitPage):
         and treating a non-zero exit as nothing to read is what left these
         blocks sitting in the terminal pane with no way to act on them.
 
-        The log view is cleared when a command starts, so what it holds belongs
-        to the run that just finished; anything without such a block parses to
-        nothing and hides the frame.
+        It *is* conditional on who asked. *ours* is the command line if this
+        screen started the run, and nothing else may fill the frame: one runner
+        and one log panel serve the whole window, so "Update @world" from the
+        toolbar ends here too, carrying a report about the entire system that
+        would otherwise be shown under the name of whichever package happened to
+        be selected.
 
-        *analysed* is the command line if this was an analysis this screen
-        started, and it is the only thing that can open the install gate. A
-        plain ``--pretend`` run can come back looking every bit as clean and
-        mean less: without ``--autounmask`` Portage never mentions a licence
-        (see ``runner/emerge.py``), so "it said nothing" would be answering a
+        *analysed* is narrower again — the command line if this was an analysis
+        — and it is the only thing that can open the install gate. A plain
+        ``--pretend`` run can come back looking every bit as clean and mean
+        less: without ``--autounmask`` Portage never mentions a licence (see
+        ``runner/emerge.py``), so "it said nothing" would be answering a
         question that was not asked.
         """
-        window = self.window()
-        output = window.log_view.text() if hasattr(window, "log_view") else ""
         plan: InstallPlan | None = None
-        if output:
-            try:
-                plan = read_plan(output)
-            except Exception:  # pragma: no cover - output we could not make sense of
-                log.warning("Could not read the emerge output back", exc_info=True)
+        if ours is not None:
+            window = self.window()
+            output = window.log_view.text() if hasattr(window, "log_view") else ""
+            if output:
+                try:
+                    plan = read_plan(output)
+                except Exception:  # pragma: no cover - output we cannot make sense of
+                    log.warning("Could not read the emerge output back", exc_info=True)
         self._required.set_plan(plan)
 
         self._gate = (

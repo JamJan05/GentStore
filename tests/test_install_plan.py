@@ -118,6 +118,55 @@ def test_an_unresolvable_graph_offers_nothing() -> None:
     assert any("slot conflict" in line for line in plan.conflicts)
 
 
+def test_a_block_portage_worked_out_for_itself_is_not_a_conflict() -> None:
+    """``[blocks b ]`` and ``[blocks B ]`` look alike and mean opposite things.
+
+    Portage writes the letter in lower case when the block is satisfied and in
+    upper case when it is not (``_emerge/resolver/output.py``), and says which in
+    its summary: ``Conflict: 1 block (all satisfied)``. This run lists a block
+    *and* asks for one keyword — treating the block as an unresolved graph would
+    withdraw the very line that makes the install work.
+    """
+    plan = install_plan.from_output(fixture("pretend-block-satisfied"))
+
+    assert plan.conflicts == ()
+    assert plan.can_apply
+    assert [entry.line for entry in plan.entries] == ["=dev-libs/wayland-1.26.0 ~amd64"]
+
+
+def test_a_block_portage_could_not_work_out_is_a_conflict(hyprland) -> None:  # noqa: ANN001
+    """The other letter, from the same shape of row."""
+    assert [row.flags for row in hyprland_rows()] == ["B"]
+    assert hyprland.conflicts
+
+
+def hyprland_rows():  # noqa: ANN201 - the blocker rows of that fixture
+    from gentstore.core.emerge_parse import parse_pretend
+
+    return parse_pretend(fixture("pretend-autounmask-hyprland")).unsatisfied_blockers
+
+
+def test_a_successful_run_that_prints_three_exclamation_marks_is_not_a_conflict() -> None:
+    """The bug this test exists for, in Portage's own words.
+
+    An ordinary ``@world`` update resolves the graph, prints its merge list,
+    exits zero — and says on the way past::
+
+        !!! The following update(s) have been skipped due to unsatisfied
+        !!! dependencies triggered by backtracking:
+
+    Reading every ``!!!`` line as an unresolved graph turned that into "Portage
+    cannot resolve this", announced over a run that had just worked. What counts
+    is the specific things Portage prints when it genuinely has no answer, not
+    the three characters it decorates half its output with.
+    """
+    plan = install_plan.from_output(fixture("pretend-world-skipped"))
+
+    assert plan.conflicts == ()
+    assert not plan.is_provisional
+    assert plan.updates, "and the merge list was read: the run did resolve"
+
+
 # -- the two quiet cases ----------------------------------------------------
 
 
