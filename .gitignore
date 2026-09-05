@@ -16,14 +16,16 @@ gentstore/i18n/*.qm
 # but nothing in it reads them: every token, screen and rule that mattered was
 # copied into Docs/. Kept locally, out of the repository.
 #
-# prompt-*.md also covers the briefs written for one piece of work at a time.
-# Those are notes to a reader, not to the program, and they are the one place
-# in this tree written in Polish; what they establish belongs in the commit
-# message or in Docs/, where it can be found without them.
+# The two prompt patterns cover the briefs written for one piece of work at a
+# time, whichever end of the name the word sits at. Those are notes to a reader,
+# not to the program, and they are the one place in this tree written in Polish;
+# what they establish belongs in the commit message or in Docs/, where it can be
+# found without them.
 Gentoo portage UI prototype.zip
 # Same again: an export of the site, which lives on the Web branch as files.
 Web/
 prompt-*.md
+*-prompt.md
 *.dc.html
 
 # --- Tooling caches and test leftovers ---------------------------------------
