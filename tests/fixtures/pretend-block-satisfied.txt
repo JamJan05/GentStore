@@ -1,0 +1,44 @@
+
+These are the packages that would be merged, in order:
+
+Calculating dependencies  . .... done!
+Dependency resolution took 8.94 s (backtrack: 0/20).
+
+[ebuild  N     ] dev-libs/oniguruma-6.9.10:0/5::gentoo  USE="-crnl-as-line-terminator -static-libs" ABI_X86="(64) -32 (-x32)" 957 KiB
+[ebuild  N    ~] gui-libs/hyprutils-0.14.1:0/0.14::hyproverlay  USE="-test" 66 KiB
+[ebuild  N     ] dev-libs/pugixml-1.15::gentoo  USE="-test" 570 KiB
+[ebuild  N     ] dev-libs/re2-2024.07.02:0/11::gentoo  USE="icu -test" ABI_X86="(64) -32 (-x32)" 382 KiB
+[ebuild  N     ] dev-cpp/muParser-2.3.5:0/2.3::gentoo  USE="openmp -doc -test" 113 KiB
+[ebuild  N    ~] dev-cpp/glaze-7.0.2::hyproverlay  USE="-examples -fuzzing -test" 1318 KiB
+[ebuild  N     ] dev-libs/iniparser-4.2.6:0/4::gentoo  USE="-doc -examples" 34 KiB
+[ebuild  N     ] dev-libs/libzip-1.11.4-r2:0/5::gentoo  USE="bzip2 ssl -gnutls -lzma -mbedtls -test -tools -zstd" 775 KiB
+[ebuild  N    ~] dev-util/hyprwayland-scanner-0.4.6:0/0.4::hyproverlay  12 KiB
+[ebuild  N    ~] dev-libs/hyprlang-0.6.8:0/0.6::hyproverlay  63 KiB
+[ebuild  N    ~] gui-libs/hyprwire-0.3.1:0/0.3::hyproverlay  USE="-test" 53 KiB
+[ebuild  N     ] app-misc/jq-1.8.2:0/1::gentoo  USE="oniguruma -static-libs -test" 1407 KiB
+[ebuild  N     ] media-libs/libde265-1.0.16::gentoo  USE="sdl -debug -dec265 -enc265 -tools" ABI_X86="(64) -32 (-x32)" CPU_FLAGS_X86="-sse4_1" 817 KiB
+[ebuild  N     ] media-libs/kvazaar-2.3.0-r1:0/6::gentoo  USE="-static-libs -test" ABI_X86="(64) -32 (-x32)" 581 KiB
+[ebuild  N     ] dev-libs/udis86-1.7.2-r2::gentoo  USE="-test" ABI_X86="(64) -32 (-x32)" 435 KiB
+[ebuild  N     ] x11-libs/xcb-util-errors-1.0.1-r2::gentoo  262 KiB
+[ebuild  N     ] dev-cpp/tomlplusplus-3.4.0::gentoo  USE="-test" 1265 KiB
+[ebuild  N     ] sys-auth/seatd-0.9.3-r1:0/1::gentoo  USE="elogind -builtin (-selinux) -server -systemd" 42 KiB
+[ebuild  N     ] media-libs/libheif-1.21.2:0/1.21::gentoo  USE="aom de265 gui jpeg jpeg2k kvazaar threads webp x264 -dav1d -doc -ffmpeg -gdk-pixbuf -openh264 -rav1e -svt-av1 -test -test-full -tools -x265" ABI_X86="(64) -32 (-x32)" 1816 KiB
+[ebuild  N    ~] dev-libs/hyprgraphics-0.5.1-r1:0/0.5::hyproverlay  450 KiB
+[ebuild  N    ~] gui-libs/hyprcursor-0.1.13-r1:0/0.1::hyproverlay  29 KiB
+[ebuild     U ~] dev-util/wayland-scanner-1.26.0::gentoo [1.24.0::gentoo] 599 KiB
+[ebuild     U ~] dev-libs/wayland-1.26.0::gentoo [1.24.0::gentoo] USE="-doc (-selinux) -test" ABI_X86="32 (64) (-x32)" 0 KiB
+[blocks b      ] <dev-libs/wayland-1.26.0 ("<dev-libs/wayland-1.26.0" is soft blocking dev-util/wayland-scanner-1.26.0)
+[ebuild     U ~] dev-libs/wayland-protocols-1.49::gentoo [1.48::gentoo] USE="-test" 148 KiB
+[ebuild  N    ~] dev-libs/hyprland-protocols-0.7.0:0/0.7::hyproverlay  0 KiB
+[ebuild  N    ~] gui-libs/aquamarine-0.14.0:0/0.14::hyproverlay  99 KiB
+[ebuild  N    ~] gui-libs/hyprtoolkit-0.5.4:0/0.5::hyproverlay  USE="-test" 565 KiB
+[ebuild  N    ~] gui-libs/hyprland-guiutils-0.2.2:0/0.2::hyproverlay  18 KiB
+[ebuild  N    ~] gui-wm/hyprland-0.56.2:0/0.56.2::hyproverlay  USE="X dbus-session filecaps guiutils -hyprpm -systemd -uwsm" LUA_SINGLE_TARGET="lua5-4" 54224 KiB
+
+Total: 29 packages (3 upgrades, 26 new), Size of downloads: 67084 KiB
+Conflict: 1 block (all satisfied)
+
+The following keyword changes are necessary to proceed:
+ (see "package.accept_keywords" in the portage(5) man page for more details)
+# required by =dev-libs/wayland-1.26.0 (argument)
+=dev-libs/wayland-1.26.0 ~amd64

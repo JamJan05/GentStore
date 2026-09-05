@@ -145,6 +145,19 @@ class MergeRow:
         return self.kind == "binary"
 
     @property
+    def is_satisfied_block(self) -> bool:
+        """``[blocks b ]`` rather than ``[blocks B ]``.
+
+        Portage writes the letter in lower case when it worked the block out for
+        itself and in upper case when it could not
+        (``_emerge/resolver/output.py``: ``if blocker.satisfied``). Both rows
+        look alike at a glance and mean opposite things — one is a note about a
+        conflict that has been handled, the other is the reason nothing can be
+        installed — so the difference is one letter and worth a name.
+        """
+        return self.action is Action.BLOCKED and "b" in self.flags
+
+    @property
     def changed_use(self) -> tuple[UseChange, ...]:
         return tuple(item for item in self.use if item.is_interesting)
 
@@ -243,6 +256,17 @@ class Preview:
     @property
     def blockers(self) -> tuple[MergeRow, ...]:
         return tuple(row for row in self.rows if row.action is Action.BLOCKED)
+
+    @property
+    def unsatisfied_blockers(self) -> tuple[MergeRow, ...]:
+        """The blockers that are actually in the way.
+
+        A run can list a block and still be perfectly installable — Portage says
+        so itself, in the summary line: ``Conflict: 1 block (all satisfied)``.
+        Anything deciding whether the graph resolved has to ask for these rather
+        than for :attr:`blockers`, or it calls a working plan a conflict.
+        """
+        return tuple(row for row in self.blockers if not row.is_satisfied_block)
 
     @property
     def binary_count(self) -> int:

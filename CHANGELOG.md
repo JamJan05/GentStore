@@ -56,6 +56,22 @@ tag was made.
 
 ### Fixed
 
+- **The package frame reported on runs that were not about that package.** One runner and one log
+  panel serve the whole window, so every command ends up back in the search screen. Pressing
+  "Update @world" in the toolbar with a package on screen left that update's report inside the
+  package's frame — a conflict about the whole system, shown under the name of something the run
+  never mentioned. The frame is now filled only by commands the screen itself started.
+
+- **Two kinds of "conflict" that were not one.** `!!!` is not a verdict: an ordinary `@world`
+  update resolves the graph, prints its merge list, exits zero and still says
+  `!!! The following update(s) have been skipped due to unsatisfied dependencies` on the way past.
+  Reading every such line as an unresolved graph announced failure over a run that had worked.
+  And `[blocks b ]` is not `[blocks B ]`: Portage writes the letter in lower case when it worked
+  the block out for itself and says so in its own summary, `Conflict: 1 block (all satisfied)`.
+  Counting those as conflicts would have withdrawn the very lines that make such an install work.
+  What counts now is an *unsatisfied* blocker, the slot-conflict banner, or the sentence about
+  packages that cannot be installed at the same time.
+
 - **Closing the window during a long read crashed on the way out.** A background task that
   finished while Qt was tearing down found its signal object already destroyed on the C++ side
   and raised inside a `QRunnable`, which Qt turns into an abort. Building the package index takes

@@ -565,6 +565,21 @@ def feed_log(window: MainWindow, text: str) -> None:
         window.log_view.append(line)
 
 
+def finish_analysis(page: SearchPage, info, window: MainWindow, output: str) -> None:  # noqa: ANN001
+    """Play out an analysis the way pressing the button does.
+
+    Two pieces of state, because the screen asks two questions of a finished
+    run: did I start it, and was it the analysis. Setting only the second is how
+    the gate tests used to pass while the frame filled itself from whatever
+    command happened to end.
+    """
+    feed_log(window, output)
+    spec = page._analysis_spec(info)
+    page._ran = spec.argv
+    page._analysing = spec.argv
+    page._on_command_finished(1)
+
+
 def arm_details(page: SearchPage) -> object:
     info = make_details()
     page._details = info
@@ -588,9 +603,8 @@ def test_the_install_button_waits_for_an_analysis(
     assert not page._btn_primary.isEnabled(), "no analysis has been run yet"
     assert page._btn_analyse.isEnabled()
 
-    feed_log(window, (Path(__file__).parent / "fixtures" / "pretend-clean.txt").read_text())
-    page._analysing = page._analysis_spec(info).argv
-    page._on_command_finished(0)
+    fixture = (Path(__file__).parent / "fixtures" / "pretend-clean.txt").read_text()
+    finish_analysis(page, info, window, fixture)
 
     assert page._btn_primary.isEnabled(), "a clean analysis opens the gate"
 
@@ -601,9 +615,7 @@ def test_an_analysis_that_wants_changes_keeps_the_gate_shut(
     monkeypatch.setattr(page, "_reload_package", lambda: None)
     info = arm_details(page)
 
-    feed_log(window, REFUSED_FOR_A_DEPENDENCY)
-    page._analysing = page._analysis_spec(info).argv
-    page._on_command_finished(1)
+    finish_analysis(page, info, window, REFUSED_FOR_A_DEPENDENCY)
 
     assert not page._btn_primary.isEnabled()
     assert not page._required.isHidden(), "and the lines are on screen instead"
@@ -621,8 +633,10 @@ def test_a_plain_pretend_cannot_open_the_gate(
     monkeypatch.setattr(page, "_reload_package", lambda: None)
     arm_details(page)
 
+    info = page._details
     feed_log(window, (Path(__file__).parent / "fixtures" / "pretend-clean.txt").read_text())
-    page._analysing = None          # a pretend, not an analysis
+    page._ran = page._pretend_spec(info).argv   # this screen ran it…
+    page._analysing = None                      # …but it was Pretend, not the analysis
     page._on_command_finished(0)
 
     assert not page._btn_primary.isEnabled()
@@ -634,9 +648,8 @@ def test_choosing_another_version_shuts_the_gate(
     """The gate is the command line, so a different atom is a different gate."""
     monkeypatch.setattr(page, "_reload_package", lambda: None)
     info = arm_details(page)
-    feed_log(window, (Path(__file__).parent / "fixtures" / "pretend-clean.txt").read_text())
-    page._analysing = page._analysis_spec(info).argv
-    page._on_command_finished(0)
+    fixture = (Path(__file__).parent / "fixtures" / "pretend-clean.txt").read_text()
+    finish_analysis(page, info, window, fixture)
     assert page._btn_primary.isEnabled()
 
     page._selected_cpv = "media-video/mpv-0.41.0"
@@ -700,3 +713,27 @@ def test_only_ticked_lines_reach_the_helper(app, tmp_path) -> None:  # noqa: ANN
     assert len(sent) == 1
     request = sent[0].as_request()
     assert [item["line"] for item in request["entries"]] == ["=cat/one-1 ~amd64"]
+
+
+def test_a_command_this_screen_did_not_start_leaves_the_frame_alone(
+    window: MainWindow, page: SearchPage, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """"Update @world" from the toolbar is not an answer about this package.
+
+    One runner and one log panel serve the whole window, so every command ends
+    here. A ``@world`` update reports on the entire system; showing that report
+    inside the frame belonging to one package attributes it to something that
+    had nothing to do with it — which is what happened, and it announced a
+    conflict under a package the run never mentioned.
+    """
+    monkeypatch.setattr(page, "_reload_package", lambda: None)
+    arm_details(page)
+
+    feed_log(window, REFUSED_FOR_A_DEPENDENCY)
+    page._ran = None                       # the toolbar started it, not this screen
+    page._analysing = None
+    page._on_command_finished(1)
+
+    assert page._required.isHidden()
+    assert page._required.selected == ()
+    assert not page._btn_primary.isEnabled()

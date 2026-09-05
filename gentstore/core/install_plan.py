@@ -86,6 +86,22 @@ _TERMINATED_EARLY = "backtracking has terminated early"
 #: ``required by gui-wm/hyprland-0.56.2::hyproverlay`` → the package alone.
 _REQUIRED_BY = re.compile(r"^required by\s+(?P<who>.+)$")
 
+#: What Portage prints when it has no answer at all, as opposed to a remark.
+#:
+#: Two of the three are the banners above the blocks it writes; the third is the
+#: refusal it gives when an atom matches nothing installable. A ``[blocks B ]``
+#: row counts as well and is checked separately, because it is a parsed row
+#: rather than a line of prose.
+#:
+#: Deliberately a short list of specific sentences. Anything vaguer — every
+#: ``!!!`` line, say — sweeps up the notes a working run leaves behind, and the
+#: cost of that is a screen announcing failure over a run that succeeded.
+_UNRESOLVED_MARKERS = (
+    "Multiple package instances within a single package slot",
+    "cannot be installed at the same time on the same system",
+    "there are no ebuilds to satisfy",
+)
+
 
 @dataclass(frozen=True, slots=True)
 class PlannedEntry:
@@ -289,15 +305,48 @@ def _merge(entries: list[RequiredEntry]) -> list[PlannedEntry]:
     return [PlannedEntry(entry=lines[key], reasons=tuple(reasons[key])) for key in order]
 
 
-def _conflicts(preview: Preview) -> tuple[str, ...]:
-    """Portage's unresolved-graph output, in its own words.
+def _is_unresolved(preview: Preview) -> bool:
+    """Whether Portage could not work out a set of packages that fits together.
 
-    Two sources, because Portage uses two shapes for the same news: the ``!!!``
-    lines it prints for a slot conflict, and the ``[blocks B ]`` row it puts in
-    the merge list for a blocker. A run can carry either, or both.
+    A ``!!!`` line is not the test, and treating it as one was wrong. Portage
+    marks a great deal with those three characters, including things a
+    successful run says on its way past::
+
+        !!! The following update(s) have been skipped due to unsatisfied
+        !!! dependencies triggered by backtracking:
+
+    That is an ordinary ``@world`` update reporting what it left out. The graph
+    resolved, the merge list is right above it and the command exits zero — and
+    a screen reading it as "Portage cannot resolve this" says something false
+    about a run that worked.
+
+    So the test is the three things Portage prints when it genuinely has no
+    answer: an *unsatisfied* blocker row, the slot-conflict banner, and the
+    sentence about packages that cannot be installed at the same time.
+
+    Unsatisfied is the load-bearing word. ``[blocks b ]`` and ``[blocks B ]``
+    look alike and mean opposite things, and a run can carry the first and still
+    be exactly what the user wants to install — Portage says as much in its own
+    summary: ``Conflict: 1 block (all satisfied)``.
     """
+    if preview.unsatisfied_blockers:
+        return True
+    return any(marker in preview.raw for marker in _UNRESOLVED_MARKERS)
+
+
+def _conflicts(preview: Preview) -> tuple[str, ...]:
+    """Portage's own account of a graph it could not resolve.
+
+    Empty unless :func:`_is_unresolved` says there is one, and then it is
+    whatever Portage wrote: the ``!!!`` lines and the ``[blocks B ]`` rows, kept
+    verbatim rather than summarised, because what this program does not
+    understand has to stay visible.
+    """
+    if not _is_unresolved(preview):
+        return ()
+
     found: list[str] = list(preview.problems)
-    for row in preview.blockers:
+    for row in preview.unsatisfied_blockers:
         line = row.raw.strip()
         if line:
             found.append(line)
