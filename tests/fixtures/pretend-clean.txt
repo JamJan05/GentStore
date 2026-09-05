@@ -1,0 +1,9 @@
+
+These are the packages that would be merged, in order:
+
+Calculating dependencies  ... done!
+Dependency resolution took 1.72 s (backtrack: 0/20).
+
+[ebuild   R    ] app-arch/zstd-1.5.7-r1:0/1::gentoo  USE="lzma zlib -lz4 -static-libs -test -verify-sig" ABI_X86="32 (64) (-x32)" 0 KiB
+
+Total: 1 package (1 reinstall), Size of downloads: 0 KiB

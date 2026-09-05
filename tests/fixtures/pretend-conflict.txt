@@ -1,0 +1,35 @@
+
+These are the packages that would be merged, in order:
+
+Calculating dependencies  . ... done!
+Dependency resolution took 6.75 s (backtrack: 2/20).
+
+[ebuild     UD ] app-arch/zstd-1.5.7:0/1::gentoo [1.5.7-r1:0/1::gentoo] USE="lzma zlib -lz4 -static-libs -test (-verify-sig%)" ABI_X86="32 (64) (-x32)" 0 KiB
+[ebuild   R    ] app-arch/zstd-1.5.7-r1:0/1::gentoo  USE="lzma zlib -lz4 -static-libs -test -verify-sig" ABI_X86="32 (64) (-x32)" 0 KiB
+
+Total: 2 packages (1 downgrade, 1 reinstall), Size of downloads: 0 KiB
+
+!!! Multiple package instances within a single package slot have been pulled
+!!! into the dependency graph, resulting in a slot conflict:
+
+app-arch/zstd:0
+
+  (app-arch/zstd-1.5.7:0/1::gentoo, ebuild scheduled for merge) USE="lzma zlib -lz4 -static-libs -test" ABI_X86="32 (64) (-x32)" pulled in by
+    =app-arch/zstd-1.5.7 (Argument)
+
+  (app-arch/zstd-1.5.7-r1:0/1::gentoo, ebuild scheduled for merge) USE="lzma zlib -lz4 -static-libs -test -verify-sig" ABI_X86="32 (64) (-x32)" pulled in by
+    =app-arch/zstd-1.5.7-r1 (Argument)
+
+
+It may be possible to solve this problem by using package.mask to
+prevent one of those packages from being selected. However, it is also
+possible that conflicting dependencies exist such that they are
+impossible to satisfy simultaneously.  If such a conflict exists in
+the dependencies of two different packages, then those packages can
+not be installed simultaneously. You may want to try a larger value of
+the --backtrack option, such as --backtrack=30, in order to see if
+that will solve this conflict automatically.
+
+For more information, see MASKED PACKAGES section in the emerge man
+page or refer to the Gentoo Handbook.
+

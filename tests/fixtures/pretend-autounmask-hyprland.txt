@@ -1,0 +1,174 @@
+
+These are the packages that would be merged, in order:
+
+Calculating dependencies  .... done!
+Dependency resolution took 3.81 s (backtrack: 0/20).
+
+[ebuild  N     ] dev-libs/oniguruma-6.9.10:0/5::gentoo  USE="-crnl-as-line-terminator -static-libs" ABI_X86="(64) -32 (-x32)" 957 KiB
+[ebuild  N    ~] gui-libs/hyprutils-0.14.1:0/0.14::hyproverlay  USE="-test" 66 KiB
+[ebuild  N     ] dev-libs/pugixml-1.15::gentoo  USE="-test" 570 KiB
+[ebuild  N     ] dev-libs/re2-2024.07.02:0/11::gentoo  USE="icu -test" ABI_X86="(64) -32 (-x32)" 382 KiB
+[ebuild  N     ] dev-cpp/muParser-2.3.5:0/2.3::gentoo  USE="openmp -doc -test" 113 KiB
+[ebuild  N    ~] dev-cpp/glaze-7.0.2::hyproverlay  USE="-examples -fuzzing -test" 1318 KiB
+[ebuild  N     ] dev-libs/iniparser-4.2.6:0/4::gentoo  USE="-doc -examples" 34 KiB
+[ebuild  N     ] dev-libs/libzip-1.11.4-r2:0/5::gentoo  USE="bzip2 ssl -gnutls -lzma -mbedtls -test -tools -zstd" 775 KiB
+[ebuild  N    ~] dev-util/hyprwayland-scanner-0.4.6:0/0.4::hyproverlay  12 KiB
+[ebuild  N    ~] dev-libs/hyprlang-0.6.8:0/0.6::hyproverlay  63 KiB
+[ebuild  N    ~] gui-libs/hyprwire-0.3.1:0/0.3::hyproverlay  USE="-test" 53 KiB
+[ebuild  N     ] app-misc/jq-1.8.2:0/1::gentoo  USE="oniguruma -static-libs -test" 1407 KiB
+[ebuild  N     ] media-libs/libde265-1.0.16::gentoo  USE="sdl -debug -dec265 -enc265 -tools" ABI_X86="(64) -32 (-x32)" CPU_FLAGS_X86="-sse4_1" 817 KiB
+[ebuild  N     ] media-libs/kvazaar-2.3.0-r1:0/6::gentoo  USE="-static-libs -test" ABI_X86="(64) -32 (-x32)" 581 KiB
+[ebuild  N     ] dev-libs/udis86-1.7.2-r2::gentoo  USE="-test" ABI_X86="(64) -32 (-x32)" 435 KiB
+[ebuild  N     ] x11-libs/xcb-util-errors-1.0.1-r2::gentoo  262 KiB
+[ebuild     U ~] dev-util/wayland-scanner-1.26.0::gentoo [1.24.0::gentoo] 599 KiB
+[ebuild  N     ] dev-cpp/tomlplusplus-3.4.0::gentoo  USE="-test" 1265 KiB
+[ebuild  N     ] sys-auth/seatd-0.9.3-r1:0/1::gentoo  USE="elogind -builtin (-selinux) -server -systemd" 42 KiB
+[ebuild     U ~] dev-libs/wayland-protocols-1.49::gentoo [1.48::gentoo] USE="-test" 148 KiB
+[ebuild  N    ~] dev-libs/hyprland-protocols-0.7.0:0/0.7::hyproverlay  0 KiB
+[ebuild  N     ] media-libs/libheif-1.21.2:0/1.21::gentoo  USE="aom de265 gui jpeg jpeg2k kvazaar threads webp x264 -dav1d -doc -ffmpeg -gdk-pixbuf -openh264 -rav1e -svt-av1 -test -test-full -tools -x265" ABI_X86="(64) -32 (-x32)" 1816 KiB
+[ebuild  N    ~] gui-libs/aquamarine-0.14.0:0/0.14::hyproverlay  99 KiB
+[ebuild  N    ~] dev-libs/hyprgraphics-0.5.1-r1:0/0.5::hyproverlay  450 KiB
+[ebuild  N    ~] gui-libs/hyprcursor-0.1.13-r1:0/0.1::hyproverlay  29 KiB
+[ebuild  N    ~] gui-libs/hyprtoolkit-0.5.4:0/0.5::hyproverlay  USE="-test" 565 KiB
+[ebuild  N    ~] gui-libs/hyprland-guiutils-0.2.2:0/0.2::hyproverlay  18 KiB
+[ebuild  N    ~] gui-wm/hyprland-0.56.2:0/0.56.2::hyproverlay  USE="X dbus-session filecaps guiutils -hyprpm -systemd -uwsm" LUA_SINGLE_TARGET="lua5-4" 54224 KiB
+[blocks B      ] <dev-libs/wayland-1.26.0 ("<dev-libs/wayland-1.26.0" is soft blocking dev-util/wayland-scanner-1.26.0)
+
+Total: 28 packages (2 upgrades, 26 new), Size of downloads: 67084 KiB
+Conflict: 1 block (1 unsatisfied)
+
+ * Error: The above package list contains packages which cannot be
+ * installed at the same time on the same system.
+
+  (dev-libs/wayland-1.24.0:0/0::gentoo, installed) pulled in by
+    dev-libs/wayland required by (gui-libs/hyprtoolkit-0.5.4:0/0.5::hyproverlay, ebuild scheduled for merge) USE="-test" ABI_X86="(64)"
+    dev-libs/wayland required by (kde-plasma/libkscreen-6.6.6-r1:6/8::gentoo, installed) USE="-debug -doc -test" ABI_X86="(64)"
+    >=dev-libs/wayland-1.20.0[abi_x86_32(-)?,abi_x86_64(-)?,abi_x86_x32(-)?,abi_mips_n32(-)?,abi_mips_n64(-)?,abi_mips_o32(-)?,abi_s390_32(-)?,abi_s390_64(-)?] (>=dev-libs/wayland-1.20.0[abi_x86_64(-)]) required by (media-libs/gst-plugins-base-1.26.11:1.0/1.0::gentoo, installed) USE="X alsa egl gles2 introspection nls ogg opengl orc pango vorbis wayland -gbm -ivorbis -test -theora -verify-sig" ABI_X86="(64) -32 (-x32)"
+    >=dev-libs/wayland-1.11[abi_x86_32(-)?,abi_x86_64(-)?,abi_x86_x32(-)?,abi_mips_n32(-)?,abi_mips_n64(-)?,abi_mips_o32(-)?,abi_s390_32(-)?,abi_s390_64(-)?] (>=dev-libs/wayland-1.11[abi_x86_64(-)]) required by (media-libs/libva-2.24.1:0/2::gentoo, installed) USE="X wayland -glx" ABI_X86="(64) -32 (-x32)"
+    dev-libs/wayland[abi_x86_32(-)?,abi_x86_64(-)?,abi_x86_x32(-)?,abi_mips_n32(-)?,abi_mips_n64(-)?,abi_mips_o32(-)?,abi_s390_32(-)?,abi_s390_64(-)?] (dev-libs/wayland[abi_x86_64(-)]) required by (media-libs/opencv-4.12.0-r1:0/4.12.0::gentoo, installed) USE="avif contrib contribdnn eigen features2d ffmpeg gif jpeg opengl openmp png qt6 tiff truetype vulkan wayland webp -atlas (-contribcvv) -contribfreetype (-contribhdf) (-contribovis) (-contribsfm) (-contribxfeatures2d) (-cuda) (-cudnn) -debug -doc -examples -gdal (-gflags) (-glog) -gphoto2 -gstreamer -gtk3 -ieee1394 -jasper -java -jpeg2k -lapack (-mkl) -non-free -opencl -opencvapps -openexr -openni -openni2 -python -quirc -spng -tbb (-tesseract) -test -testprograms -v4l -vaapi (-vtk) -wechat-qrcode -xine" ABI_X86="(64) -32 (-x32)" CPU_FLAGS_X86="sse sse2 -avx -avx2 -avx512_4fmaps -avx512_4vnniw -avx512_bitalg -avx512_vbmi2 -avx512_vnni -avx512_vpopcntdq -avx512bw -avx512cd -avx512dq -avx512er -avx512f -avx512ifma -avx512pf -avx512vbmi -avx512vl -f16c -fma3 -popcnt -sse3 -sse4_1 -sse4_2 -ssse3" PYTHON_TARGETS="python3_14 -python3_12 -python3_13" VIDEO_CARDS="-intel"
+    dev-libs/wayland required by (net-im/discord-1.0.154:0/0::gentoo, installed) USE="seccomp -appindicator -wayland" ABI_X86="(64)" L10N="pl -af -am -ar -bg -bn -ca -cs -da -de -el -en-GB -en-US -es -es-419 -et -fa -fi -fil -fr -gu -he -hi -hr -hu -id -it -ja -kn -ko -lt -lv -ml -mr -ms -nb -nl -pt-BR -pt-PT -ro -ru -sk -sl -sr -sv -sw -ta -te -th -tr -uk -ur -vi -zh-CN -zh-TW" PYTHON_SINGLE_TARGET="python3_14 -python3_12 -python3_13 (-python3_15)"
+    >=dev-libs/wayland-1.22.91 required by (gui-wm/hyprland-0.56.2:0/0.56.2::hyproverlay, ebuild scheduled for merge) USE="X dbus-session filecaps guiutils -hyprpm -systemd -uwsm" ABI_X86="(64)" LUA_SINGLE_TARGET="lua5-4"
+    dev-libs/wayland required by (kde-plasma/kscreenlocker-6.6.6:6/6::gentoo, installed) USE="-debug -test" ABI_X86="(64)"
+    >=dev-libs/wayland-1.15 required by (kde-plasma/layer-shell-qt-6.6.6:6/6::gentoo, installed) USE="-debug" ABI_X86="(64)"
+    >=dev-libs/wayland-1.15 required by (kde-plasma/xdg-desktop-portal-kde-6.6.6:6/6::gentoo, installed) USE="-debug -test" ABI_X86="(64)"
+    >=dev-libs/wayland-1.20[abi_x86_32(-)?,abi_x86_64(-)?,abi_x86_x32(-)?,abi_mips_n32(-)?,abi_mips_n64(-)?,abi_mips_o32(-)?,abi_s390_32(-)?,abi_s390_64(-)?] (>=dev-libs/wayland-1.20[abi_x86_64(-)]) required by (media-libs/libsdl2-2.32.8:0/0::gentoo, installed) USE="X alsa dbus gles2 haptic joystick opengl pipewire pulseaudio sound udev video vulkan wayland (-aqua) (-custom-cflags) -doc -fcitx -gles1 -ibus -jack -kms -libsamplerate -nas -oss -sndio -static-libs -test -xscreensaver" ABI_X86="(64) -32 (-x32)" CPU_FLAGS_X86="mmx sse sse2 -3dnow -sse3"
+    dev-libs/wayland required by (kde-frameworks/kidletime-6.27.0:6/6.27::gentoo, installed) USE="X wayland -debug -xscreensaver" ABI_X86="(64)"
+    >=dev-libs/wayland-1.18.0[abi_x86_32(-)?,abi_x86_64(-)?,abi_x86_x32(-)?,abi_mips_n32(-)?,abi_mips_n64(-)?,abi_mips_o32(-)?,abi_s390_32(-)?,abi_s390_64(-)?] (>=dev-libs/wayland-1.18.0[abi_x86_32(-),abi_x86_64(-)]) required by (media-libs/mesa-26.1.8:0/0::gentoo, installed) USE="X llvm (opengl) proprietary-codecs vulkan wayland zstd -debug -lm-sensors -opencl -sysprof -test -unwind -vaapi -valgrind" ABI_X86="32 (64) (-x32)" CPU_FLAGS_X86="sse2" LLVM_SLOT="22 -18 -19 -20 -21" VIDEO_CARDS="radeonsi -asahi -d3d12 (-freedreno) -i915 (-imagination) -intel -lavapipe (-lima) -nouveau -nvk (-panfrost) -r300 -r600 -radeon (-v3d) (-vc4) -virgl (-vivante) -vmware -zink"
+    dev-libs/wayland required by (kde-plasma/powerdevil-6.6.6-r1:6/6::gentoo, installed) USE="filecaps handbook -brightness-control -debug -test" ABI_X86="(64)"
+    dev-libs/wayland required by (dev-qt/qtbase-6.11.1:6/6.11.1::gentoo, installed) USE="X concurrent cups dbus gtk gui icu libinput libproxy network nls opengl sql sqlite ssl udev vulkan wayland widgets xml (zstd) -accessibility -brotli -custom-cflags -eglfs -evdev -gles2-only -gssapi -io-uring -journald -mysql -oci8 -odbc -postgres -renderdoc -sctp -syslog -test -tslib" ABI_X86="(64)"
+    >=dev-libs/wayland-1.15.0 required by (kde-plasma/libplasma-6.6.6:6/7::gentoo, installed) USE="-debug -doc -gles2-only -test" ABI_X86="(64)"
+    dev-libs/wayland required by (gui-libs/aquamarine-0.14.0:0/0.14::hyproverlay, ebuild scheduled for merge) USE="" ABI_X86="(64)"
+    >=dev-libs/wayland-1.18[abi_x86_32(-)?,abi_x86_64(-)?,abi_x86_x32(-)?,abi_mips_n32(-)?,abi_mips_n64(-)?,abi_mips_o32(-)?,abi_s390_32(-)?,abi_s390_64(-)?] (>=dev-libs/wayland-1.18[abi_x86_64(-)]) required by (gui-libs/libdecor-0.2.5:0/0::gentoo, installed) USE="dbus gtk -examples" ABI_X86="(64) -32 (-x32)"
+    dev-libs/wayland required by (app-misc/fastfetch-2.65.2:0/0::gentoo, installed) USE="X dbus opengl pulseaudio vulkan wayland xcb -chafa -ddcutil -drm -efl -elf -gnome -imagemagick -lua -opencl -sqlite -test -vaapi -vdpau -xrandr" ABI_X86="(64)" LUA_SINGLE_TARGET="-lua5-3 -lua5-4"
+    dev-libs/wayland:=[abi_x86_32(-)?,abi_x86_64(-)?,abi_x86_x32(-)?,abi_mips_n32(-)?,abi_mips_n64(-)?,abi_mips_o32(-)?,abi_s390_32(-)?,abi_s390_64(-)?] (dev-libs/wayland:=[abi_x86_32(-),abi_x86_64(-)]) required by (media-libs/vulkan-loader-1.4.350.0:0/0::gentoo, installed) USE="X wayland" ABI_X86="32 (64) (-x32)"
+    >=dev-libs/wayland-1.15 required by (kde-plasma/plasma-workspace-6.6.6:6/6::gentoo, installed) USE="X fontconfig handbook ksysguard networkmanager (policykit) screencast semantic-desktop wallpaper-metadata -appstream -debug -systemd -telemetry -test" ABI_X86="(64)"
+    >=dev-libs/wayland-1.15.0 required by (kde-plasma/kwayland-6.6.6:6/6::gentoo, installed) USE="-debug -test" ABI_X86="(64)"
+    dev-libs/wayland:0/0=[abi_x86_32(-),abi_x86_64(-)] required by (media-libs/vulkan-loader-1.4.350.0:0/0::gentoo, installed) USE="X wayland" ABI_X86="32 (64) (-x32)"
+    >=dev-libs/wayland-1.24.0 required by (kde-plasma/kwin-x11-6.6.6:6/6::gentoo, installed) USE="handbook lock shortcuts -accessibility -debug -gles2-only (-selinux) -systemd -test" ABI_X86="(64)"
+    dev-libs/wayland required by (kde-plasma/spectacle-6.6.6:6/6::gentoo, installed) USE="handbook -debug -share -test" ABI_X86="(64)"
+    dev-libs/wayland required by (x11-misc/appmenu-gtk-module-25.04:0/0::gentoo, installed) USE="wayland -gtk2 -test" ABI_X86="(64)"
+    >=dev-libs/wayland-1.21.0 required by (x11-base/xwayland-24.1.13:0/0::gentoo, installed) USE="libei (-selinux) -systemd -test -unwind -xcsecurity" ABI_X86="(64)"
+    dev-libs/wayland required by (kde-frameworks/kguiaddons-6.27.0:6/6.27::gentoo, installed) USE="X dbus wayland -debug -test" ABI_X86="(64)"
+    >=dev-libs/wayland-1.14.91[abi_x86_32(-)?,abi_x86_64(-)?,abi_x86_x32(-)?,abi_mips_n32(-)?,abi_mips_n64(-)?,abi_mips_o32(-)?,abi_s390_32(-)?,abi_s390_64(-)?] (>=dev-libs/wayland-1.14.91[abi_x86_64(-)]) required by (x11-libs/gtk+-3.24.52:3/3::gentoo, installed) USE="X cups introspection wayland (-aqua) -broadway -cloudproviders -colord -examples -gtk-doc -sysprof -test -vim-syntax -xinerama" ABI_X86="(64) -32 (-x32)"
+    dev-libs/wayland[abi_x86_32(-)?,abi_x86_64(-)?,abi_x86_x32(-)?,abi_mips_n32(-)?,abi_mips_n64(-)?,abi_mips_o32(-)?,abi_s390_32(-)?,abi_s390_64(-)?] (dev-libs/wayland[abi_x86_64(-)]) required by (media-libs/libsdl3-3.4.14:0/0::gentoo, installed) USE="X alsa dbus opengl pipewire pulseaudio udev usb vulkan wayland (-aqua) -bidi -doc -ibus -io-uring -jack -kms -oss -sndio -test" ABI_X86="(64) -32 (-x32)" CPU_FLAGS_X86="mmx sse sse2 -avx -avx2 -avx512f -sse3 -sse4_1 -sse4_2"
+    dev-libs/wayland[abi_x86_32(-)?,abi_x86_64(-)?] (dev-libs/wayland[abi_x86_64(-)]) required by (app-emulation/wine-vanilla-11.0:11.0/11.0::gentoo, installed) USE="X alsa bluetooth cups dbus fontconfig gecko gstreamer mingw mono nls opengl pulseaudio sdl ssl strip truetype udev unwind usb vulkan wayland wow64 (-arm64ec) -crossdev-mingw -custom-cflags -dos -ffmpeg -gphoto2 -kerberos -llvm-libunwind -netapi -odbc -opencl -pcap -perl -samba -scanner (-selinux) -smartcard -v4l -xinerama" ABI_X86="64 -32"
+    >=dev-libs/wayland-1.24.0 required by (kde-plasma/kwin-6.6.6:6/6::gentoo, installed) USE="(filecaps) handbook lock screencast shortcuts -accessibility -debug -gamepad -gles2-only (-selinux) -systemd -test" ABI_X86="(64)"
+    dev-libs/wayland required by (kde-plasma/plasma-integration-6.6.6:6/6::gentoo, installed) USE="-debug" ABI_X86="(64)"
+    >=dev-libs/wayland-1.4.0[abi_x86_32(-)?,abi_x86_64(-)?,abi_x86_x32(-)?,abi_mips_n32(-)?,abi_mips_n64(-)?,abi_mips_o32(-)?,abi_s390_32(-)?,abi_s390_64(-)?] (>=dev-libs/wayland-1.4.0[abi_x86_64(-)]) required by (media-libs/gst-plugins-bad-1.26.11:1.0/1.0::gentoo, installed) USE="X bzip2 introspection nls orc udev vulkan wayland -test -vaapi -verify-sig -vnc" ABI_X86="(64) -32 (-x32)"
+    >=dev-libs/wayland-1.24.0 required by (gui-libs/gtk-4.20.4:4/4::gentoo, installed) USE="X cups introspection vulkan wayland (-aqua) -broadway -cloudproviders -colord -examples -gstreamer -gtk-doc -sysprof -test" ABI_X86="(64)" CPU_FLAGS_X86="-f16c"
+
+  (dev-util/wayland-scanner-1.26.0:0/0::gentoo, ebuild scheduled for merge) pulled in by
+    dev-util/wayland-scanner required by (media-libs/mesa-26.1.8:0/0::gentoo, installed) USE="X llvm (opengl) proprietary-codecs vulkan wayland zstd -debug -lm-sensors -opencl -sysprof -test -unwind -vaapi -valgrind" ABI_X86="32 (64) (-x32)" CPU_FLAGS_X86="sse2" LLVM_SLOT="22 -18 -19 -20 -21" VIDEO_CARDS="radeonsi -asahi -d3d12 (-freedreno) -i915 (-imagination) -intel -lavapipe (-lima) -nouveau -nvk (-panfrost) -r300 -r600 -radeon (-v3d) (-vc4) -virgl (-vivante) -vmware -zink"
+    dev-util/wayland-scanner required by (kde-frameworks/kguiaddons-6.27.0:6/6.27::gentoo, installed) USE="X dbus wayland -debug -test" ABI_X86="(64)"
+    dev-util/wayland-scanner required by (kde-plasma/kwin-x11-6.6.6:6/6::gentoo, installed) USE="handbook lock shortcuts -accessibility -debug -gles2-only (-selinux) -systemd -test" ABI_X86="(64)"
+    dev-util/wayland-scanner required by (gui-libs/libdecor-0.2.5:0/0::gentoo, installed) USE="dbus gtk -examples" ABI_X86="(64) -32 (-x32)"
+    dev-util/wayland-scanner required by (media-libs/gst-plugins-bad-1.26.11:1.0/1.0::gentoo, installed) USE="X bzip2 introspection nls orc udev vulkan wayland -test -vaapi -verify-sig -vnc" ABI_X86="(64) -32 (-x32)"
+    dev-util/wayland-scanner required by (kde-plasma/libkscreen-6.6.6-r1:6/8::gentoo, installed) USE="-debug -doc -test" ABI_X86="(64)"
+    >=dev-util/wayland-scanner-1.19.0 required by (kde-plasma/libplasma-6.6.6:6/7::gentoo, installed) USE="-debug -doc -gles2-only -test" ABI_X86="(64)"
+    dev-util/wayland-scanner required by (kde-plasma/kwin-6.6.6:6/6::gentoo, installed) USE="(filecaps) handbook lock screencast shortcuts -accessibility -debug -gamepad -gles2-only (-selinux) -systemd -test" ABI_X86="(64)"
+    >=dev-util/wayland-scanner-1.19.0 required by (kde-plasma/kwayland-6.6.6:6/6::gentoo, installed) USE="-debug -test" ABI_X86="(64)"
+    >=dev-util/wayland-scanner-1.19.0 required by (kde-plasma/plasma-workspace-6.6.6:6/6::gentoo, installed) USE="X fontconfig handbook ksysguard networkmanager (policykit) screencast semantic-desktop wallpaper-metadata -appstream -debug -systemd -telemetry -test" ABI_X86="(64)"
+    dev-util/wayland-scanner required by (kde-plasma/kscreenlocker-6.6.6:6/6::gentoo, installed) USE="-debug -test" ABI_X86="(64)"
+    dev-util/wayland-scanner required by (kde-plasma/layer-shell-qt-6.6.6:6/6::gentoo, installed) USE="-debug" ABI_X86="(64)"
+    dev-util/wayland-scanner required by (app-emulation/wine-vanilla-11.0:11.0/11.0::gentoo, installed) USE="X alsa bluetooth cups dbus fontconfig gecko gstreamer mingw mono nls opengl pulseaudio sdl ssl strip truetype udev unwind usb vulkan wayland wow64 (-arm64ec) -crossdev-mingw -custom-cflags -dos -ffmpeg -gphoto2 -kerberos -llvm-libunwind -netapi -odbc -opencl -pcap -perl -samba -scanner (-selinux) -smartcard -v4l -xinerama" ABI_X86="64 -32"
+    >=dev-util/wayland-scanner-1.20 required by (media-libs/libsdl2-2.32.8:0/0::gentoo, installed) USE="X alsa dbus gles2 haptic joystick opengl pipewire pulseaudio sound udev video vulkan wayland (-aqua) (-custom-cflags) -doc -fcitx -gles1 -ibus -jack -kms -libsamplerate -nas -oss -sndio -static-libs -test -xscreensaver" ABI_X86="(64) -32 (-x32)" CPU_FLAGS_X86="mmx sse sse2 -3dnow -sse3"
+    dev-util/wayland-scanner required by (media-libs/libsdl3-3.4.14:0/0::gentoo, installed) USE="X alsa dbus opengl pipewire pulseaudio udev usb vulkan wayland (-aqua) -bidi -doc -ibus -io-uring -jack -kms -oss -sndio -test" ABI_X86="(64) -32 (-x32)" CPU_FLAGS_X86="mmx sse sse2 -avx -avx2 -avx512f -sse3 -sse4_1 -sse4_2"
+    dev-util/wayland-scanner required by (kde-frameworks/kwindowsystem-6.27.0:6/6.27::gentoo, installed) USE="X wayland -debug -test" ABI_X86="(64)"
+    dev-util/wayland-scanner required by (dev-libs/hyprland-protocols-0.7.0:0/0.7::hyproverlay, ebuild scheduled for merge) USE="" ABI_X86="(64)"
+    dev-util/wayland-scanner required by (kde-plasma/kscreen-6.6.6:6/6::gentoo, installed) USE="X -debug -test" ABI_X86="(64)"
+    >=dev-util/wayland-scanner-1.24.0 required by (gui-libs/gtk-4.20.4:4/4::gentoo, installed) USE="X cups introspection vulkan wayland (-aqua) -broadway -cloudproviders -colord -examples -gstreamer -gtk-doc -sysprof -test" ABI_X86="(64)" CPU_FLAGS_X86="-f16c"
+    dev-util/wayland-scanner required by (kde-plasma/powerdevil-6.6.6-r1:6/6::gentoo, installed) USE="filecaps handbook -brightness-control -debug -test" ABI_X86="(64)"
+    dev-util/wayland-scanner required by (dev-qt/qtbase-6.11.1:6/6.11.1::gentoo, installed) USE="X concurrent cups dbus gtk gui icu libinput libproxy network nls opengl sql sqlite ssl udev vulkan wayland widgets xml (zstd) -accessibility -brotli -custom-cflags -eglfs -evdev -gles2-only -gssapi -io-uring -journald -mysql -oci8 -odbc -postgres -renderdoc -sctp -syslog -test -tslib" ABI_X86="(64)"
+    dev-util/wayland-scanner required by (x11-libs/gtk+-3.24.52:3/3::gentoo, installed) USE="X cups introspection wayland (-aqua) -broadway -cloudproviders -colord -examples -gtk-doc -sysprof -test -vim-syntax -xinerama" ABI_X86="(64) -32 (-x32)"
+    dev-util/wayland-scanner required by (gui-libs/aquamarine-0.14.0:0/0.14::hyproverlay, ebuild scheduled for merge) USE="" ABI_X86="(64)"
+    dev-util/wayland-scanner required by (x11-base/xwayland-24.1.13:0/0::gentoo, installed) USE="libei (-selinux) -systemd -test -unwind -xcsecurity" ABI_X86="(64)"
+    >=dev-util/wayland-scanner-1.25.0 required by (dev-libs/wayland-protocols-1.49:0/0::gentoo, ebuild scheduled for merge) USE="-test" ABI_X86="(64)"
+    dev-util/wayland-scanner required by (media-libs/libva-2.24.1:0/2::gentoo, installed) USE="X wayland -glx" ABI_X86="(64) -32 (-x32)"
+    dev-util/wayland-scanner required by (kde-plasma/spectacle-6.6.6:6/6::gentoo, installed) USE="handbook -debug -share -test" ABI_X86="(64)"
+
+
+For more information about Blocked Packages, please refer to the following
+section of the Gentoo Linux x86 Handbook (architecture is irrelevant):
+
+https://wiki.gentoo.org/wiki/Handbook:X86/Working/Portage#Blocked_packages
+
+
+The following keyword changes are necessary to proceed:
+ (see "package.accept_keywords" in the portage(5) man page for more details)
+# required by gui-wm/hyprland-0.56.2::hyproverlay
+# required by =gui-wm/hyprland-0.56.2 (argument)
+=dev-libs/hyprlang-0.6.8 ~amd64
+# required by gui-libs/hyprland-guiutils-0.2.2::hyproverlay
+# required by gui-wm/hyprland-0.56.2::hyproverlay[guiutils]
+# required by =gui-wm/hyprland-0.56.2 (argument)
+=gui-libs/hyprtoolkit-0.5.4 ~amd64
+# required by gui-wm/hyprland-0.56.2::hyproverlay
+# required by =gui-wm/hyprland-0.56.2 (argument)
+=gui-libs/hyprwire-0.3.1 ~amd64
+# required by gui-libs/hyprtoolkit-0.5.4::hyproverlay
+# required by gui-libs/hyprland-guiutils-0.2.2::hyproverlay
+# required by gui-wm/hyprland-0.56.2::hyproverlay[guiutils]
+# required by =gui-wm/hyprland-0.56.2 (argument)
+=dev-util/hyprwayland-scanner-0.4.6 ~amd64
+# required by kde-frameworks/kidletime-6.27.0::gentoo[wayland]
+# required by kde-plasma/discover-6.6.6::gentoo
+# required by @selected
+# required by @world (argument)
+=dev-libs/wayland-protocols-1.49 ~amd64
+# required by gui-wm/hyprland-0.56.2::hyproverlay
+# required by =gui-wm/hyprland-0.56.2 (argument)
+=dev-cpp/glaze-7.0.2 ~amd64
+# required by gui-libs/hyprtoolkit-0.5.4::hyproverlay
+# required by gui-libs/hyprland-guiutils-0.2.2::hyproverlay
+# required by gui-wm/hyprland-0.56.2::hyproverlay[guiutils]
+# required by =gui-wm/hyprland-0.56.2 (argument)
+=gui-libs/aquamarine-0.14.0 ~amd64
+# required by =gui-wm/hyprland-0.56.2 (argument)
+=gui-wm/hyprland-0.56.2 ~amd64
+# required by gui-wm/hyprland-0.56.2::hyproverlay[guiutils]
+# required by =gui-wm/hyprland-0.56.2 (argument)
+=gui-libs/hyprland-guiutils-0.2.2 ~amd64
+# required by gui-wm/hyprland-0.56.2::hyproverlay
+# required by =gui-wm/hyprland-0.56.2 (argument)
+=dev-libs/hyprland-protocols-0.7.0 ~amd64
+# required by dev-libs/wayland-protocols-1.49::gentoo
+# required by gui-libs/aquamarine-0.14.0::hyproverlay
+# required by gui-libs/hyprtoolkit-0.5.4::hyproverlay
+# required by gui-libs/hyprland-guiutils-0.2.2::hyproverlay
+# required by gui-wm/hyprland-0.56.2::hyproverlay[guiutils]
+# required by =gui-wm/hyprland-0.56.2 (argument)
+=dev-util/wayland-scanner-1.26.0 ~amd64
+# required by gui-wm/hyprland-0.56.2::hyproverlay
+# required by =gui-wm/hyprland-0.56.2 (argument)
+=dev-libs/hyprgraphics-0.5.1-r1 ~amd64
+# required by gui-wm/hyprland-0.56.2::hyproverlay
+# required by =gui-wm/hyprland-0.56.2 (argument)
+=gui-libs/hyprcursor-0.1.13-r1 ~amd64
+# required by gui-wm/hyprland-0.56.2::hyproverlay
+# required by =gui-wm/hyprland-0.56.2 (argument)
+=gui-libs/hyprutils-0.14.1 ~amd64
+
+ * In order to avoid wasting time, backtracking has terminated early
+ * due to the above autounmask change(s). The --autounmask-backtrack=y
+ * option can be used to force further backtracking, but there is no
+ * guarantee that it will produce a solution.

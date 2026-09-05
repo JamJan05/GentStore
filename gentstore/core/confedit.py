@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -304,6 +305,113 @@ def plan_removal(
     if existing is None:
         return WritePlan("none", path, "", kind)
     return WritePlan("remove_line", path, existing, TargetKind.EXISTING, previous=existing)
+
+
+# ---------------------------------------------------------------------------
+# several lines at once
+# ---------------------------------------------------------------------------
+
+#: The four files a grouped write may reach.
+#:
+#: Narrower than the helper's own ``LINE_EDITABLE`` on purpose, and narrower
+#: than that list for a reason that is easy to state: these are the four
+#: ``emerge --autounmask`` proposes lines for, and a batch has no business
+#: carrying anything else. ``make.conf`` decides what Portage *does*, and
+#: ``package.mask`` adds a restriction rather than lifting one; neither has ever
+#: appeared in an autounmask block. The helper keeps its own copy of this list
+#: and checks against it, because a boundary that trusts its caller is not one.
+BATCHABLE = (
+    "package.accept_keywords",
+    "package.license",
+    "package.use",
+    "package.unmask",
+)
+
+
+@dataclass(frozen=True, slots=True)
+class BatchPlan:
+    """Several one-line additions, to be applied as a single operation.
+
+    Sorted into three, because the three mean different things to whoever is
+    looking at the screen and only the first is work.
+
+    *appends* are the lines that are not there yet. *already_present* are the
+    ones the file holds word for word — what a second run of the same analysis
+    produces, and not an error. *needs_replacement* is the awkward one: an entry
+    for that exact atom exists and says something else, because somebody wrote
+    ``=cat/pkg-1 **`` and Portage is now asking for ``~amd64``. Replacing a line
+    is not appending one, and a batch that quietly did both would be a wider
+    operation wearing a narrow name — so those are handed back for the screen to
+    show and for a person to settle deliberately.
+    """
+
+    appends: tuple[WritePlan, ...] = ()
+    already_present: tuple[WritePlan, ...] = ()
+    needs_replacement: tuple[WritePlan, ...] = ()
+
+    def __len__(self) -> int:
+        return len(self.appends)
+
+    @property
+    def is_empty(self) -> bool:
+        """Nothing to write — which is not the same as nothing being selected."""
+        return not self.appends
+
+    @property
+    def paths(self) -> tuple[Path, ...]:
+        """The distinct files this batch touches, in the order it touches them."""
+        seen: dict[Path, None] = {}
+        for plan in self.appends:
+            seen.setdefault(plan.path, None)
+        return tuple(seen)
+
+    def as_request(self) -> dict[str, object]:
+        """The ``append_lines`` request this batch corresponds to.
+
+        Structural: a list of path-and-line pairs, one object each. Not a blob
+        of text and not a file name with a body, so that the helper can check
+        every element on its own terms rather than having to parse something
+        first.
+        """
+        return {
+            "entries": [
+                {"path": str(plan.path), "line": plan.line} for plan in self.appends
+            ]
+        }
+
+
+def plan_batch(plans: Iterable[WritePlan]) -> BatchPlan:
+    """Sort *plans* into the three outcomes a batch has.
+
+    Takes plans rather than making them, so that the caller decides what is in
+    the batch and this stays a pure rearrangement. Anything aimed at a file
+    outside :data:`BATCHABLE` is handed back rather than dropped: silently
+    discarding a line the user ticked would be the worst of the answers
+    available.
+
+    A plan for a file whose ``package.*`` directory does not exist yet is an
+    ordinary append. The helper creates that one directory itself
+    (``ensure_line_directory``), which is what the preview has always said would
+    happen.
+    """
+    appends: list[WritePlan] = []
+    present: list[WritePlan] = []
+    replacing: list[WritePlan] = []
+
+    for plan in plans:
+        target = plan.path.parent.name if plan.creates_file else plan.path.name
+        if plan.is_noop:
+            present.append(plan)
+        elif plan.op == "append_line" and target in BATCHABLE:
+            appends.append(plan)
+        else:
+            replacing.append(plan)
+
+    return BatchPlan(
+        appends=tuple(appends),
+        already_present=tuple(present),
+        needs_replacement=tuple(replacing),
+    )
 
 
 def cp_from_atom(atom: str) -> str:
