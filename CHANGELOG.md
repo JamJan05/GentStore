@@ -72,6 +72,16 @@ tag was made.
   What counts now is an *unsatisfied* blocker, the slot-conflict banner, or the sentence about
   packages that cannot be installed at the same time.
 
+- **The frame said no entry would settle a conflict, when one would.** For a package whose
+  chain is blocked by something already installed, Portage reports the block and suggests
+  nothing — it only proposes changes for the package it was asked about. The screen read that
+  as "this is not something a line in your configuration will settle", which is a claim about
+  the whole system made from an answer about one package, and it was wrong on a real one: a
+  single `~amd64` keyword for the installed dependency unblocked both the package and three
+  stuck `@world` updates. It now says what is true — that Portage has nothing to suggest here,
+  that a block usually involves something already installed, and that an entry further up the
+  chain may well settle it.
+
 - **Closing the window during a long read crashed on the way out.** A background task that
   finished while Qt was tearing down found its signal object already destroyed on the C++ side
   and raised inside a `QRunnable`, which Qt turns into an abort. Building the package index takes

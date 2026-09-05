@@ -393,9 +393,12 @@ class RequiredChanges(QFrame):
     def _explanation_text(self, plan: InstallPlan) -> str:
         if not plan.groups:
             return self.tr(
-                "Portage could not find a set of packages that fits together. "
-                "Its own account of the conflict is below; this is not something "
-                "a line in your configuration will settle."
+                "Portage could not find a set of packages that fits together, and "
+                "has no change to suggest for this one. Its own account is below. "
+                "A block usually involves something already installed, and Portage "
+                "only proposes changes for the package it was asked about — so "
+                "there may well be an entry that settles this, further up the "
+                "chain, and this screen is not the thing that will find it."
             )
         if plan.is_provisional:
             return self.tr(
