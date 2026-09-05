@@ -51,8 +51,9 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from ...core.confedit import WritePlan
-from ...core.emerge_parse import parse_pretend
+from ...core.confedit import BatchPlan, WritePlan
+from ...core.install_plan import InstallPlan
+from ...core.install_plan import from_output as read_plan
 from ...core.masking import Blockage
 from ...core.masking import inspect as inspect_blocks
 from ...core.packages import (
@@ -157,6 +158,17 @@ class SearchPage(SplitPage):
         #: What to do once the command now running has finished successfully.
         #: Used for the two-step removal: show the list, then ask.
         self._after_command: Callable[[], None] | None = None
+        #: The analysis command line whose result was clean, or ``None``.
+        #:
+        #: The install gate, and an argv rather than a flag on purpose: it is
+        #: compared against the command the analysis *would* build for whatever
+        #: is selected now, so choosing another version, another repository or
+        #: turning binary packages on closes the gate by simply no longer
+        #: matching. Nothing has to remember to clear it.
+        self._gate: tuple[str, ...] | None = None
+        #: Set while an analysis this screen started is running, so that the
+        #: output arriving in the log can be told apart from any other command's.
+        self._analysing: tuple[str, ...] | None = None
         #: The version whose flags are on screen — not necessarily the one the
         #: details panel opened with, since the version picker changes it.
         self._use_cpv: str | None = None
@@ -294,12 +306,19 @@ class SearchPage(SplitPage):
         buttons.setSpacing(t.SPACE_2)
         self._btn_pretend = QPushButton()
         self._btn_pretend.clicked.connect(self._on_pretend)
+        self._btn_analyse = QPushButton()
+        self._btn_analyse.clicked.connect(self._on_analyse)
         self._btn_secondary = QPushButton()
         self._btn_secondary.clicked.connect(self._on_secondary)
         self._btn_primary = QPushButton()
         self._btn_primary.setProperty("variant", "primary")
         self._btn_primary.clicked.connect(self._on_primary)
-        for button in (self._btn_pretend, self._btn_secondary, self._btn_primary):
+        for button in (
+            self._btn_pretend,
+            self._btn_analyse,
+            self._btn_secondary,
+            self._btn_primary,
+        ):
             button.setEnabled(False)
             buttons.addWidget(button)
         actions.addLayout(buttons)
@@ -339,9 +358,7 @@ class SearchPage(SplitPage):
         layout.addWidget(self._block_notice)
 
         self._required = RequiredChanges()
-        self._required.write_requested.connect(
-            lambda plan: self._on_write_requested(plan, self._required)
-        )
+        self._required.apply_requested.connect(self._on_batch_requested)
         layout.addWidget(self._required)
 
         self._use_panel = UseFlagsPanel()
@@ -656,6 +673,7 @@ class SearchPage(SplitPage):
     def _refresh_actions(self, info: PackageDetails) -> None:
         installed = info.is_installed
         self._btn_pretend.setText(self.tr("Pretend"))
+        self._btn_analyse.setText(self.tr("Analyse requirements"))
         self._btn_secondary.setText(
             self.tr("Uninstall") if installed else self.tr("Add to @world")
         )
@@ -663,12 +681,15 @@ class SearchPage(SplitPage):
 
         for button, spec in (
             (self._btn_pretend, self._pretend_spec(info)),
+            (self._btn_analyse, self._analysis_spec(info)),
             (self._btn_secondary, self._secondary_spec(info)),
             (self._btn_primary, self._primary_spec(info)),
         ):
             # Docs/02-ui-design.md §8: a button that runs something says exactly
             # what, before it is pressed.
             button.setToolTip(spec.display if spec is not None else "")
+        if not self._gate_is_open():
+            self._btn_primary.setToolTip(self._gate_hint())
         self._command.setText(self._primary_spec(info).display)
         self._on_running_changed(self.context.is_running)
 
@@ -676,6 +697,18 @@ class SearchPage(SplitPage):
 
     def _pretend_spec(self, info: PackageDetails) -> CommandSpec:
         return emerge.pretend([self._atom_for(info)])
+
+    def _analysis_spec(self, info: PackageDetails) -> CommandSpec:
+        """The analysis, built with the options the install button would use.
+
+        Same atom, same ``--getbinpkg``. A plan worked out for one command and
+        an install that runs another would be a description of something the
+        user never agreed to, and the difference would show up as a refusal
+        after the password rather than before it.
+        """
+        return emerge.analyse(
+            [self._atom_for(info)], binaries=self.context.use_binaries
+        )
 
     def _primary_spec(self, info: PackageDetails) -> CommandSpec:
         return emerge.install(
@@ -689,12 +722,52 @@ class SearchPage(SplitPage):
 
     def _on_running_changed(self, running: bool) -> None:
         ready = self._details is not None and not running
-        for button in (self._btn_pretend, self._btn_secondary, self._btn_primary):
+        for button in (self._btn_pretend, self._btn_analyse, self._btn_secondary):
             button.setEnabled(ready)
+        self._btn_primary.setEnabled(ready and self._gate_is_open())
+
+    def _gate_is_open(self) -> bool:
+        """Whether Portage has said, about *this* command, that it can proceed.
+
+        The gate is shut until an analysis of exactly the command the install
+        button would run comes back with nothing to write and nothing
+        conflicting. It costs a click and several seconds before every install,
+        and it buys the one thing this screen could not say before: that the
+        build is going to start rather than stop on a keyword four dependencies
+        down.
+        """
+        info = self._details
+        return (
+            info is not None
+            and self._gate is not None
+            and self._gate == self._analysis_spec(info).argv
+        )
+
+    def _gate_hint(self) -> str:
+        return self.tr(
+            "Run “Analyse requirements” first — Portage has not confirmed that "
+            "this can be built as your system stands."
+        )
 
     def _on_pretend(self) -> None:
         if self._details is not None:
             self.context.run(self._pretend_spec(self._details))
+
+    def _on_analyse(self) -> None:
+        """Ask Portage what it wants changed, all of it, before installing."""
+        info = self._details
+        if info is None:
+            return
+        spec = self._analysis_spec(info)
+        # Cleared before rather than after: whatever the previous answer was, it
+        # describes a moment that has passed, and a gate left open across a run
+        # is a gate that is not a gate.
+        self._gate = None
+        self._btn_primary.setEnabled(False)
+        if self.context.run(spec):
+            self._analysing = spec.argv
+        else:
+            self._analysing = None
 
     def _on_primary(self) -> None:
         """Install or update, after showing the command and asking."""
@@ -752,12 +825,13 @@ class SearchPage(SplitPage):
         pending, self._after_command = self._after_command, None
         if code == 0 and pending is not None:
             pending()
-        self._absorb_required_changes()
+        analysed, self._analysing = self._analysing, None
+        self._absorb_required_changes(analysed)
         # Whatever ran may have installed or removed something.
         self._model.invalidate_states()
         self._reload_package()
 
-    def _absorb_required_changes(self) -> None:
+    def _absorb_required_changes(self, analysed: tuple[str, ...] | None) -> None:
         """Read back what emerge refused to proceed without.
 
         Deliberately not conditional on the exit code. A run that stops for
@@ -768,17 +842,30 @@ class SearchPage(SplitPage):
         The log view is cleared when a command starts, so what it holds belongs
         to the run that just finished; anything without such a block parses to
         nothing and hides the frame.
+
+        *analysed* is the command line if this was an analysis this screen
+        started, and it is the only thing that can open the install gate. A
+        plain ``--pretend`` run can come back looking every bit as clean and
+        mean less: without ``--autounmask`` Portage never mentions a licence
+        (see ``runner/emerge.py``), so "it said nothing" would be answering a
+        question that was not asked.
         """
         window = self.window()
         output = window.log_view.text() if hasattr(window, "log_view") else ""
-        if not output:
-            self._required.clear()
-            return
-        try:
-            self._required.set_preview(parse_pretend(output))
-        except Exception:  # pragma: no cover - output we could not make sense of
-            log.warning("Could not read the emerge output back", exc_info=True)
-            self._required.clear()
+        plan: InstallPlan | None = None
+        if output:
+            try:
+                plan = read_plan(output)
+            except Exception:  # pragma: no cover - output we could not make sense of
+                log.warning("Could not read the emerge output back", exc_info=True)
+        self._required.set_plan(plan)
+
+        self._gate = (
+            analysed if analysed is not None and plan is not None and plan.is_ready
+            else None
+        )
+        if self._details is not None:
+            self._refresh_actions(self._details)
 
     def _forget_pending(self) -> None:
         self._after_command = None
@@ -853,6 +940,93 @@ class SearchPage(SplitPage):
             **self.context.backup_options(),
             **plan.as_request(),
         )
+
+    def _on_batch_requested(self, batch: object) -> None:
+        """Send one set of lines to the helper as a single operation.
+
+        One request, one backup, one password, for a set the user has just seen
+        written out in full. The helper still checks every entry on its own
+        side: it reads its request from standard input and is in no position to
+        assume what wrote it, and "the user agreed to all of this at once" is a
+        fact about this window, not about the bytes arriving there.
+        """
+        if not isinstance(batch, BatchPlan) or batch.is_empty:
+            return
+        self._writer = self._required
+        self._required.set_busy(True)
+        run_async(
+            helper_client.request,
+            self._on_batch_written,
+            self._on_write_failed,
+            "append_lines",
+            ensure_backup=self.context.backups.needs_backup(),
+            **self.context.backup_options(),
+            **batch.as_request(),
+        )
+
+    def _on_batch_written(self, result: object) -> None:
+        """Report what the helper did, then ask Portage the question again.
+
+        The plan that was just applied described the system as it was before it
+        was applied, so it is now out of date by construction — and the run that
+        replaces it is the only thing that can open the install gate. Portage
+        also routinely stops resolving as soon as autounmask finds something,
+        which means the second run is where a conflict either disappears or
+        turns out to have been real.
+        """
+        if not getattr(result, "ok", False):
+            self._report_write_failure(result)
+            return
+
+        data = getattr(result, "data", {}) or {}
+        self.context.backups.note(getattr(result, "backup", None))
+        self.context.backups_changed.emit()
+        self._required.report_success(self._batch_report(data))
+
+        clear_use_caches()
+        self.context.reload_portage()
+        self._gate = None
+        self._reload_package()
+        self._on_analyse()
+
+    def _batch_report(self, data: dict) -> str:
+        """What actually happened, file by file, in the helper's own words."""
+        entries = [item for item in data.get("entries", []) if isinstance(item, dict)]
+        written = [item for item in entries if item.get("changed")]
+        if not written:
+            return self.tr("No change was needed: every line was already there.")
+
+        by_file: dict[str, list[str]] = {}
+        for item in written:
+            by_file.setdefault(str(item.get("path", "")), []).append(
+                str(item.get("line", ""))
+            )
+        blocks = [
+            "{path}\n{lines}".format(
+                path=path, lines="\n".join(f"+ {line}" for line in lines)
+            )
+            for path, lines in by_file.items()
+        ]
+        skipped = len(entries) - len(written)
+        report = self.tr("Added %n line(s):", "", len(written)) + "\n" + "\n\n".join(blocks)
+        if skipped:
+            report += "\n" + self.tr(
+                "%n line(s) were already there and were left alone.", "", skipped
+            )
+        return report
+
+    def _report_write_failure(self, result: object) -> None:
+        requester = self._writer
+        if requester is None:
+            return
+        if getattr(result, "cancelled", False):
+            requester.report_failure(self.tr("Cancelled — nothing was written."))
+        else:
+            requester.report_failure(
+                self.tr("Nothing was written: {error}").format(
+                    error=getattr(result, "error", "")
+                )
+            )
 
     def _on_written(self, result: object) -> None:
         requester = self._writer
