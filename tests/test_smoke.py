@@ -151,6 +151,35 @@ def test_a_worker_reports_progress_back_to_the_gui_thread(app: GentstoreApplicat
     assert seen == [(1, 3), (2, 3), (3, 3)]
 
 
+def test_a_result_arriving_after_shutdown_does_not_abort(app: GentstoreApplication) -> None:
+    """A worker finishing while Qt is tearing down must not take the process.
+
+    Closing the window while the package index is still building was enough:
+    the index would land a few seconds later, find its signal object already
+    destroyed on the C++ side, and raise inside a ``QRunnable`` — which Qt turns
+    into an abort. A crash on the way out, for a result nobody was waiting for.
+
+    Deleting the signal object is exactly what ``QApplication`` teardown does to
+    it, so this is the real sequence rather than an imitation of it.
+    """
+    from PyQt6 import sip
+
+    from gentstore.ui.tasks import Task, _pending
+
+    for outcome, work in (("finished", lambda: "a result"), ("failed", _explode)):
+        task = Task(work)
+        _pending.add(task)
+        sip.delete(task._signals)
+
+        task.run()  # must return rather than raise
+
+        assert task not in _pending, f"the {outcome} path leaks its task"
+
+
+def _explode() -> None:
+    raise ValueError("the work itself went wrong")
+
+
 def test_the_masks_screen_says_it_is_still_working(window: MainWindow) -> None:
     """The conditional-licence section reads every LICENSE in every repository.
 

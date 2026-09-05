@@ -56,6 +56,14 @@ tag was made.
 
 ### Fixed
 
+- **Closing the window during a long read crashed on the way out.** A background task that
+  finished while Qt was tearing down found its signal object already destroyed on the C++ side
+  and raised inside a `QRunnable`, which Qt turns into an abort. Building the package index takes
+  seconds, so closing the window in that time was enough. The guard for this was already there
+  and already documented; it wrapped the emit, while the failure was one line above it, in
+  reading the signal off an object that no longer existed. The signal is now named rather than
+  passed, so the lookup happens inside the same `try`.
+
 - **The directory the preview promised is now actually created.** Gentoo's recommended form for
   `package.use` and its neighbours is a directory with one file per package, and the panel has
   always said so before writing: *"Neither package.unmask nor a directory of that name exists
