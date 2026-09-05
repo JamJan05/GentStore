@@ -114,6 +114,61 @@ def install(
     )
 
 
+#: The autounmask options the analysis carries, and the reason each is there.
+#:
+#: ``--autounmask`` is not redundant. Portage turns autounmask on by itself for
+#: keywords, masks and USE, but ``--autounmask-license`` defaults to ``"n"``
+#: unless ``--autounmask`` was asked for explicitly
+#: (``_emerge/create_depgraph_params.py``: ``myopts.get("--autounmask-license",
+#: "y" if autounmask is True else "n")``). So a preview without it can never
+#: mention a licence, which is exactly the refusal a user cannot guess at.
+#: ``--autounmask-license=y`` then says so a second time, in the command line
+#: the window shows, rather than leaving it to be inferred.
+#:
+#: Three options are deliberately absent and must stay absent.
+#: ``--autounmask-write`` and ``--autounmask-continue`` write to
+#: ``/etc/portage`` themselves, and the one program here that writes there is
+#: the helper, after the user has seen the lines. ``--ask`` waits for an answer
+#: on a terminal this process does not have.
+#:
+#: ``--autounmask-backtrack=y`` is absent for a different reason: it is
+#: disabled by default, ``man emerge`` warns that it can waste a great deal of
+#: time with no guarantee of a solution, and the ordinary run already prints
+#: everything the user is being asked to accept.
+_AUTOUNMASK = ("--autounmask", "--autounmask-license=y")
+
+
+def analyse(
+    atoms: Iterable[str], *, oneshot: bool = False, binaries: bool = False
+) -> CommandSpec:
+    """``emerge -pv --autounmask`` — everything Portage wants changed, at once.
+
+    The difference from :func:`pretend` is :data:`_AUTOUNMASK`, and the point of
+    it is to collect in one run what the user would otherwise meet one refusal
+    at a time: a keyword, then a mask, then a licence, then a USE flag.
+
+    The options after that are the ones :func:`install` would carry for the same
+    package, because a plan describing a different command from the one the
+    button runs is worse than no plan.
+
+    A run that finds something to change **exits non-zero**. That is the answer,
+    not a failure: the block of lines it printed is the whole message.
+    """
+    atoms = tuple(atoms)
+    return _spec(
+        (
+            "--pretend",
+            "--verbose",
+            *_AUTOUNMASK,
+            *_binary(binaries),
+            *(("--oneshot",) if oneshot else ()),
+            *atoms,
+        ),
+        privileged=False,
+        description="analyse",
+    )
+
+
 def unmerge_pretend(atoms: Iterable[str]) -> CommandSpec:
     """``emerge -pv --unmerge`` — the list that has to be shown before removing.
 
