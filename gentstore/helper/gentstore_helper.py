@@ -83,6 +83,34 @@ LINE_EDITABLE = (
     "make.conf",
 )
 
+#: The files one ``append_lines`` request may reach — narrower than
+#: :data:`LINE_EDITABLE`, and narrower on purpose.
+#:
+#: A grouped write exists for one thing: the block of lines
+#: ``emerge --autounmask`` prints when it will not go on. Those blocks name four
+#: files and have never named another. ``make.conf`` decides what Portage
+#: *does* rather than which packages it installs, and ``package.mask`` adds a
+#: restriction rather than lifting one; neither belongs in an operation whose
+#: whole argument for existing is "the user agreed to all of this at once".
+#:
+#: The interface keeps the same four names in ``BATCHABLE``
+#: (gentstore/core/confedit.py) and the test suite compares the two lists. This
+#: copy is the one that decides.
+BATCH_EDITABLE = (
+    "package.accept_keywords",
+    "package.license",
+    "package.use",
+    "package.unmask",
+)
+
+#: How many lines one grouped request may carry.
+#:
+#: A bound rather than a policy, in the spirit of :data:`PATTERN_MAX`. The
+#: largest autounmask block seen in practice is a couple of dozen lines; a
+#: request with thousands is not a user agreeing to a plan, and every one of
+#: them is a file read and rewritten while this process is root.
+BATCH_MAX = 200
+
 #: The ``make.conf`` variables a line written by Gentstore may assign.
 #:
 #: ``make.conf`` is the one name on :data:`LINE_EDITABLE` whose *contents*
@@ -162,7 +190,15 @@ BACKUP_KEEP_MAX = 100
 #: does it, instead of being deleted.
 CONFIG_ARCHIVE = Path("/etc/config-archive")
 
-PROTOCOL_VERSION = 1
+#: Bumped to 2 when ``append_lines`` arrived.
+#:
+#: The helper is installed separately from the interface — ``make
+#: install-system`` — so the two can be different ages on one machine, and the
+#: documentation already warns about a stale copy. Without a number to read,
+#: an interface asking an old helper for a grouped write gets ``unknown_op``,
+#: which is indistinguishable from a malformed request; with one, it can say
+#: "the installed helper is older than this window" and mean it.
+PROTOCOL_VERSION = 2
 
 _BACKUP_NAME = re.compile(r"^portage\.bak-\d{4}-\d{2}-\d{2}T\d{4}(-\d+)?$")
 _ARCHIVE_NAME = re.compile(r"^portage\.bak-\d{4}-\d{2}-\d{2}T\d{4}(-\d+)?\.tar\.gz$")
@@ -337,6 +373,70 @@ def check_path(
     return resolved
 
 
+#: The names :func:`ensure_line_directory` may create a directory for.
+#:
+#: :data:`LINE_EDITABLE` minus ``make.conf``, and the exception is the whole
+#: reason this is a list of its own rather than a reuse of that one.
+#: ``make.conf`` is a *file*; creating a directory of that name on a system that
+#: has not got one yet would leave Portage reading an empty directory where its
+#: main configuration file belongs.
+LINE_DIRECTORIES = tuple(name for name in LINE_EDITABLE if name != "make.conf")
+
+
+def ensure_line_directory(raw: str) -> Path | None:
+    """Create ``/etc/portage/package.unmask`` when that is all that is missing.
+
+    Gentoo's own recommendation is the directory form — one file per package —
+    and the interface says so before it writes: *"Neither package.unmask nor a
+    directory of that name exists yet. Gentoo recommends the directory form, so
+    that is what will be created."* Nothing then created it.
+    :func:`check_path` requires the parent of a target to be a directory
+    already, so on a system that has never unmasked anything the write was
+    refused, with a message about a directory the user had just been told would
+    appear.
+
+    Deliberately *not* a relaxation of :func:`check_path`, which is left exactly
+    as strict as it was. This is a separate step with a separate question to
+    answer — "is this the one directory Gentstore is entitled to create?" — and
+    it answers it from the resolved path alone:
+
+    * the target resolves to exactly ``<root>/<name>/<file>``, two components
+      and no more, so nothing deeper and nothing shallower qualifies;
+    * *name* is one of :data:`LINE_DIRECTORIES`;
+    * nothing is there yet, in any form. An existing symlink is left alone for
+      :func:`check_path` to refuse, rather than being replaced here.
+
+    Returns the directory if it created one, ``None`` otherwise — including for
+    every path it declines to touch, which then goes on to ``check_path`` and is
+    refused there in the ordinary way. Nothing here reports a failure of its
+    own, because "I did not need to do anything" and "this is not for me" both
+    mean the same thing to the caller.
+    """
+    if not raw.startswith("/"):
+        return None
+
+    root = _root()
+    try:
+        relative = Path(raw).resolve(strict=False).relative_to(root)
+    except ValueError:
+        return None
+    if len(relative.parts) != 2 or relative.parts[0] not in LINE_DIRECTORIES:
+        return None
+
+    directory = root / relative.parts[0]
+    # ``exists()`` follows links, so a dangling symlink would look absent; the
+    # link itself is what must be noticed.
+    if directory.is_symlink() or directory.exists():
+        return None
+    try:
+        directory.mkdir()
+    except FileExistsError:  # pragma: no cover - something got there first
+        return None
+    # mkdir's mode is subject to the umask, and this one is not ours to assume.
+    os.chmod(directory, 0o755)
+    return directory
+
+
 def _require_line_target(path: Path) -> str:
     """Only the configuration files Gentstore edits one line at a time.
 
@@ -367,6 +467,25 @@ def _require_line_target(path: Path) -> str:
     if len(relative.parts) > depth:
         raise HelperError(
             "not_editable", f"{path} is deeper than anything Gentstore writes"
+        )
+    return name
+
+
+def _require_batch_target(path: Path) -> str:
+    """The same question as :func:`_require_line_target`, asked more narrowly.
+
+    Runs *through* that function rather than beside it, so a grouped write gets
+    every check a single one gets — inside the root, one of the names Gentstore
+    writes, no deeper than Gentstore goes — and then one more. Written this way
+    round because the narrow list is allowed to be a subset of the wide one and
+    is not allowed to be a second, divergent copy of it.
+    """
+    name = _require_line_target(path)
+    if name not in BATCH_EDITABLE:
+        allowed = ", ".join(BATCH_EDITABLE)
+        raise HelperError(
+            "not_batchable",
+            f"a grouped write is limited to {allowed}; {path} is none of them",
         )
     return name
 
@@ -632,7 +751,9 @@ def restore_backup(name: str) -> Path:
 
 
 def op_append_line(request: dict[str, Any]) -> dict[str, Any]:
-    path = check_path(_string(request, "path"))
+    raw = _string(request, "path")
+    created = ensure_line_directory(raw)
+    path = check_path(raw)
     target = _require_line_target(path)
     line = _string(request, "line").rstrip("\n")
     if "\n" in line:
@@ -648,7 +769,113 @@ def op_append_line(request: dict[str, Any]) -> dict[str, Any]:
     if text and not text.endswith("\n"):
         text += "\n"
     atomic_write(path, text + line + "\n")
-    return {"changed": True, "line": line}
+    result: dict[str, Any] = {"changed": True, "line": line}
+    if created is not None:
+        result["created_directory"] = str(created)
+    return result
+
+
+def _batch_entries(request: dict[str, Any]) -> list[tuple[Path, str]]:
+    """Check every element of a grouped request before any of them is written.
+
+    Two passes, and the split is the point. Everything is validated first —
+    every path resolved and proved to be one of the four files, every line
+    proved to be a line — and only then does anything reach the disk. A request
+    whose seventh entry is wrong therefore changes nothing at all, rather than
+    leaving six files edited and the configuration in a state nobody chose and
+    nobody can name.
+
+    The one thing this pass does write is a missing ``package.*`` directory, via
+    :func:`ensure_line_directory`, because :func:`check_path` cannot approve a
+    path whose parent does not exist yet and the validation is what calls it. So
+    a batch that is refused can leave an empty directory behind — and an empty
+    ``package.unmask`` means exactly what no ``package.unmask`` means, which is
+    nothing at all. The guarantee that matters, that no *line* is written, is
+    untouched.
+
+    The user agreeing to a plan in one gesture is what this operation is for. It
+    is not a reason to believe the plan: it arrived on standard input like every
+    other request, and each entry is checked here as if it had come alone.
+    """
+    entries = request.get("entries")
+    if not isinstance(entries, list):
+        raise HelperError("bad_request", "'entries' must be a list")
+    if not entries:
+        raise HelperError("bad_request", "'entries' is empty; nothing to do")
+    if len(entries) > BATCH_MAX:
+        raise HelperError(
+            "too_many", f"a grouped write takes at most {BATCH_MAX} lines"
+        )
+
+    prepared: list[tuple[Path, str]] = []
+    for position, item in enumerate(entries):
+        where = f"entry {position + 1}"
+        if not isinstance(item, dict):
+            raise HelperError("bad_request", f"{where} is not an object")
+        raw_path = item.get("path")
+        raw_line = item.get("line")
+        if not isinstance(raw_path, str):
+            raise HelperError("bad_request", f"{where}: 'path' must be a string")
+        if not isinstance(raw_line, str):
+            raise HelperError("bad_request", f"{where}: 'line' must be a string")
+
+        try:
+            ensure_line_directory(raw_path)
+            path = check_path(raw_path)
+            _require_batch_target(path)
+        except HelperError as exc:
+            raise HelperError(exc.code, f"{where}: {exc}") from exc
+
+        line = raw_line.rstrip("\n")
+        if "\n" in line:
+            raise HelperError("multiline", f"{where}: each entry is exactly one line")
+        if not line.strip():
+            raise HelperError("bad_request", f"{where}: the line is empty")
+        prepared.append((path, line))
+
+    return prepared
+
+
+def op_append_lines(request: dict[str, Any]) -> dict[str, Any]:
+    """Append several lines to the four ``package.*`` files, or none of them.
+
+    The operation behind "apply the changes Portage asked for" — one
+    authentication for one set of lines the user has read, instead of one for
+    each. What it is *not* is a wider operation: it appends, to four named
+    files, one line at a time, and every one of those lines went through the
+    checks in :func:`_batch_entries` before the first byte was written.
+
+    Two entries may name the same file. Each is read and rewritten in turn, so
+    the second sees the first, which is what makes "eight keywords into one
+    file" come out as eight lines rather than as a race with itself.
+    """
+    prepared = _batch_entries(request)
+
+    written: list[dict[str, Any]] = []
+    for path, line in prepared:
+        text = _read(path)
+        if line in _lines(text):
+            written.append(
+                {
+                    "path": str(path),
+                    "line": line,
+                    "changed": False,
+                    "detail": "the file already contains that line",
+                }
+            )
+            continue
+        if text and not text.endswith("\n"):
+            text += "\n"
+        atomic_write(path, text + line + "\n")
+        written.append({"path": str(path), "line": line, "changed": True})
+
+    changed = sum(1 for item in written if item["changed"])
+    return {
+        "changed": bool(changed),
+        "entries": written,
+        "written": changed,
+        "skipped": len(written) - changed,
+    }
 
 
 def op_replace_line(request: dict[str, Any]) -> dict[str, Any]:
@@ -807,6 +1034,7 @@ def _archive(path: Path) -> Path | None:
 
 OPERATIONS = {
     "append_line": op_append_line,
+    "append_lines": op_append_lines,
     "replace_line": op_replace_line,
     "remove_line": op_remove_line,
     "write_file": op_write_file,
@@ -818,7 +1046,15 @@ OPERATIONS = {
 
 #: Operations that change a file and therefore deserve a backup beforehand.
 MUTATING = frozenset(
-    {"append_line", "replace_line", "remove_line", "write_file", "delete_file", "cfg_apply"}
+    {
+        "append_line",
+        "append_lines",
+        "replace_line",
+        "remove_line",
+        "write_file",
+        "delete_file",
+        "cfg_apply",
+    }
 )
 
 

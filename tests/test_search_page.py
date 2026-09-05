@@ -24,6 +24,7 @@ selection — and not about which packages happen to be installed here.
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -389,38 +390,313 @@ The following USE changes are necessary to proceed:
 """
 
 
-def test_a_refusal_about_a_dependency_becomes_a_line_to_save(app) -> None:  # noqa: ANN001
+def make_panel(config_dir=None):  # noqa: ANN001, ANN201 - a widget
+    """The panel, pointed at a throwaway ``/etc/portage`` when one is given.
+
+    Without it the batch is worked out against the machine running the tests,
+    and "this line is already accepted here" turns a test about grouping into a
+    test about somebody's configuration.
+    """
+    from gentstore.ui.widgets.required_changes import RequiredChanges
+
+    return RequiredChanges(config_dir=config_dir)
+
+
+def test_a_refusal_about_a_dependency_becomes_a_line_to_save(app, tmp_path) -> None:  # noqa: ANN001
     """emerge stops, and the line it wants is offered rather than just printed.
 
     The package itself is fine here — nothing is masked — so the block notice
     has nothing to say and this frame is the only thing standing between the
     user and retyping an atom out of the terminal pane.
     """
-    from gentstore.core.emerge_parse import parse_pretend
-    from gentstore.ui.widgets.required_changes import RequiredChanges
+    from gentstore.core.install_plan import from_output
 
-    frame = RequiredChanges()
-    frame.set_preview(parse_pretend(REFUSED_FOR_A_DEPENDENCY))
+    (tmp_path / "package.use").mkdir()
+    frame = make_panel(tmp_path)
+    frame.set_plan(from_output(REFUSED_FOR_A_DEPENDENCY))
 
     assert not frame.isHidden()
-    assert [entry.line for entry in frame.entries] == [
+    assert [entry.line for entry in frame.selected] == [
         ">=sys-fs/squashfs-tools-4.7.5 zstd"
     ]
 
-    # Pressing the row's button only arms the preview; nothing is written.
-    frame._arm(frame.entries[0])
-    assert frame.plan is not None
-    assert frame.plan.line == ">=sys-fs/squashfs-tools-4.7.5 zstd"
-    assert frame.plan.path.name == "squashfs-tools"
-    assert "package.use" in str(frame.plan.path)
+    # Asking to see the lines only builds the preview; nothing is written.
+    frame._on_show_lines()
+    batch = frame.batch
+    assert batch is not None
+    assert [plan.line for plan in batch.appends] == [
+        ">=sys-fs/squashfs-tools-4.7.5 zstd"
+    ]
+    assert batch.appends[0].path.name == "squashfs-tools"
+    assert "package.use" in str(batch.appends[0].path)
 
 
 def test_output_with_nothing_to_change_leaves_the_frame_away(app) -> None:  # noqa: ANN001
     """An ordinary run must not leave a demand on the screen."""
-    from gentstore.core.emerge_parse import parse_pretend
-    from gentstore.ui.widgets.required_changes import RequiredChanges
+    from gentstore.core.install_plan import from_output
 
-    frame = RequiredChanges()
-    frame.set_preview(parse_pretend("[ebuild  N     ] app-misc/foo-1.2::gentoo 10 KiB\n"))
+    frame = make_panel()
+    frame.set_plan(from_output("[ebuild  N     ] app-misc/foo-1.2::gentoo 10 KiB\n"))
     assert frame.isHidden()
-    assert frame.entries == ()
+    assert frame.selected == ()
+
+
+def test_an_unticked_line_stays_out_of_the_batch(app, tmp_path) -> None:  # noqa: ANN001
+    """The checkbox is the decision, and it is the only thing consulted."""
+    from gentstore.core.install_plan import from_output
+
+    frame = make_panel(tmp_path)
+    plan = from_output(REFUSED_FOR_A_DEPENDENCY)
+    frame.set_plan(plan)
+
+    frame._on_entry_toggled(plan.entries[0], False)
+    assert frame.selected == ()
+
+    frame._on_show_lines()
+    batch = frame.batch
+    assert batch is not None and batch.is_empty
+
+
+def test_unticking_survives_a_second_analysis(app) -> None:  # noqa: ANN001
+    """Re-running the analysis must not undo an answer the user has given.
+
+    The second run reports the same line, because nothing was written. Ticking
+    it again "because it looks routine" would quietly reverse a decision, and
+    the decision is the only thing this screen is really asking for.
+    """
+    from gentstore.core.install_plan import from_output
+
+    frame = make_panel()
+    plan = from_output(REFUSED_FOR_A_DEPENDENCY)
+    frame.set_plan(plan)
+    frame._on_entry_toggled(plan.entries[0], False)
+
+    frame.set_plan(from_output(REFUSED_FOR_A_DEPENDENCY))
+    assert frame.selected == ()
+
+
+def test_a_line_goes_in_even_when_its_directory_does_not_exist(app, tmp_path) -> None:  # noqa: ANN001
+    """Gentoo recommends the directory form, and now something creates it.
+
+    The preview has always said "neither package.use nor a directory of that
+    name exists yet, so that is what will be created", and for a long time
+    nothing did — ``check_path`` refused a target whose parent was missing. The
+    helper creates that one directory itself now, so the line is an ordinary
+    append and belongs in the batch like any other.
+    """
+    from gentstore.core.install_plan import from_output
+
+    frame = make_panel(tmp_path)          # nothing exists under it at all
+    frame.set_plan(from_output(REFUSED_FOR_A_DEPENDENCY))
+    frame._on_show_lines()
+
+    batch = frame.batch
+    assert batch is not None and not batch.is_empty
+    assert [plan.line for plan in batch.appends] == [
+        ">=sys-fs/squashfs-tools-4.7.5 zstd"
+    ]
+    assert batch.needs_replacement == ()
+
+
+def test_a_conflict_is_shown_and_offers_no_button(app) -> None:  # noqa: ANN001
+    """Portage could not resolve the graph, and no line in /etc/portage will.
+
+    The rule the screen follows is "what the parser does not understand stays
+    visible": the text is Portage's own, and there is nothing to apply.
+    """
+    from gentstore.core.install_plan import from_output
+
+    fixture = Path(__file__).parent / "fixtures" / "pretend-conflict.txt"
+    frame = make_panel()
+    plan = from_output(fixture.read_text(encoding="utf-8"))
+    frame.set_plan(plan)
+
+    assert not frame.isHidden()
+    assert plan.conflicts and not plan.can_apply
+    assert not frame._btn_apply.isVisible()
+    assert not frame._conflict.isHidden()
+
+
+def test_masks_start_unticked_and_keywords_do_not(app) -> None:  # noqa: ANN001
+    """A keyword is ordinary Gentoo; an unmask undoes somebody's decision."""
+    from gentstore.core.install_plan import from_output
+
+    frame = make_panel()
+    frame.set_plan(
+        from_output(
+            "The following keyword changes are necessary to proceed:\n"
+            "=cat/keyworded-1 ~amd64\n"
+            "\n"
+            "The following mask changes are necessary to proceed:\n"
+            "=cat/masked-1\n"
+        )
+    )
+
+    assert [entry.line for entry in frame.selected] == ["=cat/keyworded-1 ~amd64"]
+
+
+def test_a_starred_keyword_and_a_live_atom_start_unticked(app) -> None:  # noqa: ANN001
+    """``**`` and ``9999`` are decisions of a different size from ``~amd64``."""
+    from gentstore.core.install_plan import from_output
+
+    frame = make_panel()
+    plan = from_output(
+        "The following keyword changes are necessary to proceed:\n"
+        "=cat/ordinary-1 ~amd64\n"
+        "=cat/untested-1 **\n"
+        "=cat/live-9999 **\n"
+    )
+    frame.set_plan(plan)
+
+    assert [entry.line for entry in frame.selected] == ["=cat/ordinary-1 ~amd64"]
+    assert [entry.line for entry in plan.notable] == [
+        "=cat/untested-1 **",
+        "=cat/live-9999 **",
+    ]
+
+
+# -- the install gate -------------------------------------------------------
+
+
+def feed_log(window: MainWindow, text: str) -> None:
+    """Put *text* in the log pane the way a finished command would leave it."""
+    window.log_view.start("emerge", "")
+    for line in text.splitlines():
+        window.log_view.append(line)
+
+
+def arm_details(page: SearchPage) -> object:
+    info = make_details()
+    page._details = info
+    page._selected_cpv = "media-video/mpv-0.40.0"
+    page._refresh_actions(info)
+    return info
+
+
+def test_the_install_button_waits_for_an_analysis(
+    window: MainWindow, page: SearchPage, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Nothing installs until Portage has said, about this command, that it can.
+
+    The gate costs a click and a few seconds before every install. What it buys
+    is the one thing the screen could not say before: that the build will start
+    rather than stop on a keyword four dependencies down.
+    """
+    monkeypatch.setattr(page, "_reload_package", lambda: None)
+    info = arm_details(page)
+
+    assert not page._btn_primary.isEnabled(), "no analysis has been run yet"
+    assert page._btn_analyse.isEnabled()
+
+    feed_log(window, (Path(__file__).parent / "fixtures" / "pretend-clean.txt").read_text())
+    page._analysing = page._analysis_spec(info).argv
+    page._on_command_finished(0)
+
+    assert page._btn_primary.isEnabled(), "a clean analysis opens the gate"
+
+
+def test_an_analysis_that_wants_changes_keeps_the_gate_shut(
+    window: MainWindow, page: SearchPage, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(page, "_reload_package", lambda: None)
+    info = arm_details(page)
+
+    feed_log(window, REFUSED_FOR_A_DEPENDENCY)
+    page._analysing = page._analysis_spec(info).argv
+    page._on_command_finished(1)
+
+    assert not page._btn_primary.isEnabled()
+    assert not page._required.isHidden(), "and the lines are on screen instead"
+
+
+def test_a_plain_pretend_cannot_open_the_gate(
+    window: MainWindow, page: SearchPage, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``--pretend`` without ``--autounmask`` never mentions a licence.
+
+    So a clean-looking run of it is an answer to a question that was not asked,
+    and letting it stand in for the analysis would be the quietest way to put
+    the old behaviour back.
+    """
+    monkeypatch.setattr(page, "_reload_package", lambda: None)
+    arm_details(page)
+
+    feed_log(window, (Path(__file__).parent / "fixtures" / "pretend-clean.txt").read_text())
+    page._analysing = None          # a pretend, not an analysis
+    page._on_command_finished(0)
+
+    assert not page._btn_primary.isEnabled()
+
+
+def test_choosing_another_version_shuts_the_gate(
+    window: MainWindow, page: SearchPage, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The gate is the command line, so a different atom is a different gate."""
+    monkeypatch.setattr(page, "_reload_package", lambda: None)
+    info = arm_details(page)
+    feed_log(window, (Path(__file__).parent / "fixtures" / "pretend-clean.txt").read_text())
+    page._analysing = page._analysis_spec(info).argv
+    page._on_command_finished(0)
+    assert page._btn_primary.isEnabled()
+
+    page._selected_cpv = "media-video/mpv-0.41.0"
+    page._refresh_actions(info)
+
+    assert not page._btn_primary.isEnabled()
+
+
+def test_the_analysis_carries_the_options_the_install_would(page: SearchPage) -> None:
+    """A plan for one command and an install of another is not a plan."""
+    info = arm_details(page)
+    analysis = page._analysis_spec(info).argv
+    install = page._primary_spec(info).argv
+
+    assert "--autounmask" in analysis
+    assert "--pretend" in analysis
+    assert analysis[-1] == install[-1], "the same atom"
+    assert ("--getbinpkg" in analysis) == ("--getbinpkg" in install)
+    for forbidden in ("--autounmask-write", "--autounmask-continue", "--ask"):
+        assert forbidden not in analysis
+
+
+def test_cancelling_the_preview_sends_nothing(app, tmp_path) -> None:  # noqa: ANN001
+    """The second confirmation is a real one: dismissing it writes nothing."""
+    from gentstore.core.install_plan import from_output
+
+    (tmp_path / "package.use").mkdir()
+    frame = make_panel(tmp_path)
+    frame.set_plan(from_output(REFUSED_FOR_A_DEPENDENCY))
+
+    sent: list[object] = []
+    frame.apply_requested.connect(sent.append)
+
+    frame._on_show_lines()
+    assert frame.batch is not None
+    frame._disarm()
+
+    assert frame.batch is None
+    assert sent == [], "nothing may reach the helper before Save is pressed"
+
+
+def test_only_ticked_lines_reach_the_helper(app, tmp_path) -> None:  # noqa: ANN001
+    """What the request carries is exactly what the boxes say."""
+    from gentstore.core.install_plan import from_output
+
+    (tmp_path / "package.accept_keywords").mkdir()
+    frame = make_panel(tmp_path)
+    plan = from_output(
+        "The following keyword changes are necessary to proceed:\n"
+        "=cat/one-1 ~amd64\n"
+        "=cat/two-1 ~amd64\n"
+    )
+    frame.set_plan(plan)
+    frame._on_entry_toggled(plan.entries[1], False)
+
+    sent: list[object] = []
+    frame.apply_requested.connect(sent.append)
+    frame._on_show_lines()
+    frame._on_save()
+
+    assert len(sent) == 1
+    request = sent[0].as_request()
+    assert [item["line"] for item in request["entries"]] == ["=cat/one-1 ~amd64"]

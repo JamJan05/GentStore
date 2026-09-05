@@ -285,6 +285,21 @@ EMERGE_COMMANDS = (
     (*_EMERGE_BASE, "--pretend", "--verbose", "--oneshot?", ATOMS),
     # install()
     (*_EMERGE_BASE, "--verbose", "--getbinpkg?", "--oneshot?", ATOMS),
+    # analyse(), which the interface also runs unprivileged. The two autounmask
+    # options are literals matched whole, so nothing can be hidden in the value
+    # of the second one. What is *not* on this row is the point of it:
+    # --autounmask-write and --autounmask-continue would have this command write
+    # to /etc/portage itself, which is the helper's job and nothing else's.
+    (
+        *_EMERGE_BASE,
+        "--pretend",
+        "--verbose",
+        "--autounmask",
+        "--autounmask-license=y",
+        "--getbinpkg?",
+        "--oneshot?",
+        ATOMS,
+    ),
     # unmerge_pretend()
     (*_EMERGE_BASE, "--pretend", "--verbose", "--unmerge", ATOMS),
     # unmerge()

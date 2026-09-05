@@ -100,6 +100,9 @@ def every_emerge_command() -> tuple[object, ...]:
         # that started needing root would otherwise fail at the last moment.
         emerge.pretend(["media-video/mpv"]),
         emerge.pretend(["media-video/mpv"], oneshot=True),
+        emerge.analyse(["media-video/mpv"]),
+        emerge.analyse(["media-video/mpv"], binaries=True),
+        emerge.analyse(["media-video/mpv"], oneshot=True, binaries=True),
         emerge.unmerge_pretend(["media-video/mpv"]),
         emerge.update_world_pretend(),
         emerge.update_world_pretend(binaries=True),
@@ -144,6 +147,38 @@ def test_the_launcher_accepts_every_command_the_interface_builds() -> None:
         ("emerge", ["--config", "sys-apps/portage"]),
         ("emerge", ["--root=/tmp/somewhere", "media-video/mpv"]),
         ("emerge", ["--sync"]),
+        # The analysis is allowed; these two turn it into something that edits
+        # /etc/portage on its own, which is the helper's job and only its job.
+        (
+            "emerge",
+            [
+                "--ignore-default-opts", "--color=n", "--nospinner", "--pretend",
+                "--verbose", "--autounmask", "--autounmask-write", "media-video/mpv",
+            ],
+        ),
+        (
+            "emerge",
+            [
+                "--ignore-default-opts", "--color=n", "--nospinner", "--pretend",
+                "--verbose", "--autounmask", "--autounmask-continue", "media-video/mpv",
+            ],
+        ),
+        (
+            "emerge",
+            [
+                "--ignore-default-opts", "--color=n", "--nospinner", "--pretend",
+                "--verbose", "--autounmask", "--autounmask-license=y", "--ask",
+                "media-video/mpv",
+            ],
+        ),
+        # --autounmask-license takes a value, and only the one the builder sends.
+        (
+            "emerge",
+            [
+                "--ignore-default-opts", "--color=n", "--nospinner", "--pretend",
+                "--verbose", "--autounmask", "--autounmask-license=n", "media-video/mpv",
+            ],
+        ),
         ("emerge", ["--usepkgonly", "media-video/mpv"]),
         # An option carrying a value is a place to hide one.
         ("emerge", ["--color=y", "media-video/mpv"]),

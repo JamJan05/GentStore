@@ -347,3 +347,36 @@ object to pass instead of a mapping (the same private surface plus a constructor
 required arguments); leaving `configured()` repo-blind and correcting the answers afterwards
 (there is nothing to correct them with — the configuration is where the answer comes from).
 
+---
+
+### D-18 · One narrow grouped operation, rather than one authentication per line
+
+**Decision:** the helper gained `append_lines`: a list of path-and-line pairs, validated in full
+before the first byte is written, limited to `package.accept_keywords`, `package.license`,
+`package.use` and `package.unmask`. The interface builds it from the lines the user ticked and
+sends it once. `PROTOCOL_VERSION` went to 2.
+
+**Reason:** `emerge --autounmask` for one window manager asked for fourteen keyword lines. Under
+D-15 — every privileged step asks — applying them one at a time meant fourteen password
+prompts for a decision the user had made once, in front of a screen that had already shown them
+all fourteen lines. D-15 is right about what an authentication buys: it should buy one operation
+the user has seen. Fourteen prompts do not make that operation smaller; they make people stop
+reading the dialog.
+
+Grouping is therefore about the *number of dialogs*, and deliberately not about the checking. A
+batch is validated per entry, against a list narrower than `LINE_EDITABLE` rather than wider,
+and the interface's own copy of that list is compared with the helper's by a test — the same
+arrangement D-14 established for `EMERGE_COMMANDS`.
+
+**Consequence:** all-or-nothing. One bad entry writes nothing, which is what makes "the user
+agreed to this set" true of the outcome as well as of the request. The one thing a refused batch
+can leave behind is an empty `package.*` directory, because creating it is what makes the path
+checkable at all (rule 1d in Docs/04-privileges.md) — and an empty `package.unmask` means
+exactly what no `package.unmask` means. No line is written, which is the promise.
+
+**Alternatives:** widening `append_line` to take a list (the same thing with a name that no
+longer describes it, and no way for an old helper to say it does not understand); a
+`write_file` for each `package.*` file (whole-file writes, which would destroy comments and
+anything the user put there by hand — against rule 4 in Docs/04-privileges.md); remembering the
+authentication for a few minutes (`auth_admin_keep`, which D-15 removed for good reasons and
+which grants far more than the set of lines on screen).

@@ -97,25 +97,34 @@ class Task(QRunnable):
             result = self._fn(*self._args, **self._kwargs)
         except Exception as exc:  # noqa: BLE001 - reported to the caller
             log.exception("Background task %s failed", getattr(self._fn, "__name__", self._fn))
-            self._emit(self._signals.failed, exc)
+            self._emit("failed", exc)
         else:
-            self._emit(self._signals.finished, result)
+            self._emit("finished", result)
 
-    def _emit(self, signal: Any, payload: Any) -> None:
+    def _emit(self, name: str, payload: Any) -> None:
         """Emit, tolerating a receiver that went away while we were working.
 
         During shutdown Qt can tear the signal object down before a still-running
         task reaches this point; that is not an error worth crashing over.
 
-        It is also the one path on which the slot that releases this task from
+        *name* rather than the signal itself, and that is the whole of the
+        difference between this working and not. Reading ``self._signals.failed``
+        is already a call into a destroyed C++ object, so passing the signal in
+        raised the ``RuntimeError`` in :meth:`run`, one line above the ``try``
+        that exists to swallow it — and an unhandled exception in a ``QRunnable``
+        aborts the process. Closing the window while the package index is still
+        building was enough to do it: a crash on the way out, for a result
+        nobody was waiting for any more.
+
+        This is also the one path on which the slot that releases this task from
         :data:`_pending` never runs, because the signal that would have carried
         it is the thing that just failed. So the release happens here instead:
         that set is a lifetime guard rather than a record of anything, and an
         entry nobody will ever take out is a leak for the life of the process.
         """
         try:
-            signal.emit(payload)
-        except RuntimeError:  # pragma: no cover - shutdown race
+            getattr(self._signals, name).emit(payload)
+        except RuntimeError:
             log.debug("Task result dropped: the receiver was already destroyed")
             _pending.discard(self)
 
