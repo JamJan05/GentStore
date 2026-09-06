@@ -56,6 +56,44 @@ tag was made.
 
 ### Fixed
 
+- **"Ready to install" over a run in which Portage had refused.** The install gate opens when an
+  analysis comes back with nothing to write and nothing conflicting. A refusal is neither. When
+  Portage cannot satisfy a dependency it prints its reason and stops — no merge list, no blocker
+  row, and, autounmask having already been asked and had nothing to offer, no lines to write
+  either. Everything the plan is read off is therefore absent, which is exactly what a run with
+  nothing to do looks like, so the gate opened and the button lit up on a package Portage had
+  just said it would not build. Installing Spotify was the report: the analysis said it was
+  ready, and the install then wanted two libraries that had to be found and merged one at a
+  time.
+
+  `emerge` has one function for this (`_emerge/depgraph.py`: `_show_unsatisfied_dep`) and four
+  branches inside it, and all four are now read: a dependency whose own `REQUIRED_USE` forbids
+  the flags being asked of it, a USE flag no candidate version has, a mask `--autounmask` will
+  not lift, and an atom nothing provides — which is nearly always a repository that is not
+  enabled. The last of those prints no `!!!` line anywhere in the run, so nothing about it looked
+  like trouble at all.
+
+  What Portage printed under the banner is kept and shown with it. That is where the answer is:
+  which versions it looked at, which flag each one is missing, and the `(dependency required by
+  …)` chain naming the package that wanted it. Collecting the `!!!` lines and nothing else — the
+  previous behaviour — dropped every one of those and left a heading with nothing under it.
+
+  One case is worth its own sentence, because it is a circle rather than a dead end: Portage can
+  ask for a line *and* refuse in the same run. It proposes `-icu` for a package whose
+  `REQUIRED_USE` says `inspector? ( icu )`, so writing the line and analysing again produces the
+  identical output, forever. The line is still offered — it is Portage's proposal and this screen
+  does not edit those — the refusal is shown beside it, and the gate stays shut until a run comes
+  back without one.
+
+- **A plan that was only the first layer looked like the whole of it.** Portage stops
+  backtracking the moment autounmask has something to say — `In order to avoid wasting time,
+  backtracking has terminated early due to the above autounmask change(s)` — so one analysis
+  shows the refusals it met before it stopped, and the ones behind those only appear after the
+  first set is written. The screen already used that sentence to grade a conflict; it now says it
+  where it is felt, which is a block of changes with nothing conflicting beside it. Apply,
+  re-analyse, more lines: that is Portage working as documented, and it should not read as the
+  window having missed something the first time.
+
 - **The package frame reported on runs that were not about that package.** One runner and one log
   panel serve the whole window, so every command ends up back in the search screen. Pressing
   "Update @world" in the toolbar with a package on screen left that update's report inside the
@@ -69,8 +107,8 @@ tag was made.
   And `[blocks b ]` is not `[blocks B ]`: Portage writes the letter in lower case when it worked
   the block out for itself and says so in its own summary, `Conflict: 1 block (all satisfied)`.
   Counting those as conflicts would have withdrawn the very lines that make such an install work.
-  What counts now is an *unsatisfied* blocker, the slot-conflict banner, or the sentence about
-  packages that cannot be installed at the same time.
+  What counts now is an *unsatisfied* blocker, one of the two slot-conflict banners, or one of
+  the refusals below.
 
 - **Closing the window during a long read crashed on the way out.** A background task that
   finished while Qt was tearing down found its signal object already destroyed on the C++ side

@@ -72,6 +72,24 @@ def _failure(code: str, error: str) -> HelperResult:
     return HelperResult(ok=False, code=code, error=error)
 
 
+def _subject(fields: dict[str, Any]) -> str:
+    """What the log line should say this request was about.
+
+    Most operations name one ``path``; ``append_lines`` names several, under
+    ``entries``, and logging ``fields.get("path")`` for it wrote the operation
+    with nothing after it. That is the one request that writes to more than one
+    file at a time, so it is exactly the one whose files want recording.
+    """
+    path = fields.get("path")
+    if path:
+        return str(path)
+    entries = fields.get("entries")
+    if isinstance(entries, list):
+        paths = {str(entry.get("path", "")) for entry in entries if isinstance(entry, dict)}
+        return ", ".join(sorted(p for p in paths if p))
+    return ""
+
+
 def request(op: str, *, ensure_backup: bool = False, **fields: Any) -> HelperResult:
     """Run one helper operation and return its answer.
 
@@ -93,7 +111,7 @@ def request(op: str, *, ensure_backup: bool = False, **fields: Any) -> HelperRes
 
     payload = json.dumps({"op": op, "ensure_backup": ensure_backup, **fields})
     argv = escalation.wrap(helper.argv)
-    log.info("Helper request: %s %s", op, fields.get("path", ""))
+    log.info("Helper request: %s %s", op, _subject(fields))
 
     try:
         completed = subprocess.run(  # noqa: S603 - argv is built here, not passed in

@@ -1281,26 +1281,41 @@ eselect repository remove -f {name}</translation>
     </message>
     <message>
         <location filename="../ui/widgets/required_changes.py" line="395" />
+        <source>Portage refused one of the dependencies outright, and said why below. There is no line to write for this one: the usual causes are a package that no repository you have enabled provides, and a USE flag the versions on offer no longer have.</source>
+        <translation>Portage wprost odmówił jednej z zależności i niżej napisał dlaczego. Tu nie ma wiersza do zapisania: najczęstsze przyczyny to pakiet, którego nie ma w żadnym włączonym repozytorium, oraz flaga USE, której dostępne wersje już nie mają.</translation>
+    </message>
+    <message>
+        <location filename="../ui/widgets/required_changes.py" line="402" />
         <source>Portage could not find a set of packages that fits together. Its own account of the conflict is below; this is not something a line in your configuration will settle.</source>
         <translation>Portage nie znalazł zestawu pakietów, który do siebie pasuje. Niżej jest jego własny opis konfliktu; tego nie rozwiąże żaden wpis w konfiguracji.</translation>
     </message>
     <message>
-        <location filename="../ui/widgets/required_changes.py" line="401" />
+        <location filename="../ui/widgets/required_changes.py" line="408" />
         <source>Portage stopped before building anything: it needs these lines in your configuration first. It also reported a conflict, but it stopped working on the graph as soon as it found these changes, so that conflict was worked out without them. Applying the lines and looking again is the way to find out whether it is real.</source>
         <translation>Portage zatrzymał się przed budowaniem czegokolwiek: najpierw potrzebuje tych wpisów w konfiguracji. Zgłosił też konflikt, ale przestał pracować nad grafem, gdy tylko znalazł te zmiany, więc ten konflikt został policzony bez nich. Żeby sprawdzić, czy jest prawdziwy, zastosuj wpisy i przeanalizuj jeszcze raz.</translation>
     </message>
     <message>
-        <location filename="../ui/widgets/required_changes.py" line="409" />
+        <location filename="../ui/widgets/required_changes.py" line="416" />
+        <source>Portage asked for these lines and then refused a dependency anyway — both are below. Writing the lines is not enough on its own, and it may not be enough at all: what the refusal says it could not get past is the thing to read first.</source>
+        <translation>Portage poprosił o te wiersze, a mimo to odmówił jednej z zależności — oba opisy są niżej. Sam zapis wierszy nie wystarczy, a może nie wystarczyć w ogóle: najpierw warto przeczytać, czego według odmowy nie dało się obejść.</translation>
+    </message>
+    <message>
+        <location filename="../ui/widgets/required_changes.py" line="423" />
         <source>Portage needs these lines in your configuration, and it also reported a conflict it worked out in full. Writing the lines will not settle that on its own; the analysis after them will say where it stands.</source>
         <translation>Portage potrzebuje tych wpisów w konfiguracji i zgłosił też konflikt, który policzył do końca. Zapisanie wpisów samo w sobie tego nie rozwiąże; analiza po nich powie, jak to wygląda.</translation>
     </message>
     <message>
-        <location filename="../ui/widgets/required_changes.py" line="415" />
+        <location filename="../ui/widgets/required_changes.py" line="430" />
+        <source>Portage stopped before building anything because it needs these lines in your configuration first. It also stopped looking as soon as it had found them — it says so itself — so more may appear behind them once these are written. The analysis runs again by itself afterwards and will say. Nothing is written until you have seen the exact lines.</source>
+        <translation>Portage zatrzymał się przed budowaniem czegokolwiek, bo najpierw potrzebuje tych wierszy w konfiguracji. Przestał też szukać, gdy tylko je znalazł — sam to napisał — więc po ich zapisaniu mogą pojawić się kolejne. Analiza uruchomi się potem sama i to pokaże. Nic nie zostanie zapisane, dopóki nie zobaczysz dokładnych wierszy.</translation>
+    </message>
+    <message>
+        <location filename="../ui/widgets/required_changes.py" line="438" />
         <source>Portage stopped before building anything because it needs these lines in your configuration first. Each one is shown with the package that asked for it. Nothing is written until you have seen the exact lines.</source>
         <translation>Portage zatrzymał się przed budowaniem czegokolwiek, bo najpierw potrzebuje tych wpisów w konfiguracji. Przy każdym widać pakiet, który go zażądał. Nic nie zostanie zapisane, zanim nie zobaczysz dokładnych linii.</translation>
     </message>
     <message numerus="yes">
-        <location filename="../ui/widgets/required_changes.py" line="432" />
+        <location filename="../ui/widgets/required_changes.py" line="455" />
         <source>%n line(s) would replace an entry you already have for the same atom, which is a change to make on purpose rather than in a batch.</source>
         <translation>
             <numerusform>%n linia zastąpiłaby wpis, który już masz dla tego samego atomu — taką zmianę robi się świadomie, a nie zbiorczo.</numerusform>
@@ -1309,7 +1324,7 @@ eselect repository remove -f {name}</translation>
         </translation>
     </message>
     <message numerus="yes">
-        <location filename="../ui/widgets/required_changes.py" line="442" />
+        <location filename="../ui/widgets/required_changes.py" line="465" />
         <source>%n line(s) are already in your configuration.</source>
         <translation>
             <numerusform>%n linia jest już w Twojej konfiguracji.</numerusform>
@@ -1318,17 +1333,17 @@ eselect repository remove -f {name}</translation>
         </translation>
     </message>
     <message>
-        <location filename="../ui/widgets/required_changes.py" line="483" />
+        <location filename="../ui/widgets/required_changes.py" line="506" />
         <source>A developer masked these on purpose and wrote down why. Unmasking is not routine; tick them one at a time.</source>
         <translation>Deweloper zamaskował je celowo i napisał dlaczego. Odmaskowanie nie jest rutyną; zaznaczaj je pojedynczo.</translation>
     </message>
     <message>
-        <location filename="../ui/widgets/required_changes.py" line="545" />
+        <location filename="../ui/widgets/required_changes.py" line="568" />
         <source>Portage cannot resolve this</source>
         <translation>Portage nie potrafi tego rozwiązać</translation>
     </message>
     <message numerus="yes">
-        <location filename="../ui/widgets/required_changes.py" line="547" />
+        <location filename="../ui/widgets/required_changes.py" line="570" />
         <source>Emerge needs %n change(s) first</source>
         <translation>
             <numerusform>Emerge potrzebuje najpierw %n zmiany</numerusform>
@@ -1337,27 +1352,27 @@ eselect repository remove -f {name}</translation>
         </translation>
     </message>
     <message>
-        <location filename="../ui/widgets/required_changes.py" line="561" />
+        <location filename="../ui/widgets/required_changes.py" line="584" />
         <source>Show exact lines</source>
         <translation>Pokaż dokładne linie</translation>
     </message>
     <message>
-        <location filename="../ui/widgets/required_changes.py" line="562" />
+        <location filename="../ui/widgets/required_changes.py" line="585" />
         <source>Apply selected changes</source>
         <translation>Zastosuj zaznaczone zmiany</translation>
     </message>
     <message>
-        <location filename="../ui/widgets/required_changes.py" line="579" />
+        <location filename="../ui/widgets/required_changes.py" line="602" />
         <source>Will be written</source>
         <translation>Zostanie zapisane</translation>
     </message>
     <message>
-        <location filename="../ui/widgets/required_changes.py" line="583" />
+        <location filename="../ui/widgets/required_changes.py" line="606" />
         <source>Nothing left to write — see the note above.</source>
         <translation>Nie zostało nic do zapisania — zobacz uwagę powyżej.</translation>
     </message>
     <message numerus="yes">
-        <location filename="../ui/widgets/required_changes.py" line="586" />
+        <location filename="../ui/widgets/required_changes.py" line="609" />
         <source>%n line(s) will be added, in one privileged operation, after one password. Everything else in those files is left alone.</source>
         <translation>
             <numerusform>Zostanie dopisana %n linia, w jednej uprzywilejowanej operacji, po jednym haśle. Reszta tych plików pozostaje nietknięta.</numerusform>
@@ -1366,17 +1381,17 @@ eselect repository remove -f {name}</translation>
         </translation>
     </message>
     <message>
-        <location filename="../ui/widgets/required_changes.py" line="593" />
+        <location filename="../ui/widgets/required_changes.py" line="616" />
         <source>Cancel</source>
         <translation>Anuluj</translation>
     </message>
     <message>
-        <location filename="../ui/widgets/required_changes.py" line="595" />
+        <location filename="../ui/widgets/required_changes.py" line="618" />
         <source>Saving…</source>
         <translation>Zapisywanie…</translation>
     </message>
     <message>
-        <location filename="../ui/widgets/required_changes.py" line="595" />
+        <location filename="../ui/widgets/required_changes.py" line="618" />
         <source>Save</source>
         <translation>Zapisz</translation>
     </message>
@@ -1462,124 +1477,124 @@ eselect repository remove -f {name}</translation>
 </context><context>
     <name>SearchPage</name>
     <message>
-        <location filename="../ui/pages/search.py" line="402" />
+        <location filename="../ui/pages/search.py" line="406" />
         <source>unavailable</source>
         <translation>niedostępne</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="404" />
+        <location filename="../ui/pages/search.py" line="408" />
         <source>Portage could not be read: {error}</source>
         <translation>Nie udało się odczytać Portage: {error}</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="1164" />
-        <location filename="../ui/pages/search.py" line="419" />
+        <location filename="../ui/pages/search.py" line="1186" />
+        <location filename="../ui/pages/search.py" line="423" />
         <source>all</source>
         <translation>wszystkie</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="584" />
+        <location filename="../ui/pages/search.py" line="588" />
         <source>installed: {versions}</source>
         <translation>zainstalowana: {versions}</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="587" />
+        <location filename="../ui/pages/search.py" line="591" />
         <source>not installed</source>
         <translation>nie zainstalowany</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="589" />
+        <location filename="../ui/pages/search.py" line="593" />
         <source>no description</source>
         <translation>brak opisu</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="609" />
+        <location filename="../ui/pages/search.py" line="613" />
         <source>download: {size}</source>
         <translation>pobranie: {size}</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="644" />
+        <location filename="../ui/pages/search.py" line="648" />
         <source>installed</source>
         <translation>zainstalowana</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="646" />
+        <location filename="../ui/pages/search.py" line="650" />
         <source>live</source>
         <translation>live</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="648" />
+        <location filename="../ui/pages/search.py" line="652" />
         <source>blocked</source>
         <translation>zablokowana</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="650" />
+        <location filename="../ui/pages/search.py" line="654" />
         <source>unchecked</source>
         <translation>niesprawdzona</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="652" />
+        <location filename="../ui/pages/search.py" line="656" />
         <source>testing</source>
         <translation>testowa</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="654" />
+        <location filename="../ui/pages/search.py" line="658" />
         <source>stable</source>
         <translation>stabilna</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="675" />
+        <location filename="../ui/pages/search.py" line="679" />
         <source>Pretend</source>
         <translation>Pretend</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="676" />
+        <location filename="../ui/pages/search.py" line="680" />
         <source>Analyse requirements</source>
         <translation>Przeanalizuj wymagania</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="678" />
+        <location filename="../ui/pages/search.py" line="682" />
         <source>Uninstall</source>
         <translation>Odinstaluj</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="788" />
-        <location filename="../ui/pages/search.py" line="678" />
+        <location filename="../ui/pages/search.py" line="803" />
+        <location filename="../ui/pages/search.py" line="682" />
         <source>Add to @world</source>
         <translation>Dodaj do @world</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="680" />
+        <location filename="../ui/pages/search.py" line="684" />
         <source>Update</source>
         <translation>Zaktualizuj</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="680" />
+        <location filename="../ui/pages/search.py" line="684" />
         <source>Install</source>
         <translation>Zainstaluj</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="747" />
+        <location filename="../ui/pages/search.py" line="765" />
         <source>Run “Analyse requirements” first — Portage has not confirmed that this can be built as your system stands.</source>
         <translation>Najpierw uruchom „Przeanalizuj wymagania” — Portage nie potwierdził, że da się to zbudować na systemie w obecnym stanie.</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="778" />
+        <location filename="../ui/pages/search.py" line="793" />
         <source>Update package</source>
         <translation>Aktualizacja pakietu</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="778" />
+        <location filename="../ui/pages/search.py" line="793" />
         <source>Install package</source>
         <translation>Instalacja pakietu</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="803" />
+        <location filename="../ui/pages/search.py" line="818" />
         <source>Uninstall package</source>
         <translation>Odinstalowanie pakietu</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="804" />
+        <location filename="../ui/pages/search.py" line="819" />
         <source>The log above lists what would be removed.
 
 Remove {package} now?
@@ -1592,7 +1607,7 @@ Usunąć teraz {package}?
 {command}</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="818" />
+        <location filename="../ui/pages/search.py" line="833" />
         <source>This will run:
 
 {command}</source>
@@ -1601,12 +1616,12 @@ Usunąć teraz {package}?
 {command}</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="997" />
+        <location filename="../ui/pages/search.py" line="1019" />
         <source>No change was needed: every line was already there.</source>
         <translation>Nic nie trzeba było zmieniać: każda linia już tam była.</translation>
     </message>
     <message numerus="yes">
-        <location filename="../ui/pages/search.py" line="1011" />
+        <location filename="../ui/pages/search.py" line="1033" />
         <source>Added %n line(s):</source>
         <translation>
             <numerusform>Dopisano %n linię:</numerusform>
@@ -1615,7 +1630,7 @@ Usunąć teraz {package}?
         </translation>
     </message>
     <message numerus="yes">
-        <location filename="../ui/pages/search.py" line="1013" />
+        <location filename="../ui/pages/search.py" line="1035" />
         <source>%n line(s) were already there and were left alone.</source>
         <translation>
             <numerusform>%n linia już tam była i została nietknięta.</numerusform>
@@ -1624,48 +1639,48 @@ Usunąć teraz {package}?
         </translation>
     </message>
     <message>
+        <location filename="../ui/pages/search.py" line="1067" />
         <location filename="../ui/pages/search.py" line="1045" />
-        <location filename="../ui/pages/search.py" line="1023" />
         <source>Cancelled — nothing was written.</source>
         <translation>Anulowano — nic nie zostało zapisane.</translation>
     </message>
     <message>
+        <location filename="../ui/pages/search.py" line="1070" />
         <location filename="../ui/pages/search.py" line="1048" />
-        <location filename="../ui/pages/search.py" line="1026" />
         <source>Nothing was written: {error}</source>
         <translation>Nic nie zostało zapisane: {error}</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="1058" />
+        <location filename="../ui/pages/search.py" line="1080" />
         <source>No change was needed: {detail}</source>
         <translation>Zmiana nie była potrzebna: {detail}</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="1062" />
+        <location filename="../ui/pages/search.py" line="1084" />
         <source>Removed the line from {path}.</source>
         <translation>Usunięto linię z pliku {path}.</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="1064" />
+        <location filename="../ui/pages/search.py" line="1086" />
         <source>Replaced one line in {path} with:
 {line}</source>
         <translation>Podmieniono jedną linię w pliku {path} na:
 {line}</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="1067" />
+        <location filename="../ui/pages/search.py" line="1089" />
         <source>Added to {path}:
 {line}</source>
         <translation>Dopisano do pliku {path}:
 {line}</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="1127" />
+        <location filename="../ui/pages/search.py" line="1149" />
         <source>loading…</source>
         <translation>wczytywanie…</translation>
     </message>
     <message numerus="yes">
-        <location filename="../ui/pages/search.py" line="1129" />
+        <location filename="../ui/pages/search.py" line="1151" />
         <source>%n package(s)</source>
         <translation>
             <numerusform>%n pakiet</numerusform>
@@ -1674,7 +1689,7 @@ Usunąć teraz {package}?
         </translation>
     </message>
     <message numerus="yes">
-        <location filename="../ui/pages/search.py" line="1131" />
+        <location filename="../ui/pages/search.py" line="1153" />
         <source>%n result(s)</source>
         <translation>
             <numerusform>%n wynik</numerusform>
@@ -1683,7 +1698,7 @@ Usunąć teraz {package}?
         </translation>
     </message>
     <message numerus="yes">
-        <location filename="../ui/pages/search.py" line="1135" />
+        <location filename="../ui/pages/search.py" line="1157" />
         <source>%n package(s) outside ::gentoo hidden. Overlays keep syncing.</source>
         <translation>
             <numerusform>Ukryto %n pakiet spoza ::gentoo. Overlaye nadal się synchronizują.</numerusform>
@@ -1692,23 +1707,23 @@ Usunąć teraz {package}?
         </translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="1144" />
+        <location filename="../ui/pages/search.py" line="1166" />
         <source>Nothing matches the query.</source>
         <translation>Nic nie pasuje do zapytania.</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="1170" />
-        <location filename="../ui/pages/search.py" line="1146" />
+        <location filename="../ui/pages/search.py" line="1192" />
+        <location filename="../ui/pages/search.py" line="1168" />
         <source>Type a name, a category or a word from the description.</source>
         <translation>Wpisz nazwę, kategorię albo słowo z opisu.</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="1152" />
+        <location filename="../ui/pages/search.py" line="1174" />
         <source>name, category or description</source>
         <translation>nazwa, kategoria lub opis</translation>
     </message>
     <message>
-        <location filename="../ui/pages/search.py" line="1160" />
+        <location filename="../ui/pages/search.py" line="1182" />
         <source>VERSION</source>
         <translation>WERSJA</translation>
     </message>

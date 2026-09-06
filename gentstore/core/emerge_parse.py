@@ -76,12 +76,45 @@ _TOTAL = re.compile(r"^Total:\s+(?P<count>\d+)\s+package")
 _UNITS = {"B": 1, "KiB": 1024, "MiB": 1024**2, "GiB": 1024**3, "TiB": 1024**4}
 
 #: Blocks emerge prints when it wants /etc/portage changed before it will go on.
-_REQUIRED_CHANGE_HEADINGS = (
+_CHANGE_HEADINGS = (
     "The following USE changes are necessary to proceed",
     "The following keyword changes are necessary to proceed",
     "The following mask changes are necessary to proceed",
     "The following license changes are necessary to proceed",
-    "The following REQUIRED_USE flag constraints are unsatisfied",
+)
+
+#: Printed nowhere else than inside the "has unmet requirements" refusal
+#: (``_emerge/depgraph.py``: ``_show_unsatisfied_dep``), so it is part of that
+#: message rather than a block of its own — but it is still listed among the
+#: headings, because it ends whatever block came before it just as they do.
+_REQUIRED_USE_HEADING = "The following REQUIRED_USE flag constraints are unsatisfied"
+
+_REQUIRED_CHANGE_HEADINGS = (*_CHANGE_HEADINGS, _REQUIRED_USE_HEADING)
+
+#: The ways ``emerge`` says it cannot satisfy a dependency at all.
+#:
+#: Four branches of a single ``if`` in one function — ``_emerge/depgraph.py``:
+#: ``_show_unsatisfied_dep`` — and five sentences, because the last branch has a
+#: second wording for ``--usepkgonly``. They are kept together here for the same
+#: reason they are together there: a reader checking three of them against
+#: Portage has no way to tell that they missed one.
+#:
+#: They are what a refusal *looks like* when autounmask has already been asked
+#: and has nothing to offer. The consequence matters more than the wording: a
+#: run carrying one of these printed no lines to write and no blocker row, so
+#: everything else about it reads exactly like a run with nothing to do.
+_REFUSAL_BANNERS = (
+    # REQUIRED_USE: the package's own flags contradict each other.
+    "The ebuild selected to satisfy ",
+    # A USE dependency no candidate can meet — a flag that was renamed or
+    # removed, most often in an ebuild from an overlay.
+    "there are no ebuilds built with USE flags to satisfy ",
+    # Masked, and in a way ``--autounmask`` will not lift.
+    "All ebuilds that could satisfy ",
+    # Nothing anywhere provides the atom: the usual reading is a repository
+    # that is not enabled on this system.
+    "there are no ebuilds to satisfy ",
+    "there are no binary packages to satisfy ",
 )
 
 #: ``The following USE changes are …`` — the word that says which file.
@@ -229,6 +262,25 @@ class RequiredChange:
 
 
 @dataclass(frozen=True, slots=True)
+class Refusal:
+    """One dependency ``emerge`` said it could not satisfy, in its own words.
+
+    Kept whole and unparsed on purpose. What Portage prints under the banner is
+    the only explanation there is — which versions it looked at, which flag each
+    one is missing, who asked for the dependency — and none of it fits a field.
+    """
+
+    #: The sentence that opens the message, stripped of leading whitespace.
+    banner: str
+    #: Everything printed under it, up to whatever came next. Verbatim.
+    lines: tuple[str, ...] = ()
+
+    @property
+    def text(self) -> tuple[str, ...]:
+        return (self.banner, *self.lines)
+
+
+@dataclass(frozen=True, slots=True)
 class Preview:
     """Everything ``emerge -pv`` said, in a shape a table can use."""
 
@@ -238,6 +290,8 @@ class Preview:
     required_changes: tuple[RequiredChange, ...] = ()
     #: Lines beginning with ``!!!`` — conflicts, mostly.
     problems: tuple[str, ...] = ()
+    #: Dependencies emerge refused outright. See :data:`_REFUSAL_BANNERS`.
+    refusals: tuple[Refusal, ...] = ()
     raw: str = ""
 
     @property
@@ -433,11 +487,25 @@ def parse_row(line: str) -> MergeRow | None:
     )
 
 
+def _is_refusal(stripped: str) -> bool:
+    """Whether *stripped* opens one of emerge's "I cannot" messages.
+
+    Anchored on the prefix as well as the sentence. Portage writes these with
+    ``writemsg``, so they arrive on stderr and can turn up interleaved anywhere
+    in a merged log; what does not vary is that the line is either an ``!!!``
+    remark or an ``emerge:`` one.
+    """
+    if not (stripped.startswith("!!!") or stripped.startswith("emerge:")):
+        return False
+    return any(banner in stripped for banner in _REFUSAL_BANNERS)
+
+
 def parse_pretend(text: str) -> Preview:
     """Read the whole of an ``emerge -pv`` run."""
     rows: list[MergeRow] = []
     problems: list[str] = []
     required: list[RequiredChange] = []
+    refusals: list[Refusal] = []
     total = download = None
 
     lines = text.splitlines()
@@ -450,6 +518,14 @@ def parse_pretend(text: str) -> Preview:
         if row is not None:
             rows.append(row)
             index += 1
+            continue
+
+        # Before the ``!!!`` branch: two of the four refusals are ``!!!`` lines,
+        # and filing them as one more problem would throw away the explanation
+        # printed underneath — which, for a refusal, is the entire message.
+        if _is_refusal(stripped):
+            block, index = _collect_refusal(lines, index + 1)
+            refusals.append(Refusal(banner=stripped, lines=block))
             continue
 
         if stripped.startswith("!!!"):
@@ -479,6 +555,7 @@ def parse_pretend(text: str) -> Preview:
         download_size=download,
         required_changes=tuple(required),
         problems=tuple(problems),
+        refusals=tuple(refusals),
         raw=text,
     )
 
@@ -508,6 +585,7 @@ def _collect_block(lines: list[str], start: int) -> tuple[tuple[str, ...], int]:
         starts_something_else = (
             parse_row(line) is not None
             or stripped.startswith("!!!")
+            or _is_refusal(stripped)
             or _TOTAL.match(stripped)
             or any(stripped.startswith(h) for h in _REQUIRED_CHANGE_HEADINGS)
         )
@@ -515,6 +593,55 @@ def _collect_block(lines: list[str], start: int) -> tuple[tuple[str, ...], int]:
             break
         collected.append(line.rstrip())
         index += 1
+    return tuple(collected), index
+
+
+def _collect_refusal(lines: list[str], start: int) -> tuple[tuple[str, ...], int]:
+    """Everything printed under a refusal banner, kept as it was printed.
+
+    A wider net than :func:`_collect_block`, and it has to be. The blocks that
+    function reads are lists of atoms closed by the first blank line; a refusal
+    is prose with blank lines *inside* it — the REQUIRED_USE message alone puts
+    two of them between the package, the constraint it broke and the expression
+    that constraint came from. So the end is decided by what starts next
+    instead: another refusal, a merge row, a totals line, or a block of changes
+    to write. A second blank line in a row ends it too, since by then emerge has
+    stopped talking about this dependency.
+
+    ``The following REQUIRED_USE flag constraints are unsatisfied`` is
+    deliberately not one of the boundaries. Portage prints that heading in one
+    place only, inside this message, and stopping at it would drop the one line
+    that says *which* constraint was broken.
+    """
+    collected: list[str] = []
+    index = start
+    blanks = 0
+    while index < len(lines):
+        line = lines[index]
+        stripped = line.strip()
+
+        if not stripped:
+            blanks += 1
+            if blanks > 1:
+                break
+            collected.append("")
+            index += 1
+            continue
+        blanks = 0
+
+        starts_something_else = (
+            parse_row(line) is not None
+            or _is_refusal(stripped)
+            or _TOTAL.match(stripped)
+            or any(stripped.startswith(h) for h in _CHANGE_HEADINGS)
+        )
+        if starts_something_else:
+            break
+        collected.append(line.rstrip())
+        index += 1
+
+    while collected and not collected[-1]:
+        collected.pop()
     return tuple(collected), index
 
 

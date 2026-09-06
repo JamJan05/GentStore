@@ -1,0 +1,15 @@
+
+These are the packages that would be merged, in order:
+
+Calculating dependencies  ... done!
+Dependency resolution took 2.67 s (backtrack: 0/20).
+
+
+emerge: there are no ebuilds built with USE flags to satisfy "media-video/ffmpeg[-encode]".
+!!! One of the following packages is required to complete your request:
+- media-video/ffmpeg-8.1.2::gentoo (Missing IUSE: encode)
+- media-video/ffmpeg-7.1.5::gentoo (Missing IUSE: encode)
+- media-video/ffmpeg-6.1.6::gentoo (Missing IUSE: encode)
+- media-video/ffmpeg-4.4.8::gentoo (Missing IUSE: encode)
+(dependency required by "app-misc/gs-demo-missing-use-1::scratch" [ebuild])
+(dependency required by "app-misc/gs-demo-missing-use" [argument])

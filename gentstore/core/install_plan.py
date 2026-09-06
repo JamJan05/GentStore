@@ -50,6 +50,12 @@ verdict — it is what the graph looked like before the changes were applied. Th
 distinction decides whether the screen offers to write anything, and getting it
 backwards would refuse to help with precisely the case the feature exists for:
 an overlay package whose whole dependency chain still needs keywording.
+
+And one thing it takes away: :attr:`InstallPlan.is_ready`, the install gate,
+which opens only on a run that said nothing needs changing *and* nothing is in
+the way. Reading the second half of that correctly is what most of
+:func:`_is_unresolved` is for, because Portage's flattest refusals look, to
+everything a plan is built out of, exactly like a run with nothing to do.
 """
 
 from __future__ import annotations
@@ -86,12 +92,12 @@ _TERMINATED_EARLY = "backtracking has terminated early"
 #: ``required by gui-wm/hyprland-0.56.2::hyproverlay`` → the package alone.
 _REQUIRED_BY = re.compile(r"^required by\s+(?P<who>.+)$")
 
-#: What Portage prints when it has no answer at all, as opposed to a remark.
+#: What Portage prints when it cannot fit a set of packages together.
 #:
-#: Two of the three are the banners above the blocks it writes; the third is the
-#: refusal it gives when an atom matches nothing installable. A ``[blocks B ]``
-#: row counts as well and is checked separately, because it is a parsed row
-#: rather than a line of prose.
+#: Both are banners above the blocks it writes about slot conflicts. A
+#: ``[blocks B ]`` row counts as well and is checked separately, because it is a
+#: parsed row rather than a line of prose; so does a refusal, which the parser
+#: recognises for itself (``emerge_parse._REFUSAL_BANNERS``).
 #:
 #: Deliberately a short list of specific sentences. Anything vaguer — every
 #: ``!!!`` line, say — sweeps up the notes a working run leaves behind, and the
@@ -99,7 +105,6 @@ _REQUIRED_BY = re.compile(r"^required by\s+(?P<who>.+)$")
 _UNRESOLVED_MARKERS = (
     "Multiple package instances within a single package slot",
     "cannot be installed at the same time on the same system",
-    "there are no ebuilds to satisfy",
 )
 
 
@@ -184,10 +189,17 @@ class InstallPlan:
 
     groups: tuple[PlanGroup, ...] = ()
     #: Portage's own text for anything it could not resolve, verbatim and
-    #: unparsed. Slot conflicts and blockers land here and are deliberately not
-    #: taken apart: the project's rule is that what the parser does not
-    #: understand stays visible rather than being summarised badly.
+    #: unparsed. Slot conflicts, blockers and refusals all land here and are
+    #: deliberately not taken apart: the project's rule is that what the parser
+    #: does not understand stays visible rather than being summarised badly.
     conflicts: tuple[str, ...] = ()
+    #: The opening sentence of each refusal, and nothing more — the rest of the
+    #: message is in :attr:`conflicts` with everything else. Kept separately
+    #: only so the screen can say which kind of dead end this is: a dependency
+    #: Portage could not satisfy reads nothing like two versions fighting over
+    #: one slot, and telling the user the wrong one sends them to the wrong
+    #: screen.
+    refusals: tuple[str, ...] = ()
     #: Portage said it stopped backtracking because autounmask found something.
     stopped_early: bool = False
     #: Nothing recognisable came back at all — an empty log, a crash, output in
@@ -320,16 +332,33 @@ def _is_unresolved(preview: Preview) -> bool:
     a screen reading it as "Portage cannot resolve this" says something false
     about a run that worked.
 
-    So the test is the three things Portage prints when it genuinely has no
-    answer: an *unsatisfied* blocker row, the slot-conflict banner, and the
-    sentence about packages that cannot be installed at the same time.
+    So the test is the four specific things Portage prints when it genuinely has
+    no answer: an *unsatisfied* blocker row, a slot-conflict banner, a refusal,
+    and a block of changes it wants nothing written for.
 
     Unsatisfied is the load-bearing word. ``[blocks b ]`` and ``[blocks B ]``
     look alike and mean opposite things, and a run can carry the first and still
     be exactly what the user wants to install — Portage says as much in its own
     summary: ``Conflict: 1 block (all satisfied)``.
+
+    A refusal is the quietest of the four and the reason this function grew. It
+    is what Portage prints when it cannot satisfy a dependency at all: the
+    reason, and then it stops. No merge list, no blocker row, and — autounmask
+    having already been asked and had nothing to offer — no lines to write
+    either. Everything a plan is normally read off is absent, which is exactly
+    what a run with nothing to do looks like. Until this was checked, "this
+    needs a library from a repository you do not have" and "this is ready to
+    build" both came out as an open install gate.
+
+    The last of the four is the same trap in miniature: a block of required
+    changes that names no file. ``REQUIRED_USE`` constraints arrive that way —
+    the package's own flags contradicting each other, which no line in
+    ``/etc/portage`` settles — and a plan that finds no line to write in them
+    would otherwise have nothing left to object to.
     """
-    if preview.unsatisfied_blockers:
+    if preview.unsatisfied_blockers or preview.refusals:
+        return True
+    if any(not change.file for change in preview.required_changes):
         return True
     return any(marker in preview.raw for marker in _UNRESOLVED_MARKERS)
 
@@ -338,14 +367,29 @@ def _conflicts(preview: Preview) -> tuple[str, ...]:
     """Portage's own account of a graph it could not resolve.
 
     Empty unless :func:`_is_unresolved` says there is one, and then it is
-    whatever Portage wrote: the ``!!!`` lines and the ``[blocks B ]`` rows, kept
-    verbatim rather than summarised, because what this program does not
-    understand has to stay visible.
+    whatever Portage wrote: the refusals with the explanations under them, the
+    ``!!!`` lines and the ``[blocks B ]`` rows, kept verbatim rather than
+    summarised, because what this program does not understand has to stay
+    visible.
+
+    Refusals come first. When there is one it is the whole answer — the other
+    two are usually the wreckage it left behind.
     """
     if not _is_unresolved(preview):
         return ()
 
-    found: list[str] = list(preview.problems)
+    found: list[str] = []
+    for refusal in preview.refusals:
+        found.extend(refusal.text)
+    # A block emerge wants nothing written for — REQUIRED_USE constraints.
+    # Normally these arrive under a refusal banner and are already above; a
+    # block that turns up on its own still has to be shown, or the screen goes
+    # quiet about the only thing the run said.
+    for change in preview.required_changes:
+        if not change.file:
+            found.append(change.heading)
+            found.extend(line.rstrip() for line in change.lines)
+    found.extend(preview.problems)
     for row in preview.unsatisfied_blockers:
         line = row.raw.strip()
         if line:
@@ -365,6 +409,7 @@ def _is_unreadable(preview: Preview) -> bool:
         preview.rows
         or preview.required_changes
         or preview.problems
+        or preview.refusals
         or preview.total is not None
     )
 
@@ -388,6 +433,7 @@ def from_preview(preview: Preview) -> InstallPlan:
     return InstallPlan(
         groups=groups,
         conflicts=_conflicts(preview),
+        refusals=tuple(refusal.banner for refusal in preview.refusals),
         stopped_early=_TERMINATED_EARLY in preview.raw,
         unreadable=_is_unreadable(preview),
         new=preview.count(Action.NEW) + preview.count(Action.NEW_SLOT),
