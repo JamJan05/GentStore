@@ -400,12 +400,10 @@ class RequiredChanges(QFrame):
             )
         if not plan.groups:
             return self.tr(
-                "Portage could not find a set of packages that fits together, and "
-                "has no change to suggest for this one. Its own account is below. "
-                "A block usually involves something already installed, and Portage "
-                "only proposes changes for the package it was asked about — so "
-                "there may well be an entry that settles this, further up the "
-                "chain, and this screen is not the thing that will find it."
+                "Portage has nothing to suggest for this package; its account is "
+                "below. A block usually involves something already installed, so an "
+                "entry further up the chain may settle it — not one this screen can "
+                "find."
             )
         if plan.is_provisional:
             return self.tr(

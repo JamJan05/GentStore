@@ -1281,36 +1281,36 @@ eselect repository remove -f {name}</translation>
     </message>
     <message>
         <location filename="../ui/widgets/required_changes.py" line="402" />
-        <source>Portage could not find a set of packages that fits together, and has no change to suggest for this one. Its own account is below. A block usually involves something already installed, and Portage only proposes changes for the package it was asked about — so there may well be an entry that settles this, further up the chain, and this screen is not the thing that will find it.</source>
-        <translation>Portage could not find a set of packages that fits together, and has no change to suggest for this one. Its own account is below. A block usually involves something already installed, and Portage only proposes changes for the package it was asked about — so there may well be an entry that settles this, further up the chain, and this screen is not the thing that will find it.</translation>
+        <source>Portage has nothing to suggest for this package; its account is below. A block usually involves something already installed, so an entry further up the chain may settle it — not one this screen can find.</source>
+        <translation>Portage has nothing to suggest for this package; its account is below. A block usually involves something already installed, so an entry further up the chain may settle it — not one this screen can find.</translation>
     </message>
     <message>
-        <location filename="../ui/widgets/required_changes.py" line="411" />
+        <location filename="../ui/widgets/required_changes.py" line="409" />
         <source>Portage stopped before building anything: it needs these lines in your configuration first. It also reported a conflict, but it stopped working on the graph as soon as it found these changes, so that conflict was worked out without them. Applying the lines and looking again is the way to find out whether it is real.</source>
         <translation>Portage stopped before building anything: it needs these lines in your configuration first. It also reported a conflict, but it stopped working on the graph as soon as it found these changes, so that conflict was worked out without them. Applying the lines and looking again is the way to find out whether it is real.</translation>
     </message>
     <message>
-        <location filename="../ui/widgets/required_changes.py" line="419" />
+        <location filename="../ui/widgets/required_changes.py" line="417" />
         <source>Portage asked for these lines and then refused a dependency anyway — both are below. Writing the lines is not enough on its own, and it may not be enough at all: what the refusal says it could not get past is the thing to read first.</source>
         <translation>Portage asked for these lines and then refused a dependency anyway — both are below. Writing the lines is not enough on its own, and it may not be enough at all: what the refusal says it could not get past is the thing to read first.</translation>
     </message>
     <message>
-        <location filename="../ui/widgets/required_changes.py" line="426" />
+        <location filename="../ui/widgets/required_changes.py" line="424" />
         <source>Portage needs these lines in your configuration, and it also reported a conflict it worked out in full. Writing the lines will not settle that on its own; the analysis after them will say where it stands.</source>
         <translation>Portage needs these lines in your configuration, and it also reported a conflict it worked out in full. Writing the lines will not settle that on its own; the analysis after them will say where it stands.</translation>
     </message>
     <message>
-        <location filename="../ui/widgets/required_changes.py" line="433" />
+        <location filename="../ui/widgets/required_changes.py" line="431" />
         <source>Portage stopped before building anything because it needs these lines in your configuration first. It also stopped looking as soon as it had found them — it says so itself — so more may appear behind them once these are written. The analysis runs again by itself afterwards and will say. Nothing is written until you have seen the exact lines.</source>
         <translation>Portage stopped before building anything because it needs these lines in your configuration first. It also stopped looking as soon as it had found them — it says so itself — so more may appear behind them once these are written. The analysis runs again by itself afterwards and will say. Nothing is written until you have seen the exact lines.</translation>
     </message>
     <message>
-        <location filename="../ui/widgets/required_changes.py" line="441" />
+        <location filename="../ui/widgets/required_changes.py" line="439" />
         <source>Portage stopped before building anything because it needs these lines in your configuration first. Each one is shown with the package that asked for it. Nothing is written until you have seen the exact lines.</source>
         <translation>Portage stopped before building anything because it needs these lines in your configuration first. Each one is shown with the package that asked for it. Nothing is written until you have seen the exact lines.</translation>
     </message>
     <message numerus="yes">
-        <location filename="../ui/widgets/required_changes.py" line="458" />
+        <location filename="../ui/widgets/required_changes.py" line="456" />
         <source>%n line(s) would replace an entry you already have for the same atom, which is a change to make on purpose rather than in a batch.</source>
         <translation>
             <numerusform>%n line would replace an entry you already have for the same atom, which is a change to make on purpose rather than in a batch.</numerusform>
@@ -1318,7 +1318,7 @@ eselect repository remove -f {name}</translation>
         </translation>
     </message>
     <message numerus="yes">
-        <location filename="../ui/widgets/required_changes.py" line="468" />
+        <location filename="../ui/widgets/required_changes.py" line="466" />
         <source>%n line(s) are already in your configuration.</source>
         <translation>
             <numerusform>%n line is already in your configuration.</numerusform>
@@ -1326,17 +1326,17 @@ eselect repository remove -f {name}</translation>
         </translation>
     </message>
     <message>
-        <location filename="../ui/widgets/required_changes.py" line="509" />
+        <location filename="../ui/widgets/required_changes.py" line="507" />
         <source>A developer masked these on purpose and wrote down why. Unmasking is not routine; tick them one at a time.</source>
         <translation>A developer masked these on purpose and wrote down why. Unmasking is not routine; tick them one at a time.</translation>
     </message>
     <message>
-        <location filename="../ui/widgets/required_changes.py" line="571" />
+        <location filename="../ui/widgets/required_changes.py" line="569" />
         <source>Portage cannot resolve this</source>
         <translation>Portage cannot resolve this</translation>
     </message>
     <message numerus="yes">
-        <location filename="../ui/widgets/required_changes.py" line="573" />
+        <location filename="../ui/widgets/required_changes.py" line="571" />
         <source>Emerge needs %n change(s) first</source>
         <translation>
             <numerusform>Emerge needs %n change first</numerusform>
@@ -1344,27 +1344,27 @@ eselect repository remove -f {name}</translation>
         </translation>
     </message>
     <message>
-        <location filename="../ui/widgets/required_changes.py" line="587" />
+        <location filename="../ui/widgets/required_changes.py" line="585" />
         <source>Show exact lines</source>
         <translation>Show exact lines</translation>
     </message>
     <message>
-        <location filename="../ui/widgets/required_changes.py" line="588" />
+        <location filename="../ui/widgets/required_changes.py" line="586" />
         <source>Apply selected changes</source>
         <translation>Apply selected changes</translation>
     </message>
     <message>
-        <location filename="../ui/widgets/required_changes.py" line="605" />
+        <location filename="../ui/widgets/required_changes.py" line="603" />
         <source>Will be written</source>
         <translation>Will be written</translation>
     </message>
     <message>
-        <location filename="../ui/widgets/required_changes.py" line="609" />
+        <location filename="../ui/widgets/required_changes.py" line="607" />
         <source>Nothing left to write — see the note above.</source>
         <translation>Nothing left to write — see the note above.</translation>
     </message>
     <message numerus="yes">
-        <location filename="../ui/widgets/required_changes.py" line="612" />
+        <location filename="../ui/widgets/required_changes.py" line="610" />
         <source>%n line(s) will be added, in one privileged operation, after one password. Everything else in those files is left alone.</source>
         <translation>
             <numerusform>%n line will be added, in one privileged operation, after one password. Everything else in that file is left alone.</numerusform>
@@ -1372,17 +1372,17 @@ eselect repository remove -f {name}</translation>
         </translation>
     </message>
     <message>
-        <location filename="../ui/widgets/required_changes.py" line="619" />
+        <location filename="../ui/widgets/required_changes.py" line="617" />
         <source>Cancel</source>
         <translation>Cancel</translation>
     </message>
     <message>
-        <location filename="../ui/widgets/required_changes.py" line="621" />
+        <location filename="../ui/widgets/required_changes.py" line="619" />
         <source>Saving…</source>
         <translation>Saving…</translation>
     </message>
     <message>
-        <location filename="../ui/widgets/required_changes.py" line="621" />
+        <location filename="../ui/widgets/required_changes.py" line="619" />
         <source>Save</source>
         <translation>Save</translation>
     </message>
