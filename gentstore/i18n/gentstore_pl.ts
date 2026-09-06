@@ -1286,36 +1286,36 @@ eselect repository remove -f {name}</translation>
     </message>
     <message>
         <location filename="../ui/widgets/required_changes.py" line="402" />
-        <source>Portage could not find a set of packages that fits together. Its own account of the conflict is below; this is not something a line in your configuration will settle.</source>
-        <translation>Portage nie znalazł zestawu pakietów, który do siebie pasuje. Niżej jest jego własny opis konfliktu; tego nie rozwiąże żaden wpis w konfiguracji.</translation>
+        <source>Portage has nothing to suggest for this package; its account is below. A block usually involves something already installed, so an entry further up the chain may settle it — not one this screen can find.</source>
+        <translation>Portage nie ma nic do zaproponowania dla tego pakietu; niżej jego opis. Blokada zwykle dotyczy czegoś już zainstalowanego, więc sprawę może rozwiązać wpis wyżej w łańcuchu — tylko nie znajdzie go ten ekran.</translation>
     </message>
     <message>
-        <location filename="../ui/widgets/required_changes.py" line="408" />
+        <location filename="../ui/widgets/required_changes.py" line="409" />
         <source>Portage stopped before building anything: it needs these lines in your configuration first. It also reported a conflict, but it stopped working on the graph as soon as it found these changes, so that conflict was worked out without them. Applying the lines and looking again is the way to find out whether it is real.</source>
         <translation>Portage zatrzymał się przed budowaniem czegokolwiek: najpierw potrzebuje tych wpisów w konfiguracji. Zgłosił też konflikt, ale przestał pracować nad grafem, gdy tylko znalazł te zmiany, więc ten konflikt został policzony bez nich. Żeby sprawdzić, czy jest prawdziwy, zastosuj wpisy i przeanalizuj jeszcze raz.</translation>
     </message>
     <message>
-        <location filename="../ui/widgets/required_changes.py" line="416" />
+        <location filename="../ui/widgets/required_changes.py" line="417" />
         <source>Portage asked for these lines and then refused a dependency anyway — both are below. Writing the lines is not enough on its own, and it may not be enough at all: what the refusal says it could not get past is the thing to read first.</source>
         <translation>Portage poprosił o te wiersze, a mimo to odmówił jednej z zależności — oba opisy są niżej. Sam zapis wierszy nie wystarczy, a może nie wystarczyć w ogóle: najpierw warto przeczytać, czego według odmowy nie dało się obejść.</translation>
     </message>
     <message>
-        <location filename="../ui/widgets/required_changes.py" line="423" />
+        <location filename="../ui/widgets/required_changes.py" line="424" />
         <source>Portage needs these lines in your configuration, and it also reported a conflict it worked out in full. Writing the lines will not settle that on its own; the analysis after them will say where it stands.</source>
         <translation>Portage potrzebuje tych wpisów w konfiguracji i zgłosił też konflikt, który policzył do końca. Zapisanie wpisów samo w sobie tego nie rozwiąże; analiza po nich powie, jak to wygląda.</translation>
     </message>
     <message>
-        <location filename="../ui/widgets/required_changes.py" line="430" />
+        <location filename="../ui/widgets/required_changes.py" line="431" />
         <source>Portage stopped before building anything because it needs these lines in your configuration first. It also stopped looking as soon as it had found them — it says so itself — so more may appear behind them once these are written. The analysis runs again by itself afterwards and will say. Nothing is written until you have seen the exact lines.</source>
         <translation>Portage zatrzymał się przed budowaniem czegokolwiek, bo najpierw potrzebuje tych wierszy w konfiguracji. Przestał też szukać, gdy tylko je znalazł — sam to napisał — więc po ich zapisaniu mogą pojawić się kolejne. Analiza uruchomi się potem sama i to pokaże. Nic nie zostanie zapisane, dopóki nie zobaczysz dokładnych wierszy.</translation>
     </message>
     <message>
-        <location filename="../ui/widgets/required_changes.py" line="438" />
+        <location filename="../ui/widgets/required_changes.py" line="439" />
         <source>Portage stopped before building anything because it needs these lines in your configuration first. Each one is shown with the package that asked for it. Nothing is written until you have seen the exact lines.</source>
         <translation>Portage zatrzymał się przed budowaniem czegokolwiek, bo najpierw potrzebuje tych wpisów w konfiguracji. Przy każdym widać pakiet, który go zażądał. Nic nie zostanie zapisane, zanim nie zobaczysz dokładnych linii.</translation>
     </message>
     <message numerus="yes">
-        <location filename="../ui/widgets/required_changes.py" line="455" />
+        <location filename="../ui/widgets/required_changes.py" line="456" />
         <source>%n line(s) would replace an entry you already have for the same atom, which is a change to make on purpose rather than in a batch.</source>
         <translation>
             <numerusform>%n linia zastąpiłaby wpis, który już masz dla tego samego atomu — taką zmianę robi się świadomie, a nie zbiorczo.</numerusform>
@@ -1324,7 +1324,7 @@ eselect repository remove -f {name}</translation>
         </translation>
     </message>
     <message numerus="yes">
-        <location filename="../ui/widgets/required_changes.py" line="465" />
+        <location filename="../ui/widgets/required_changes.py" line="466" />
         <source>%n line(s) are already in your configuration.</source>
         <translation>
             <numerusform>%n linia jest już w Twojej konfiguracji.</numerusform>
@@ -1333,17 +1333,17 @@ eselect repository remove -f {name}</translation>
         </translation>
     </message>
     <message>
-        <location filename="../ui/widgets/required_changes.py" line="506" />
+        <location filename="../ui/widgets/required_changes.py" line="507" />
         <source>A developer masked these on purpose and wrote down why. Unmasking is not routine; tick them one at a time.</source>
         <translation>Deweloper zamaskował je celowo i napisał dlaczego. Odmaskowanie nie jest rutyną; zaznaczaj je pojedynczo.</translation>
     </message>
     <message>
-        <location filename="../ui/widgets/required_changes.py" line="568" />
+        <location filename="../ui/widgets/required_changes.py" line="569" />
         <source>Portage cannot resolve this</source>
         <translation>Portage nie potrafi tego rozwiązać</translation>
     </message>
     <message numerus="yes">
-        <location filename="../ui/widgets/required_changes.py" line="570" />
+        <location filename="../ui/widgets/required_changes.py" line="571" />
         <source>Emerge needs %n change(s) first</source>
         <translation>
             <numerusform>Emerge potrzebuje najpierw %n zmiany</numerusform>
@@ -1352,27 +1352,27 @@ eselect repository remove -f {name}</translation>
         </translation>
     </message>
     <message>
-        <location filename="../ui/widgets/required_changes.py" line="584" />
+        <location filename="../ui/widgets/required_changes.py" line="585" />
         <source>Show exact lines</source>
         <translation>Pokaż dokładne linie</translation>
     </message>
     <message>
-        <location filename="../ui/widgets/required_changes.py" line="585" />
+        <location filename="../ui/widgets/required_changes.py" line="586" />
         <source>Apply selected changes</source>
         <translation>Zastosuj zaznaczone zmiany</translation>
     </message>
     <message>
-        <location filename="../ui/widgets/required_changes.py" line="602" />
+        <location filename="../ui/widgets/required_changes.py" line="603" />
         <source>Will be written</source>
         <translation>Zostanie zapisane</translation>
     </message>
     <message>
-        <location filename="../ui/widgets/required_changes.py" line="606" />
+        <location filename="../ui/widgets/required_changes.py" line="607" />
         <source>Nothing left to write — see the note above.</source>
         <translation>Nie zostało nic do zapisania — zobacz uwagę powyżej.</translation>
     </message>
     <message numerus="yes">
-        <location filename="../ui/widgets/required_changes.py" line="609" />
+        <location filename="../ui/widgets/required_changes.py" line="610" />
         <source>%n line(s) will be added, in one privileged operation, after one password. Everything else in those files is left alone.</source>
         <translation>
             <numerusform>Zostanie dopisana %n linia, w jednej uprzywilejowanej operacji, po jednym haśle. Reszta tych plików pozostaje nietknięta.</numerusform>
@@ -1381,17 +1381,17 @@ eselect repository remove -f {name}</translation>
         </translation>
     </message>
     <message>
-        <location filename="../ui/widgets/required_changes.py" line="616" />
+        <location filename="../ui/widgets/required_changes.py" line="617" />
         <source>Cancel</source>
         <translation>Anuluj</translation>
     </message>
     <message>
-        <location filename="../ui/widgets/required_changes.py" line="618" />
+        <location filename="../ui/widgets/required_changes.py" line="619" />
         <source>Saving…</source>
         <translation>Zapisywanie…</translation>
     </message>
     <message>
-        <location filename="../ui/widgets/required_changes.py" line="618" />
+        <location filename="../ui/widgets/required_changes.py" line="619" />
         <source>Save</source>
         <translation>Zapisz</translation>
     </message>
