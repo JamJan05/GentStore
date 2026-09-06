@@ -1,0 +1,10 @@
+
+These are the packages that would be merged, in order:
+
+Calculating dependencies  ... done!
+Dependency resolution took 2.86 s (backtrack: 1/20).
+
+
+emerge: there are no ebuilds to satisfy "dev-libs/gs-only-in-an-overlay".
+(dependency required by "app-misc/gs-demo-no-ebuild-1::scratch" [ebuild])
+(dependency required by "app-misc/gs-demo-no-ebuild" [argument])

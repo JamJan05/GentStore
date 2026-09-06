@@ -267,6 +267,8 @@ def test_a_required_use_conflict_produces_no_line() -> None:
     )
     assert plan.groups == ()
     assert not plan.can_apply
+    assert not plan.is_ready
+    assert any("exactly-one-of" in line for line in plan.conflicts)
 
 
 @pytest.mark.parametrize(
@@ -290,3 +292,112 @@ def test_the_two_that_are_not_routine_are_marked(
     assert entry.is_unkeyworded is unkeyworded
     assert entry.is_live is live
     assert entry.is_ordinary is not (unkeyworded or live)
+
+
+# -- the four refusals ------------------------------------------------------
+#
+# ``emerge`` has one function for "I cannot satisfy this dependency"
+# (``_emerge/depgraph.py``: ``_show_unsatisfied_dep``) and four branches inside
+# it. All four print a reason and stop: no merge list, no blocker row, and no
+# lines to write, because ``--autounmask`` was already on and had nothing to
+# offer. That is the same shape as a run with nothing to do, which is how a
+# refusal came to open the install gate — the bug these fixtures were recorded
+# for. Each was produced against a scratch repository holding one ebuild whose
+# ``RDEPEND`` cannot be met, so the message arrives the way a user meets it:
+# about a dependency they did not ask for by name.
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["pretend-required-use", "pretend-missing-use", "pretend-no-ebuild", "pretend-masked"],
+)
+def test_a_refusal_never_opens_the_install_gate(name: str) -> None:
+    """The whole point. Portage said no; the button stays off."""
+    plan = install_plan.from_output(fixture(name))
+
+    assert plan.conflicts, "and the user is shown why, not just stopped"
+    assert not plan.is_ready
+    assert not plan.unreadable, "the run was read perfectly well — it said no"
+
+
+def test_the_refusal_carries_the_lines_that_explain_it() -> None:
+    """The banner alone is not the message.
+
+    ``there are no ebuilds built with USE flags to satisfy`` says nothing a user
+    can act on. The four lines under it name the versions Portage looked at and
+    the flag each one is missing, and the two after that name the package that
+    wanted it. Reporting the banner and dropping the rest — which is what
+    collecting only ``!!!`` lines did — is worse than saying nothing, because it
+    looks like the whole answer.
+    """
+    plan = install_plan.from_output(fixture("pretend-missing-use"))
+
+    assert plan.conflicts[0].startswith("emerge: there are no ebuilds built with USE")
+    assert any("Missing IUSE: encode" in line for line in plan.conflicts)
+    assert any("gs-demo-missing-use-1::scratch" in line for line in plan.conflicts)
+
+
+def test_a_refusal_with_no_exclamation_marks_at_all_is_still_a_refusal() -> None:
+    """Two of the four are ``emerge:`` lines, and one of those stands alone.
+
+    ``there are no ebuilds to satisfy`` — the reading of which is nearly always
+    a repository that is not enabled — prints no ``!!!`` line anywhere in the
+    run. A screen that recognises trouble by those three characters sees an
+    empty log and calls it unreadable, which is the right verdict reached for
+    the wrong reason and with nothing to show the user.
+    """
+    plan = install_plan.from_output(fixture("pretend-no-ebuild"))
+
+    assert "!!!" not in fixture("pretend-no-ebuild")
+    assert plan.refusals == (
+        'emerge: there are no ebuilds to satisfy "dev-libs/gs-only-in-an-overlay".',
+    )
+    assert not plan.is_ready
+
+
+def test_a_refusal_beside_a_line_to_write_withdraws_neither() -> None:
+    """The case that sent somebody round in circles.
+
+    Portage proposes ``-icu``, and ``-icu`` is what breaks the package's own
+    ``REQUIRED_USE``. So the run carries a line to write *and* a refusal, and
+    the two have to survive together: the line because Portage wrote it and this
+    screen never edits Portage's proposals, the refusal because applying that
+    line and analysing again produces exactly the same output. Only the gate
+    settles it, and the gate is shut.
+    """
+    plan = install_plan.from_output(fixture("pretend-required-use"))
+
+    assert [entry.line for entry in plan.entries] == [">=net-libs/nodejs-26.3.0 -icu"]
+    assert plan.can_apply
+    assert not plan.is_ready
+    assert any("REQUIRED_USE" in line for line in plan.conflicts)
+    assert any("inspector? ( icu )" in line for line in plan.conflicts)
+
+
+def test_the_required_use_block_stays_with_the_message_it_belongs_to() -> None:
+    """``The following REQUIRED_USE flag constraints are unsatisfied`` is prose.
+
+    It reads like the four headings that introduce lines for ``/etc/portage``
+    and is nothing of the kind: Portage prints it in one place only, inside the
+    "has unmet requirements" refusal, to say which constraint was broken.
+    Treating it as a heading of its own split the refusal in half and dropped
+    the half that mattered.
+    """
+    plan = install_plan.from_output(fixture("pretend-required-use"))
+
+    assert [group.file for group in plan.groups] == ["package.use"]
+    text = "\n".join(plan.conflicts)
+    assert "The following REQUIRED_USE flag constraints are unsatisfied" in text
+    assert "The above constraints are a subset" in text
+
+
+def test_a_working_run_is_not_read_as_a_refusal() -> None:
+    """The other half of every check in this file.
+
+    ``pretend-world-skipped`` is an ordinary update that succeeded, and
+    ``pretend-clean`` a run with nothing to say. Neither may acquire a refusal
+    from a sentence that happens to look like one.
+    """
+    for name in ("pretend-clean", "pretend-world-skipped", "pretend-block-satisfied"):
+        plan = install_plan.from_output(fixture(name))
+        assert plan.refusals == (), name

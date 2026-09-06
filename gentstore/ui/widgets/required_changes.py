@@ -391,6 +391,13 @@ class RequiredChanges(QFrame):
         return ""
 
     def _explanation_text(self, plan: InstallPlan) -> str:
+        if not plan.groups and plan.refusals:
+            return self.tr(
+                "Portage refused one of the dependencies outright, and said why "
+                "below. There is no line to write for this one: the usual causes "
+                "are a package that no repository you have enabled provides, and a "
+                "USE flag the versions on offer no longer have."
+            )
         if not plan.groups:
             return self.tr(
                 "Portage could not find a set of packages that fits together. "
@@ -405,12 +412,28 @@ class RequiredChanges(QFrame):
                 "that conflict was worked out without them. Applying the lines and "
                 "looking again is the way to find out whether it is real."
             )
+        if plan.refusals:
+            return self.tr(
+                "Portage asked for these lines and then refused a dependency "
+                "anyway — both are below. Writing the lines is not enough on its "
+                "own, and it may not be enough at all: what the refusal says it "
+                "could not get past is the thing to read first."
+            )
         if plan.conflicts:
             return self.tr(
                 "Portage needs these lines in your configuration, and it also "
                 "reported a conflict it worked out in full. Writing the lines will "
                 "not settle that on its own; the analysis after them will say where "
                 "it stands."
+            )
+        if plan.stopped_early:
+            return self.tr(
+                "Portage stopped before building anything because it needs these "
+                "lines in your configuration first. It also stopped looking as soon "
+                "as it had found them — it says so itself — so more may appear "
+                "behind them once these are written. The analysis runs again by "
+                "itself afterwards and will say. Nothing is written until you have "
+                "seen the exact lines."
             )
         return self.tr(
             "Portage stopped before building anything because it needs these lines "

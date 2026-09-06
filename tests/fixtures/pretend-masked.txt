@@ -1,0 +1,18 @@
+
+These are the packages that would be merged, in order:
+
+Calculating dependencies  .... done!
+Dependency resolution took 2.42 s (backtrack: 1/20).
+
+
+!!! All ebuilds that could satisfy "app-misc/gs-demo-eapi" have been masked.
+!!! One of the following masked packages is required to complete your request:
+- app-misc/gs-demo-eapi-1::scratch (masked by: EAPI 99)
+
+The current version of portage supports EAPI '9'. You must upgrade to a
+newer version of portage before EAPI masked packages can be installed.
+(dependency required by "app-misc/gs-demo-masked-1::scratch" [ebuild])
+(dependency required by "app-misc/gs-demo-masked" [argument])
+For more information, see the MASKED PACKAGES section in the emerge
+man page or refer to the Gentoo Handbook.
+
