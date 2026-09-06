@@ -51,6 +51,10 @@ That is how a user meets a refusal — about a package they have never heard of,
 in by the one they asked for. A refusal about the atom they typed is the easy case and
 the rare one.
 
+`tools/refusal-demo.sh` builds that repository again, either to re-record these files or
+to put the four refusals in front of the running window. It changes nothing on the
+machine and needs no root.
+
 ## One edit, and what it was
 
 The Hyprland run and the `@world` run are the two that have been touched. Portage explains a

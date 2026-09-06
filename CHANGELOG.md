@@ -45,6 +45,16 @@ tag was made.
   without anything having to remember to. Output that could not be read keeps it shut too: a
   check that failed must not be mistaken for a check that passed.
 
+- **`tools/refusal-demo.sh`.** The four ways Portage says it cannot satisfy a dependency, in
+  front of the running window. Getting them out of a healthy system is not a matter of picking
+  awkward packages — with `--autounmask` on, Portage answers most refusals with a line to write
+  instead — so the script builds a throwaway repository of four one-line ebuilds and hands it to
+  Portage in `PORTAGE_REPOSITORIES`, which replaces `repos.conf` for that one process and its
+  children. The live configuration is copied into it first, so the window looks exactly as it
+  always does with four extra packages in it. Nothing on the machine changes and nothing needs
+  root. `--emerge` prints what Portage says about each without opening a window; the same
+  technique recorded the four fixtures.
+
 - **`append_lines` in the privileged helper.** A list of path-and-line pairs, every one of them
   checked exactly as if it had arrived alone, and all of them checked before the first is
   written — one bad entry changes nothing at all. It reaches four files rather than the six
