@@ -473,6 +473,34 @@ def test_every_ref_the_changelog_links_to_still_exists() -> None:
         assert resolved.returncode == 0, f"CHANGELOG.md links to {ref}, which is not in this repo"
 
 
+def test_the_changelog_mentions_no_one() -> None:
+    """The notes are this file verbatim, and GitHub reads ``@name`` as a person.
+
+    1.3.6 went out with ``"Update @world"`` in plain quotes. GitHub turned it
+    into a mention on the release page, there is an account called ``world``,
+    and the release looked like it credited a stranger for the work. Portage's
+    set names are the obvious way to walk into this — ``@world``, ``@system``,
+    ``@live-rebuild`` — but anything that starts a word with ``@`` does it, and
+    the account on the other end is a real person who gets the notification.
+
+    Inside backticks the name renders as itself and nothing is linked, which is
+    the whole rule: no bare ``@`` in the one file a release publishes wholesale.
+    """
+    body = (ROOT / "CHANGELOG.md").read_text()
+
+    # Blanked rather than deleted, so an offender's line number is still its
+    # line number in the file the reader is about to open.
+    plain = re.sub(r"`[^`]*`", lambda m: re.sub(r"[^\n]", " ", m.group(0)), body)
+
+    found = [
+        f"CHANGELOG.md:{plain[: m.start()].count(chr(10)) + 1} says {m.group()}"
+        for m in re.finditer(r"(?<![A-Za-z0-9_])@[A-Za-z0-9][\w-]*", plain)
+    ]
+    assert not found, "\n  ".join(
+        ["these reach a GitHub account when the notes are published:", *found]
+    )
+
+
 # -- the release ebuild carries what the live one depends on --------------------
 
 #: Two ebuilds cut down to what this is about: the release one fetches and is
