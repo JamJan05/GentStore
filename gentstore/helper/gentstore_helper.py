@@ -809,9 +809,27 @@ def _check_owned_content(subtree: str, path: Path, content: str) -> None:
     one file: is this the single section this application produces for a file of
     that name, spelt the way it spells it.
     """
+    # Interpolation left on, deliberately. Portage reads these files with a
+    # plain ConfigParser too (``portage.util.configparser.SafeConfigParser`` is
+    # an alias for it), so a value with a bare ``%`` in it — a percent-encoded
+    # sync-uri, most often — raises there exactly as it does here, and Portage
+    # drops the repository with an error. Turning interpolation off would let
+    # this program write a file the reader it is writing for cannot parse,
+    # which is a worse outcome than refusing it. The message says what to do.
     parser = configparser.ConfigParser()
     try:
         parser.read_string(content)
+        # Touched here rather than left to the loop below, so that an
+        # interpolation error is reported with the rest of the parse failures
+        # instead of escaping this try block later on.
+        sections = {name: dict(parser[name].items()) for name in parser.sections()}
+    except configparser.InterpolationError as exc:
+        raise HelperError(
+            "bad_content",
+            f"{path.name} has a '%' that is not doubled: {exc}. Portage reads "
+            f"this file the same way and would refuse it too; write '%%' for a "
+            f"literal percent sign.",
+        ) from exc
     except configparser.Error as exc:
         raise HelperError("bad_content", f"{path.name} is not a configuration file: {exc}") from exc
 
@@ -822,9 +840,8 @@ def _check_owned_content(subtree: str, path: Path, content: str) -> None:
             "Gentstore never wrote; refusing to write one",
         )
 
-    sections = parser.sections()
     expected = path.name[: -len(".conf")] if path.name.endswith(".conf") else path.name
-    if sections != [expected]:
+    if list(sections) != [expected]:
         found = ", ".join(f"[{name}]" for name in sections) or "no section at all"
         raise HelperError(
             "bad_content",
@@ -838,7 +855,7 @@ def _check_owned_content(subtree: str, path: Path, content: str) -> None:
         )
 
     allowed = OWNED_KEYS[subtree]
-    for key, value in parser[expected].items():
+    for key, value in sections[expected].items():
         if key not in allowed:
             raise HelperError(
                 "bad_content",

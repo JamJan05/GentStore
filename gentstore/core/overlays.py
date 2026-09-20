@@ -191,7 +191,7 @@ def _owners(element) -> tuple[str, ...]:  # noqa: ANN001
 #: of that; it is not a cure, and the cure is defusedxml, which this project does
 #: not have and would be a dependency to justify.
 #:
-#: Eight megabytes rather than one: the real catalogue lists every overlay
+#: Eight mebibytes rather than one: the real catalogue lists every overlay
 #: Gentoo knows about and is a few hundred kilobytes, where a metadata.xml
 #: describes one package.
 CATALOGUE_MAX_BYTES = 8 << 20

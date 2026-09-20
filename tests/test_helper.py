@@ -1255,13 +1255,31 @@ def test_the_two_kinds_are_anchored(portage: Path) -> None:
 
 def test_the_interface_and_the_helper_agree_on_how_a_line_is_found(portage: Path) -> None:
     """The seam: what core/confedit.py and core/makeconf.py put in a plan has to
-    be something this program knows how to build a pattern from."""
+    be something this program knows how to build a pattern from.
+
+    The file has to exist and hold the variable, or ``plan_set`` returns an
+    ``append_line`` plan with no ``match_kind`` at all and there is nothing to
+    compare — which is how this test spent its first day passing without
+    asserting anything.
+    """
     from gentstore.core import makeconf  # noqa: PLC0415
 
-    conf = makeconf.load(path=portage / "make.conf")
+    target = portage / "make.conf"
+    target.write_text('MAKEOPTS="-j1"\n', encoding="utf-8")
+    conf = makeconf.load(path=target)
     plan = makeconf.plan_set(conf, "MAKEOPTS", "-j4")
-    if plan.match_kind is not None:
-        assert plan.match_kind in helper.MATCH_KINDS
+
+    assert plan.op == "replace_line"
+    assert plan.match_kind == "assignment"
+    assert plan.match_kind in helper.MATCH_KINDS
+    assert plan.match_literal == "MAKEOPTS"
+
+    # And the request that actually crosses the boundary carries the pair,
+    # never a pattern.
+    request = plan.as_request()
+    assert request["match_kind"] == "assignment"
+    assert request["match_literal"] == "MAKEOPTS"
+    assert "match" not in request
 
 
 # -- where cfg_apply may reach ----------------------------------------------

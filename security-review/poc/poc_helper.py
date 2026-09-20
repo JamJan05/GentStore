@@ -1,5 +1,9 @@
 """Dowody do GS-01, GS-05, GS-06, GS-10 i GS-12 — wszystko na katalogu tymczasowym.
 
+UWAGA: poprawki są już w tej gałęzi, więc skrypt pokazuje dziś **odmowy**, a nie
+luki. Każda sekcja mówi, co robiła przed poprawką i co robi teraz; żeby zobaczyć
+oryginalne zachowanie, uruchom go na `9b6ba1d` (commit sprzed audytu).
+
 Ten skrypt niczego nie instaluje, nie woła pkexec ani sudo i nie dotyka /etc.
 Działa dokładnie tak, jak tests/test_helper.py: importuje moduł helpera i podmienia
 po imporcie stałą CONFIG_ROOT — czego zainstalowany program nie umie zrobić.
@@ -36,7 +40,7 @@ def call(op: str, **fields) -> dict:
     return json.loads(out.getvalue())
 
 
-print("=== GS-01 · write_file sprawdza ścieżkę, nie treść ===")
+print("=== GS-01 · przedtem: write_file sprawdzał ścieżkę, nie treść ===")
 payload = (
     "[gentoo]\n"
     "location = /var/db/repos/gentoo\n"
@@ -61,10 +65,11 @@ import configparser  # noqa: E402  — tak samo scala portage.repository.config.
 )
 parser = configparser.ConfigParser()
 parser.read(sorted(str(f) for f in (root / "repos.conf").iterdir()))
-print("  sync-uri repozytorium gentoo po scaleniu:", parser["gentoo"]["sync-uri"])
+print("  gdyby plik powstał, sync-uri repozytorium gentoo brzmiałoby:",
+      parser["gentoo"]["sync-uri"])
 
 print()
-print("=== GS-06 · które wartości make.conf helper przyjmuje ===")
+print("=== GS-06 · które wartości make.conf helper przyjmuje (przedtem: wszystkie) ===")
 for line in (
     'FEATURES="-sandbox -usersandbox -network-sandbox -userpriv -ipc-sandbox"',
     'FEATURES="-strict -webrsync-gpg"',
@@ -80,7 +85,7 @@ for line in (
         print("  odrzucona:", line, "->", exc.code)
 
 print()
-print("=== GS-10 · \\r przechodzi, a _lines() traktuje go jak koniec linii ===")
+print("=== GS-10 · przedtem: \\r przechodził jako jedna linia, a Portage czytał dwa wpisy ===")
 package_use = root / "package.use"
 package_use.write_text("media-video/mpv vulkan\n", encoding="utf-8")
 smuggled = "app-x/y flag\rsys-apps/portage -rsync-verify"
@@ -95,15 +100,25 @@ print(
 )
 
 print()
-print("=== GS-10b · replace_line przepisuje CR na LF w całym pliku ===")
+print("=== GS-10b · czy replace_line zostawia resztę pliku bajt w bajt ===")
 make_conf = root / "make.conf"
-make_conf.write_bytes(b'USE="X"\nCOMMENT_ONE\rCOMMENT_TWO\nMAKEOPTS="-j4"\n')
-print("  przed:", make_conf.read_bytes())
-call("replace_line", path=str(make_conf), line='USE="X wayland"', match=r"^\s*USE=")
-print("  po   :", make_conf.read_bytes(), "  (Docs §4: reszta pliku bajt w bajt)")
+before = b'# notatka\n\nUSE="X"\n\n# zachowaj ten komentarz\nMAKEOPTS="-j4"\n'
+make_conf.write_bytes(before)
+call(
+    "replace_line",
+    path=str(make_conf),
+    line='USE="X wayland"',
+    match_kind="assignment",
+    match_literal="USE",
+)
+after = make_conf.read_bytes()
+print("  przed:", before)
+print("  po   :", after)
+print("  zmieniła się tylko linia USE:",
+      after == before.replace(b'USE="X"', b'USE="X wayland"'))
 
 print()
-print("=== GS-12 · zagnieżdżony JSON łamie kontrakt „zawsze jedna odpowiedź JSON” ===")
+print("=== GS-12 · przedtem: zagnieżdżony JSON łamał kontrakt „zawsze jedna odpowiedź JSON” ===")
 out = io.StringIO()
 try:
     helper.main(io.StringIO("[" * 200_000 + "]" * 200_000), out)
@@ -112,12 +127,12 @@ except BaseException as exc:  # noqa: BLE001 — o to właśnie chodzi
     print("  NIEZŁAPANY", type(exc).__name__, "— brak jakiejkolwiek odpowiedzi JSON")
 
 print()
-print("=== GS-05 · wzorzec `match` to regex z żądania, uruchamiany jako root ===")
-pattern = "^(a+)+$"
-print(f"  wzorzec {pattern!r}: {len(pattern)} znaków, PATTERN_MAX = {helper.PATTERN_MAX}")
-for length in (18, 20, 22, 24, 26, 28):
-    package_use.write_text("a" * length + "b\n", encoding="utf-8")
-    started = time.monotonic()
-    call("replace_line", path=str(package_use), line="x/y flag", match=pattern)
-    print(f"  {length:2d} znaków w pliku -> {time.monotonic() - started:6.2f} s")
-print("  (podwojenie co dwa znaki; 60 znaków to praktycznie nieskończoność)")
+print("=== GS-05 · regex z żądania nie jest już kompilowany ===")
+package_use.write_text("a" * 200 + "b\n", encoding="utf-8")
+started = time.monotonic()
+answer = call("replace_line", path=str(package_use), line="x/y flag", match="^(a+)+$")
+elapsed = time.monotonic() - started
+print(f"  stary ładunek '^(a+)+$' na 200 znakach -> {answer.get('code')} w {elapsed:.2f} s")
+print("  komunikat:", answer.get("error", "")[:78])
+print("  (przed poprawką ten sam wzorzec na 28 znakach liczył się 10 s,")
+print("   a na 60 nie kończył się nigdy — w procesie roota, którego użytkownik nie ubije)")

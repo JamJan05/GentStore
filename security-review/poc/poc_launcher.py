@@ -1,5 +1,8 @@
 """Dowody do GS-04 i GS-09 — sama bramka argumentów, nic się nie uruchamia.
 
+Poprawki są w tej gałęzi, więc wiersze, które kiedyś przechodziły, są dziś
+odrzucane. Na `9b6ba1d` ten sam skrypt pokazuje je jako PRZYJĘTE.
+
     python3 security-review/poc/poc_launcher.py
 
 check_arguments() jest czystą funkcją: sprawdza wiersz poleceń i albo wraca, albo

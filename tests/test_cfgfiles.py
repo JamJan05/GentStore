@@ -276,3 +276,82 @@ def test_a_pending_file_inside_two_protected_directories_is_offered_once(
 
     found = cfgfiles.find(roots=(outer, inner, outer), masks=())
     assert [item.target for item in found] == [inner / "hostname"]
+
+
+# -- what a merge says it expected to find ----------------------------------
+
+
+@pytest.fixture
+def cfg_page(app, etc, monkeypatch):
+    """The Configuration files screen, pointed at a sandbox /etc."""
+    from PyQt6.QtWidgets import QWidget
+
+    from gentstore.core import cfgfiles as core_cfgfiles
+    from gentstore.ui.context import AppContext
+    from gentstore.ui.pages.cfgfiles import CfgFilesPage
+    from gentstore.ui.pages.registry import PAGES_BY_ID
+    from gentstore.ui.tasks import wait_for_tasks
+
+    monkeypatch.setattr(core_cfgfiles, "protected_directories", lambda *a, **k: (etc,))
+    holder = QWidget()
+    page = CfgFilesPage(PAGES_BY_ID["cfg"], AppContext(app.settings, holder), holder)
+    yield page
+    wait_for_tasks()
+    holder.deleteLater()
+    app.processEvents()
+
+
+def test_a_merge_expects_what_the_diff_was_built_from(cfg_page, etc, monkeypatch) -> None:
+    """The snapshot is taken beside the diff, not when Save is pressed.
+
+    Between the two the target can change. Reading it again at the end would
+    mean telling the helper "I expect what is there now" — which is true, and
+    useless: it agrees with whatever happened in the meantime, and the user
+    approved a difference against something else. That is the one case the
+    field exists to catch.
+    """
+    from gentstore.core.cfgfiles import ConfigFile
+    from gentstore.ui.pages import cfgfiles as page_module
+
+    target = etc / "conf.d"
+    target.write_text("as the user saw it\n", encoding="utf-8")
+    candidate = etc / "._cfg0000_conf.d"
+    candidate.write_text("what the package shipped\n", encoding="utf-8")
+
+    cfg_page.select(ConfigFile(candidate=candidate, target=target, number=0))
+
+    # The file moves on after the diff was shown and before Save is pressed.
+    target.write_text("somebody else got here first\n", encoding="utf-8")
+
+    sent: dict = {}
+    monkeypatch.setattr(page_module, "run_async", lambda *a, **k: sent.update(k))
+    yes = page_module.QMessageBox.StandardButton.Yes
+    monkeypatch.setattr(page_module.QMessageBox, "question", lambda *a, **k: yes)
+    cfg_page._editor.setPlainText("merged by hand\n")
+    cfg_page._decide("merge")
+
+    assert sent.get("expect") == "as the user saw it\n", sent
+    assert sent.get("content") == "merged by hand\n"
+
+
+def test_a_merge_of_a_file_that_is_not_there_yet_expects_nothing(
+    cfg_page, etc, monkeypatch
+) -> None:
+    """`expect: null` is a real answer — "this file should not exist yet" — so
+    it cannot double as "could not be read"."""
+    from gentstore.core.cfgfiles import ConfigFile
+    from gentstore.ui.pages import cfgfiles as page_module
+
+    candidate = etc / "._cfg0000_brand-new"
+    candidate.write_text("new\n", encoding="utf-8")
+
+    cfg_page.select(ConfigFile(candidate=candidate, target=etc / "brand-new", number=0))
+
+    sent: dict = {}
+    monkeypatch.setattr(page_module, "run_async", lambda *a, **k: sent.update(k))
+    yes = page_module.QMessageBox.StandardButton.Yes
+    monkeypatch.setattr(page_module.QMessageBox, "question", lambda *a, **k: yes)
+    cfg_page._decide("merge")
+
+    assert "expect" in sent
+    assert sent["expect"] is None

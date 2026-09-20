@@ -59,6 +59,26 @@ from .split_page import SplitPage
 
 log = logging.getLogger(__name__)
 
+#: "The target could not be read", told apart from "the target is not there".
+#:
+#: ``None`` is a real answer — it is what the helper's ``expect`` field means by
+#: "this file should not exist yet" — so it cannot double as the failure. A file
+#: in /etc that this process may not read, or one that is not UTF-8, is a file
+#: whose merge nobody can vouch for, and that has to be a different outcome from
+#: a file that is simply absent.
+_UNREADABLE = object()
+
+
+def _content_of(path):  # noqa: ANN001, ANN202 - str | None | the sentinel above
+    """The target's text as the diff on screen was computed from it."""
+    if not path.exists():
+        return None
+    try:
+        return path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as exc:
+        log.error("Could not read %s: %s", path, exc)
+        return _UNREADABLE
+
 
 class _FileRow(QFrame):
     """One pending file."""
@@ -130,6 +150,8 @@ class CfgFilesPage(SplitPage):
         self._rows: list[_FileRow] = []
         self._selected: ConfigFile | None = None
         self._merging = False
+        #: The target's content when the diff was built — see :meth:`select`.
+        self._expect: object = None
 
         self._build_list_pane()
         self._build_detail_pane()
@@ -280,6 +302,14 @@ class CfgFilesPage(SplitPage):
         self._report.hide()
         for row in self._rows:
             row.set_selected(row.item.candidate == item.candidate)
+        # Taken here, beside the diff that is built from it, and not again when
+        # the user presses Save. A merge tells the helper what it expects the
+        # target to hold, and the only thing that claim is worth anything
+        # against is the text the diff on screen was actually computed from.
+        # Reading it again at the end would mean agreeing with whatever the
+        # file had become in the meantime — which is the one case the field
+        # exists to catch.
+        self._expect = _content_of(item.target)
         self._diff.set_lines(cfgfiles.diff(item))
         self._stack.setCurrentIndex(1)
         self._refresh_detail()
@@ -343,15 +373,9 @@ class CfgFilesPage(SplitPage):
             # The helper requires this for a merge and is right to: the text
             # below came out of the editor, so the only thing tying it to what
             # the user was shown is the state of the file they were shown it
-            # against. A target that has changed underneath means the diff on
-            # screen described something else, and the write should not go.
-            try:
-                expect = item.target.read_text(encoding="utf-8") if item.target.exists() else None
-            except (OSError, UnicodeDecodeError) as exc:
-                # Unreadable because of permissions, or not text at all. Either
-                # way the helper would compare against something we cannot name,
-                # and the same read there has to produce the same bytes.
-                log.error("Could not read %s: %s", item.target, exc)
+            # against. The snapshot was taken in select(), beside the diff — see
+            # there for why it is not read again here.
+            if self._expect is _UNREADABLE:
                 self._report.setProperty("state", "err")
                 self._report.setText(
                     self.tr(
@@ -363,7 +387,7 @@ class CfgFilesPage(SplitPage):
                 self._report.show()
                 return
             fields["content"] = self._editor.toPlainText()
-            fields["expect"] = expect
+            fields["expect"] = self._expect
 
         self._set_busy(True)
         run_async(

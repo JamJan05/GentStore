@@ -122,8 +122,10 @@ Reszta listy czeka — nic z niej nie zostało zastosowane.
       `${{ github.event.inputs.dry_run }}` do `env:`, tak jak robi to `website-version.yml`.
 - [x] **GS-18** — przypiąć akcje do SHA zamiast do tagów (`actions/checkout@v5`,
       `actions/setup-python@v5`) w workflowach z `permissions: contents: write`.
-- [x] **GS-18** — przypiąć wersje w `tests.yml:63` (`pip install …`) i obraz
-      `gentoo/portage:latest` w `tests-gentoo.yml:39`.
+- [x] **GS-18** — wersje w `tests.yml:63` (`pip install …`) przypięte. Obraz
+      `gentoo/portage:latest` w `tests-gentoo.yml:39` **zostaje niezmieniony** — patrz
+      sprostowanie w raporcie: to nocny cron sprawdzający projekt wobec Gentoo *dzisiejszego*,
+      a przypięcie zamroziłoby dokładnie to, co ten workflow obserwuje.
 
 ## `tests/`
 

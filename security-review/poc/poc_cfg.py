@@ -1,4 +1,8 @@
-"""PoC: cfg_apply never asks who may write the directory the ._cfg file is in.
+"""PoC: whether cfg_apply asks who may write the directory the ._cfg file is in.
+
+The fix is in this branch, so today the answer is "yes" and the write is
+refused. Run this on 9b6ba1d, the commit the audit started from, to see the
+original behaviour: the same call succeeded and rewrote victim.conf.
 
 The sandbox stands in for a real system: `etc` plays /etc (root-owned, 0755),
 `etc/loose` plays any directory under a protected root that is not root's alone.
@@ -14,7 +18,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-sys.path.insert(0, "/home/janek/Dokumenty/githun/GentStore")
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from gentstore.helper import gentstore_helper as helper
 
 tmp = Path(tempfile.mkdtemp()).resolve()

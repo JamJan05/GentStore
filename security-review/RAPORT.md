@@ -101,7 +101,7 @@ Reguły z `Docs/04-privileges.md`. Status: **potwierdzona** / **częściowo** / 
 | Komunikat `modify-config` wymienia `/etc` obok `/etc/portage` | potwierdzona | `:38-39` | Uczciwie co do *miejsca*. Nie co do *treści*: nie zapowiada „dowolna treść, jaką poda wołający" → GS-02. |
 | Komunikat `run-emerge`: „install, update or remove packages" | **częściowo** | `:53-54` | Za tą akcją stoi też `eselect repository add` (dodanie źródła oprogramowania) i `eselect profile set` (zmiana profilu systemu). Dokument sam to przyznaje w §3 („A third action would be better still") — raportuję tylko to, czego przyznanie nie obejmuje → GS-09. |
 | `allow_inactive` | **niepotwierdzona w dokumencie** | `:43`, `:57` | Dokument nie wspomina o sesjach nieaktywnych/zdalnych → GS-14. |
-| Kopie z drzewa źródłowego nie sięgają roota same z siebie | potwierdzona | `privilege.py:271-299` | `GENTSTORE_DEV_HELPER` domyślnie wyłączony, ostrzeżenie w logu. Ale `_tampering_risk` nie sprawdza właściciela → GS-13 (Info; dokument sam opisuje to ryzyko). |
+| Kopie z drzewa źródłowego nie sięgają roota same z siebie | potwierdzona | `privilege.py:271-299` | `GENTSTORE_DEV_HELPER` domyślnie wyłączony, ostrzeżenie w logu. Ale `_tampering_risk` nie sprawdza właściciela → GS-15 (Info; dokument sam opisuje to ryzyko). |
 | Jedna maszyna albo żadna (`ROOT`/`PORTAGE_CONFIGROOT`/`SYSROOT`/`EPREFIX`) | potwierdzona | `privilege.py:72-110,171-176` | Sprawdzane przed przypadkiem „już root", obie ścieżki uprzywilejowane przechodzą przez `detect()`. Normalizacja `//`, `""`, `EPREFIX` obsłużona. |
 
 ### §5 — kopie zapasowe
