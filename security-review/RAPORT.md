@@ -1465,7 +1465,7 @@ proces zginął.
 
 `-vv`, nie `-q`, i ta różnica jest tu całą sprawą. `-q` wypisuje kropkę **po** zakończeniu testu,
 więc test, który zabija proces, nigdy swojej kropki nie dostaje; `-vv` wypisuje `nodeid` **przed**
-uruchomieniem, więc ostatnia linia nazywa winowajcę. Sprawdzone na testcie wołającym `os.abort()`:
+uruchomieniem, więc ostatnia linia nazywa winowajcę. Sprawdzone na teście wołającym `os.abort()`:
 przy `-q` linia przed `Fatal Python error` to `..`, przy `-vv` to
 `test_crash.py::test_the_one_that_dies`.
 
