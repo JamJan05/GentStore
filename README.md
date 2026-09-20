@@ -66,6 +66,7 @@ configuration file waiting, and an empty panel is a worse picture than a dated o
 | `dev-lang/python` ≥ 3.12 | the runtime |
 | `sys-apps/portage` | the `portage` module — package data |
 | `dev-python/pyqt6` | the graphical interface (the default USE flags are enough) |
+| `dev-qt/qtsvg` | the `qsvg` image plugin — every icon here is an SVG, including the application's own |
 | `dev-qt/qttools[linguist]` | `lrelease` — compiling the translations |
 | `app-eselect/eselect-repository` | overlay management and the `repositories.xml` catalogue |
 | `sys-auth/polkit` | `pkexec` — raising privileges |
@@ -172,7 +173,7 @@ To take the overlay back out: `sudo bash make-overlay.sh --remove` (or, without 
 ### From the working directory — for working on the code
 
 ```bash
-emerge --ask dev-python/pyqt6 dev-qt/qttools app-eselect/eselect-repository sys-auth/polkit
+emerge --ask dev-python/pyqt6 dev-qt/qtsvg dev-qt/qttools app-eselect/eselect-repository sys-auth/polkit
 
 python tools/i18n.py compile   # the .qm catalogues are not kept in the repository
 sudo make install              # the privileged half, the menu entry and the icon

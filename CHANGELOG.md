@@ -66,6 +66,22 @@ tag was made.
 
 ### Fixed
 
+- **An installed copy with no icons at all, which the nightly job had been saying since the day
+  it could.** The ebuild never asked for `dev-qt/qtsvg`. Every icon here is an SVG — the
+  interface glyphs and the application's own — and without that package `QIcon` reads none of
+  them: the window has nothing to hand the compositor and the toolbar falls back to whatever the
+  desktop theme happens to carry. `dev-python/pyqt6` does not bring it along; its `svg` USE flag
+  is off by default and is for the QtSvg bindings, which nothing here imports. So the dependency
+  was invisible on any machine that had qtsvg for some other reason, which is every machine this
+  was written on.
+
+  It is now in `RDEPEND`, in the requirements table, in the `emerge` line for a working-directory
+  install, and in the stage3 the nightly Gentoo job builds — the one machine in the picture with
+  no other reason to have it, and the reason
+  `test_the_application_introduces_itself_to_the_desktop` had failed there every night since that
+  test was written. `tests/test_packaging.py` now reads `RDEPEND` for it, so the same gap cannot
+  reopen quietly in the fast job.
+
 - **"Ready to install" over a run in which Portage had refused.** The install gate opens when an
   analysis comes back with nothing to write and nothing conflicting. A refusal is neither. When
   Portage cannot satisfy a dependency it prints its reason and stops — no merge list, no blocker
