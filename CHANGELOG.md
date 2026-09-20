@@ -9,6 +9,8 @@ tag was made.
 
 ## [Unreleased]
 
+## [1.4.0] — 2026-09-20
+
 A security release. A line-by-line review of the two privileged programs, and of what reaches
 them, turned up nineteen findings — nine in those two programs, the rest in the window and in the
 parsers that read `emerge`'s output. Two ended in code running as root. None of it was reported
@@ -859,7 +861,8 @@ comes from the `portage` API rather than from parsing ebuilds. Everything privil
 Bilingual (Polish and English) through Qt's own translation system; the documentation and the
 source strings are English.
 
-[Unreleased]: https://github.com/JamJan05/GentStore/compare/v1.3.6...HEAD
+[Unreleased]: https://github.com/JamJan05/GentStore/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/JamJan05/GentStore/compare/v1.3.6...v1.4.0
 [1.3.6]: https://github.com/JamJan05/GentStore/compare/v1.3.5...v1.3.6
 [1.3.5]: https://github.com/JamJan05/GentStore/compare/v1.3.1...v1.3.5
 [1.3.1]: https://github.com/JamJan05/GentStore/compare/v1.3.0...v1.3.1

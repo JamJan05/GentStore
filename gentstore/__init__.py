@@ -16,7 +16,7 @@
 
 """Gentstore — a graphical front-end for Portage on Gentoo Linux."""
 
-__version__ = "1.3.6"
+__version__ = "1.4.0"
 APP_NAME = "Gentstore"
 ORG_NAME = "Gentstore"
 ORG_DOMAIN = "gentstore.gentoo.org"
