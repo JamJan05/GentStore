@@ -617,3 +617,21 @@ def test_the_icon_is_looked_for_where_the_installers_put_it(
     monkeypatch.setenv("XDG_DATA_DIRS", "/usr/share")
     monkeypatch.delenv("XDG_DATA_HOME", raising=False)
     assert Path(installed) / f"{ICON_NAME}.svg" in set(app_icon_search_paths())
+
+
+def test_the_ebuild_pulls_in_what_reads_an_svg(ebuild: str) -> None:
+    """An installed copy has icons only if the qsvg image plugin came with it.
+
+    Every icon here is an SVG — the interface glyphs and the application's own
+    — and QIcon reads none of them without dev-qt/qtsvg: the window hands the
+    compositor nothing and the toolbar falls back to whatever the desktop theme
+    carries. Nothing else in the list brings it along. dev-python/pyqt6 has an
+    ``svg`` USE flag, but it is off by default and is for the QtSvg bindings,
+    which nothing here imports. So it is named, and named here, because the
+    failure is silent everywhere except a machine that happens not to have it —
+    which is what the nightly Gentoo job is, and it was red from the day the
+    window-icon test was written until this line existed.
+    """
+    block = re.search(r'^RDEPEND="\n(.*?)^"$', ebuild, re.M | re.S)
+    assert block, "the ebuild no longer has an RDEPEND block to read"
+    assert "dev-qt/qtsvg" in block.group(1), "nothing in RDEPEND renders an SVG"

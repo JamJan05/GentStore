@@ -32,8 +32,13 @@ mkdir -p /etc/portage/package.use
 echo "dev-qt/qttools linguist" > /etc/portage/package.use/gentstore-tests
 cd /src
 # git, so the tests that ask the repository whether CHANGELOG.md's refs resolve
-# have something to ask. A stage3 has no VCS in it.
-emerge --quiet --usepkg dev-python/pytest dev-python/pyqt6 dev-qt/qttools dev-vcs/git
+# have something to ask. A stage3 has no VCS in it. dev-qt/qtsvg is the ebuild's
+# RDEPEND and is here for the same reason it is there: it carries the qsvg image
+# plugin, without which QIcon reads none of the SVGs this application ships and
+# the window has no icon of its own — which is exactly what the smoke test in
+# tests/test_smoke.py asks about.
+emerge --quiet --usepkg dev-python/pytest dev-python/pyqt6 dev-qt/qtsvg \
+	dev-qt/qttools dev-vcs/git
 
 python tools/i18n.py compile
 

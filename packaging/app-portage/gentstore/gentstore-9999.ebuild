@@ -17,8 +17,15 @@ SLOT="0"
 # unkeyworded and needs "=app-portage/gentstore-9999 **" to be accepted.
 KEYWORDS=""
 
+# dev-qt/qtsvg is here for the qsvg image plugin, not for the QtSvg bindings —
+# nothing imports those. Every icon this application draws is an SVG, its own
+# included, and without the plugin QIcon reads none of them: the window has no
+# icon to give the compositor and the toolbar falls back to whatever the
+# desktop theme happens to carry. dev-python/pyqt6[svg] would pull it in as
+# well, but that flag is off by default and builds bindings nobody here calls.
 RDEPEND="
 	dev-python/pyqt6[gui,widgets,${PYTHON_USEDEP}]
+	dev-qt/qtsvg:6
 	app-eselect/eselect-repository
 	sys-apps/portage[${PYTHON_USEDEP}]
 	sys-auth/polkit
