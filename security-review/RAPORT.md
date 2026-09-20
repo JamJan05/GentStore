@@ -1386,12 +1386,18 @@ czyli najdłuższej rzeczy, jaką budowanie realnie wypisuje.
 
 Uczciwa lista. Wolę ją dłuższą niż wrażenie kompletności.
 
-**Nie uruchomiłem testów ani lintera.** W tym środowisku nie ma `pytest` ani `ruff`
-(`No module named pytest`, `ruff: nie znaleziono polecenia`), a instalowanie czegokolwiek byłoby
-zmianą w systemie. Wszystkie odwołania do testów pochodzą z czytania plików w `tests/`, nie
-z obserwacji, że przechodzą. **Szkice testów regresyjnych przy znaleziskach nie były uruchomione**
-— są szkicami, nie działającym kodem; w szczególności te dotyczące Qt zakładają `pytest-qt`,
-którego projekt dziś nie używa (`tests/test_search_page.py` konstruuje widżety wprost).
+~~**Nie uruchomiłem testów ani lintera.**~~ **Nieaktualne — patrz sprostowanie niżej.**
+W chwili pisania raportu w tym środowisku nie było `pytest` ani `ruff`, więc wszystkie odwołania
+do testów pochodziły z czytania plików w `tests/`, a szkice testów regresyjnych przy znaleziskach
+były szkicami, nie działającym kodem.
+
+> **SPROSTOWANIE.** Oba narzędzia zostały później zainstalowane, a każde znalezisko dostało
+> działający test. Warto odnotować, co pokazał pierwszy prawdziwy przebieg: przez część pracy
+> używałem własnej namiastki `pytest`, która zgłaszała **sześć** padających testów. Prawdziwy
+> `pytest` pokazał **dwa** — cztery pozostałe były brakami mojego narzędzia (`monkeypatch.delattr`,
+> `capsys`), nie kodu. Podawałem liczbę z własnego narzędzia jako fakt o projekcie. Te dwa
+> prawdziwe okazały się brakiem skompilowanych katalogów `.qm`; dziś pomijają się z podaniem
+> komendy zamiast padać, a `ruff` przechodzi czysto na całym repozytorium.
 
 **Nie uruchomiłem `eselect`, `emerge` ani `portage`** — to wykluczał §2 promptu. Stąd trzy rzeczy
 są wnioskami z dokumentacji Portage, a nie obserwacją:
@@ -1426,6 +1432,47 @@ są wnioskami z dokumentacji Portage, a nie obserwacją:
   tylko rzut oka. Nic rażącego.
 - `gentstore/i18n/*.ts`, `Makefile`, `pyproject.toml` — przejrzane; `Makefile` instaluje
   `0755`/`0644` poprawnie i respektuje `DESTDIR`/`PREFIX`.
+
+**Segfault, który wystąpił dwa razy i nie został wyjaśniony.** Zaraz po scaleniu pierwszej partii
+poprawek `make check` padł z naruszeniem ochrony pamięci. Powtórzony — padł drugi raz. Potem każdy
+kolejny przebieg, a było ich kilkadziesiąt, był czysty.
+
+Sprawdziłem hipotezę, że winne są dwa testy przełączające język, które po zbudowaniu katalogów
+`.qm` wreszcie zaczęły się naprawdę wykonywać zamiast padać: zbudowałem katalogi na commicie
+sprzed audytu i puściłem sześć razy. Czysto. To nie to. Innej hipotezy popartej dowodem nie mam.
+
+Crash jest w warstwie C — Python sam z siebie tego nie robi — i niemal na pewno dotyczy sprzątania
+widżetów Qt, czyli tej samej klasy, którą `runner/command.py:close()` opisuje słowami *„to nie jest
+błąd, który Qt może zgłosić, to jest crash”*. Zależy od kolejności, w jakiej Python zwolni obiekty,
+a ta zależy od obciążenia maszyny — stąd milczenie przez kilkadziesiąt przebiegów niczego nie
+dowodzi.
+
+**Nie jest naprawiony. Przestał się pojawiać.** To dwie różne rzeczy i nie należy ich mylić.
+Nie dotyczy działającej aplikacji — okno uruchomione w trakcie pracy chodziło i zamknęło się
+czysto; objawia się wyłącznie w zestawie testów.
+
+Czego brakuje, żeby to domknąć: **nazwy testu, na którym się urywa.** Przy obu wystąpieniach miałem
+tylko obcięty ogon wyjścia, bez linii poprzedzającej `Fatal Python error`, i to był błąd
+w prowadzeniu śledztwa — pytest sam wypisuje ślad Pythona przy takim padzie, wystarczyło go nie
+zgubić. Gdyby wrócił:
+
+```
+QT_QPA_PLATFORM=offscreen python3 -m pytest -vv 2>&1 | tee /tmp/crash.log
+```
+
+i odczytać ostatnią linię przed `Fatal Python error` — będzie nią `nodeid` testu, na którym
+proces zginął.
+
+`-vv`, nie `-q`, i ta różnica jest tu całą sprawą. `-q` wypisuje kropkę **po** zakończeniu testu,
+więc test, który zabija proces, nigdy swojej kropki nie dostaje; `-vv` wypisuje `nodeid` **przed**
+uruchomieniem, więc ostatnia linia nazywa winowajcę. Sprawdzone na teście wołającym `os.abort()`:
+przy `-q` linia przed `Fatal Python error` to `..`, przy `-vv` to
+`test_crash.py::test_the_one_that_dies`.
+
+Zwykle ratuje jeszcze `faulthandler`, który przy takim padzie wypisuje ślad Pythona — ale **nie
+tutaj**: w obu zaobserwowanych wystąpieniach lista ramek Pythona była pusta, a zaraz po niej szedł
+stos C. To znaczy, że crash nastąpił w kodzie C bez ramki Pythona na stosie, czyli dokładnie
+w sprzątaniu Qt. Przy takim padzie `-q` nie da nazwy żadną drogą.
 
 **Czego nie próbowałem w ogóle:**
 - wyścigów (TOCTOU) *empirycznie* — rozumowanie w tabeli §2 przy regule 1 jest analizą kodu,
