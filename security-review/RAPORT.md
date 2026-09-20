@@ -1361,12 +1361,21 @@ ciągów i na wszystkich dziewięciu fixture'ach z `tests/fixtures/` — **zero 
 **Test regresyjny:** `test_one_line_cannot_hold_the_parser_up` w `tests/test_update.py`, z
 budżetem 3 s na 200 tys. znaków. Przeciwko kodowi sprzed poprawki pada po 128,8 s.
 
-**Co zostaje nienaprawione:** `runner/command.py:_read()` zbiera bufor aż do znaku nowej linii
-**bez żadnego limitu długości**, a `log_view.MAX_LINES` ogranicza liczbę linii, nie ich rozmiar.
-Te dwa wzorce są liniowe, ale następny dodany taki nie będzie, a jedna linia bez końca to też
-nieograniczona pamięć w procesie GUI. Ograniczenie długości linii byłoby poprawką strukturalną
-zamiast dwóch punktowych — świadomie nie zrobione tutaj, bo zmienia widoczne zachowanie logu
-i zasługuje na osobną decyzję.
+**Podłoga pod tym wszystkim, dorobiona osobno:** `runner/command.py:_read()` zbierał bufor aż do
+znaku nowej linii **bez żadnego limitu długości**, a `log_view.MAX_LINES` ogranicza liczbę linii,
+nie ich rozmiar. Te dwa wzorce są teraz liniowe, ale następny dodany taki nie będzie, a linia bez
+końca to również nieograniczona pamięć w procesie GUI.
+
+Doszło `MAX_LINE = 16 KiB`. Linia, która przekroczy ten rozmiar, jest przekazywana dalej
+w kawałkach — nic nie ginie, a nic poniżej nie dostaje ciągu bez górnego ograniczenia długości.
+Przy okazji domknęło to przypadek, który **nie wymaga żadnego napastnika**: `ninja`, `wget`
+i każdy inny program z paskiem postępu nadpisuje jedną linię powrotami karetki i nigdy nie wysyła
+znaku nowej linii, więc ten bufor rósł przez cały czas trwania budowania. Liczy się tu tylko
+ostatnia klatka — to samo pokazuje terminal — i tak jest teraz obsługiwana.
+
+Szesnaście kibibajtów to około dwudziestokrotność najdłuższej linii w logach na maszynie, na
+której to pisano (715 znaków), i kilkukrotność wywołania kompilatora ze stoma ścieżkami nagłówków,
+czyli najdłuższej rzeczy, jaką budowanie realnie wypisuje.
 
 ## 4. Czego nie sprawdzono
 

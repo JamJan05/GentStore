@@ -34,7 +34,7 @@ from PyQt6.QtWidgets import QApplication
 from gentstore.core import backup as backup_core
 from gentstore.helper import gentstore_helper as helper
 from gentstore.helper import gentstore_launcher as launcher
-from gentstore.runner import emerge, eselect, privilege
+from gentstore.runner import command, emerge, eselect, privilege
 from gentstore.runner.command import Command, CommandError, CommandSpec
 from gentstore.ui.widgets.log_view import classify
 
@@ -1058,3 +1058,63 @@ def test_an_existing_repository_called_gentoo_is_still_ordinary() -> None:
     launcher.check_arguments("emaint", ["sync", "-r", "gentoo"])
     launcher.check_arguments("eselect", ["repository", "enable", "gentoo"])
     launcher.check_arguments("eselect", ["repository", "disable", "gentoo"])
+
+
+# -- a line that never ends -------------------------------------------------
+
+
+def test_a_line_that_never_ends_is_passed_on_in_pieces(runner: Command) -> None:
+    """Output is held until a newline says the line is over, and nothing
+    guaranteed one ever would.
+
+    An ebuild that means harm simply never prints one; the buffer then grows for
+    as long as the command runs, and every character of it reaches parsers that
+    have to look at all of them. Passed on in pieces instead — nothing is lost,
+    and nothing downstream is handed a string with no upper bound on its length.
+    """
+    size = command.MAX_LINE * 3 + 500
+    spec = CommandSpec(
+        argv=(sys.executable, "-c", f"import sys; sys.stdout.write('a' * {size})"),
+    )
+    lines, codes = run_and_wait(runner, spec)
+
+    assert codes == [0]
+    assert "".join(lines) == "a" * size, "the output has to survive the splitting"
+    assert max(len(line) for line in lines) <= command.MAX_LINE
+
+
+def test_a_progress_bar_does_not_grow_without_end(runner: Command) -> None:
+    """ninja, wget and anything else with a bar overwrite one line with carriage
+    returns and never send a newline.
+
+    That is ordinary software, not an attack, and only the last frame is worth
+    keeping — which is what a terminal shows anyway.
+    """
+    frames = command.MAX_LINE // 8 + 100
+    spec = CommandSpec(
+        argv=(
+            sys.executable,
+            "-c",
+            f"import sys\nfor i in range({frames}): sys.stdout.write('\\rstep %06d' % i)",
+        ),
+    )
+    lines, codes = run_and_wait(runner, spec)
+
+    assert codes == [0]
+    assert max((len(line) for line in lines), default=0) <= command.MAX_LINE
+    # Whatever survived is a frame, not a wall of them glued together.
+    assert lines, "the last frame still has to arrive"
+    assert lines[-1].startswith("step "), lines[-1][:60]
+
+
+def test_an_ordinary_long_line_is_still_one_line(runner: Command) -> None:
+    """The cap has to sit above anything a build really prints. The longest
+    line in the portage logs on the machine this was written on was 715
+    characters; a compiler invocation with a hundred include paths is the
+    realistic upper bound and is still far below."""
+    line = "x" * 4000
+    spec = CommandSpec(argv=(sys.executable, "-c", f"print('{line}')"))
+    lines, codes = run_and_wait(runner, spec)
+
+    assert codes == [0]
+    assert lines == [line]

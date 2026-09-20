@@ -32,6 +32,22 @@ tag was made.
   The process is unprivileged, so this was a window that stopped answering rather than anything
   reaching root.
 
+- **One line of output can no longer grow without end.** `runner/command.py` held output until a
+  newline arrived to say the line was over, and nothing guaranteed one ever would. An ebuild that
+  means harm simply never prints one — but this also had an entirely innocent half: `ninja`,
+  `wget` and anything else with a progress bar overwrite a single line with carriage returns and
+  send no newline at all, so the buffer grew for as long as the build ran.
+
+  There is a 16 KiB cap now. A progress bar is compressed to its last frame, which is what a
+  terminal shows anyway; anything still over the cap is passed on in pieces, so nothing is lost
+  and nothing downstream receives a string with no upper bound on its length. The size is about
+  twenty times the longest line in the logs on the machine this was written on, and several times
+  a compiler invocation with a hundred include paths — the longest thing a build realistically
+  prints.
+
+  It is the floor under the two parser fixes above rather than a replacement for them: the next
+  pattern somebody adds will not be linear either, and this bounds what it can be handed.
+
 - **A whole-file write now has to be the file Gentstore writes, not just live where one would.**
   `write_file` proved its path and then wrote whatever it was handed. Portage reads *every* file
   in `repos.conf` and merges them, and a section repeated in a file read later replaces the

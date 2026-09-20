@@ -47,6 +47,27 @@ GRACE_MS = 10_000
 #: cannot, so only the text after the last one is kept.
 _CARRIAGE_RETURN = "\r"
 
+#: How much of one line this will hold before passing it on unfinished.
+#:
+#: Output arrives in chunks and is held until a newline arrives to say the line
+#: is over. Nothing guaranteed one ever would. A build that prints its progress
+#: with carriage returns and no newline — ninja, wget, anything with a bar —
+#: grows this buffer for as long as it runs, and an ebuild that means harm can
+#: simply never print one at all. Neither needs the other to be a problem: the
+#: first is ordinary software, the second is a line with no upper bound on its
+#: length arriving at parsers that have to look at every character of it.
+#:
+#: Sixteen kibibytes is about twenty times the longest line in the logs on the
+#: machine this was written on, and several times a compiler invocation with a
+#: hundred include paths, which is the longest thing a build realistically
+#: prints. The number is also chosen against :data:`gentstore.ui.widgets.
+#: log_view.MAX_LINES`: the widget keeps 20 000 blocks, so the two together are
+#: what bounds how much of a runaway command can be held in memory at once.
+#:
+#: Not a substitute for parsers that do not backtrack — see the note on _ROW in
+#: core/emerge_parse.py. It is the floor under them.
+MAX_LINE = 16 * 1024
+
 
 @dataclass(frozen=True, slots=True)
 class CommandSpec:
@@ -184,6 +205,20 @@ class Command(QObject):
         *complete, self._buffer = self._buffer.split("\n")
         for line in complete:
             self.output.emit(line.rsplit(_CARRIAGE_RETURN, 1)[-1])
+
+        if len(self._buffer) > MAX_LINE:
+            # A progress bar overwrites itself and never sends a newline, so
+            # the whole of it is waiting here. Only the last frame is worth
+            # anything — which is what a terminal shows — and dropping the rest
+            # is usually the whole of the problem.
+            self._buffer = self._buffer.rsplit(_CARRIAGE_RETURN, 1)[-1]
+        while len(self._buffer) > MAX_LINE:
+            # Still too long: a line that is genuinely this long, or one that
+            # is never going to end. Pass it on in pieces rather than hold it,
+            # so that nothing is lost and nothing downstream is handed a string
+            # without an upper bound on its length.
+            self.output.emit(self._buffer[:MAX_LINE])
+            self._buffer = self._buffer[MAX_LINE:]
 
     def _flush(self) -> None:
         if self._buffer:
