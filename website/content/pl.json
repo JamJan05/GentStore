@@ -42,7 +42,7 @@
       "PyQt6",
       "GPL-2+",
       "pl · en",
-      "797 testów"
+      "1022 testów"
     ]
   },
   "figures": {
@@ -289,25 +289,25 @@
     "body": "Wszystkie dziewięć ekranów działa, a obie połowy zostały przećwiczone na żywym systemie: strona tylko do czytania — szukanie, flagi USE, maski, repozytoria, podgląd aktualizacji, pliki konfiguracyjne, `make.conf`, elog i `@world` — i ta uprzywilejowana, która zapisała prawdziwe wpisy w `package.use`, `package.license` i `package.accept_keywords` przez `pkexec`.",
     "caveat": {
       "title": "Czego ta liczba nie obiecuje",
-      "body": "797 testów przechodzi, ale działało to na **jednej** maszynie, wyłącznie amd64 — dlatego ebuild ma keyword `~amd64`. Pakiet ogłasza się jako `Development Status :: 4 - Beta`, co jest tym samym stwierdzeniem powiedzianym drugi raz. Zgłoszenia błędów z innych konfiguracji to najszybszy sposób, żeby następne wydanie było lepsze."
+      "body": "1022 testów przechodzi, ale działało to na **jednej** maszynie, wyłącznie amd64 — dlatego ebuild ma keyword `~amd64`. Pakiet ogłasza się jako `Development Status :: 4 - Beta`, co jest tym samym stwierdzeniem powiedzianym drugi raz. Zgłoszenia błędów z innych konfiguracji to najszybszy sposób, żeby następne wydanie było lepsze."
     },
-    "changes_title": "Co nowego w 1.3.0",
+    "changes_title": "Co nowego w 1.4.0",
     "changes": [
       {
-        "title": "Ekran Repozytoriów to jedna lista z dwiema zakładkami",
-        "body": "„Skonfigurowane” i „Dostępne” to to samo pytanie zadane w różnych momentach. Jedno pole szukania obsługuje otwartą zakładkę, a wybór wiersza wypełnia prawą stronę — przy skonfigurowanym repozytorium także tym, **co ono wnosi**: pakietami, które pochodzą z niego i znikąd indziej."
+        "title": "Dwa sposoby, na jakie część uprzywilejowana robiła więcej, niż mówił dialog",
+        "body": "`write_file` sprawdzał, czy ścieżka leży pod `repos.conf`, i zapisywał, cokolwiek przyszło razem z nią — a Portage scala wszystkie pliki w tym katalogu, więc sekcja `[gentoo]` nie dodawała repozytorium, tylko zastępowała to, z którego pochodzi każdy pakiet w systemie. Scalanie w `cfg_apply` brało treść z żądania i nic nie wiązało jej z tym, co użytkownik zobaczył, więc każdy plik `._cfg` czekający po aktualizacji był drogą do zapisania obok niego dowolnej treści jako root. Oba naprawione: sprawdzana jest teraz treść, nie tylko ścieżka."
       },
       {
-        "title": "Trzy dziury w części uprzywilejowanej zamknięte",
-        "body": "`emerge --unmerge '*/*'` przechodziło kontrolę argumentów launchera; helper odpowiadał na zniekształcone żądanie tracebackiem zamiast odpowiedzią; `cfg_apply` dało się skierować poza `/etc/portage`. Nieudane przywracanie kopii już nie zabiera ze sobą katalogu konfiguracji."
+        "title": "Podgląd nie pokazywał nic, a linia szła do pliku w całości",
+        "body": "`QLabel` zgaduje, czy dostał HTML. Atom zaczynający się od operatora mniejszości — zwykły atom z ograniczeniem wersji, jaki wypisuje `emerge --autounmask` — wygląda jak niezamknięty znacznik, więc panel mówiący *to zostanie zapisane* pokazywał pusty ciąg i zapisywał całość. To samo zgadywanie rysowało opisy pakietów z ebuildów jako znaczniki, przez co znacznik obrazka w takim opisie stawał się żądaniem sieciowym z programu, o którym dokumentacja mówi, że żadnych nie wysyła."
       },
       {
-        "title": "Flagi USE pakietu z overlaya mają wreszcie opisy",
-        "body": "`use.desc` żyje w repozytorium głównym, a szukane było obok ebuilda, gdzie żaden overlay go nie ma."
+        "title": "Jedna linia z ebuilda potrafiła zawiesić okno",
+        "body": "Dwa wyrażenia w parserze wyjścia `emerge` robiły nawroty: 200 tysięcy znaków zajmowało 128 sekund, a `pkg_pretend()` z ebuilda uruchamia się właśnie przy `--pretend` i może wypisać cokolwiek. Oba są teraz liniowe — milion znaków to milisekundy — a wyjście ma limit 16 KiB na linię, co przy okazji zatrzymuje puchnięcie bufora przez cały czas budowania z paskiem postępu."
       },
       {
-        "title": "1.1.1 wycofane",
-        "body": "Wydanie, jego plik i tag są usunięte, a ebuild jest poza overlayem, więc Portage nie może rozwiązać zależności do wersji, której nie da się zbudować. Sekcja w changelogu zostaje, oznaczona `[YANKED]` — wycofane wydanie to fakt z historii projektu."
+        "title": "Po aktualizacji przeinstaluj część uprzywilejowaną",
+        "body": "`sudo make install-system` albo przeinstalowanie pakietu. Protokół helpera poszedł z 2 na 3, bo `replace_line` nie kompiluje już wyrażenia regularnego z żądania — `^(a+)+$` ma siedem znaków i nie kończy się nigdy, w procesie działającym jako root, któremu nie wyślesz sygnału. Starszy helper odrzuci każdą podmianę linii; okno to zauważy i powie, ale lepiej wiedzieć wcześniej."
       }
     ],
     "changelog_link": "Pełny changelog →"

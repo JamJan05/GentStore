@@ -42,7 +42,7 @@
       "PyQt6",
       "GPL-2+",
       "pl · en",
-      "797 tests"
+      "1022 tests"
     ]
   },
   "figures": {
@@ -289,25 +289,25 @@
     "body": "All nine screens work, and both halves have been exercised on a live system: the read-only side — search, USE flags, masks, repositories, the update preview, configuration files, `make.conf`, elog and `@world` — and the privileged one, which has written real `package.use`, `package.license` and `package.accept_keywords` entries through `pkexec`.",
     "caveat": {
       "title": "What that number does not claim",
-      "body": "797 tests pass, but this has run on **one** machine, amd64 only — so the ebuild is keyworded `~amd64`. The package announces itself as `Development Status :: 4 - Beta`, which is the same statement said twice on purpose. Bug reports from other setups are the fastest way to make the next release better."
+      "body": "1022 tests pass, but this has run on **one** machine, amd64 only — so the ebuild is keyworded `~amd64`. The package announces itself as `Development Status :: 4 - Beta`, which is the same statement said twice on purpose. Bug reports from other setups are the fastest way to make the next release better."
     },
-    "changes_title": "New in 1.3.0",
+    "changes_title": "New in 1.4.0",
     "changes": [
       {
-        "title": "The Repositories screen is one list with two tabs",
-        "body": "“Configured” and “Available” are the same question asked at different times. One search box serves whichever tab is open, and picking a row fills the right side — for a configured repository, also **what it brings**: the packages that come from it and nowhere else."
+        "title": "Two ways the privileged half did more than the dialog said",
+        "body": "`write_file` proved that its path was under `repos.conf` and then wrote whatever came with it — and Portage merges every file in that directory, so a section named `[gentoo]` did not add a repository, it replaced the one every package on the system comes from. `cfg_apply`'s merge took its text from the request with nothing tying it to what the user had been shown, so any `._cfg` file waiting after an update was a way to write chosen content beside it as root. Both are fixed; the content is checked now, not only the path."
       },
       {
-        "title": "Three holes in the privileged half closed",
-        "body": "`emerge --unmerge '*/*'` passed the launcher's argument check; the helper answered a malformed request with a traceback instead of an answer; `cfg_apply` could be aimed outside `/etc/portage`. A failed restore no longer takes the configuration root with it."
+        "title": "The preview showed nothing while the line was written in full",
+        "body": "`QLabel` guesses whether its text is HTML. An atom that opens with the less-than operator — an ordinary upper-bound atom, which `emerge --autounmask` prints — looks like an unclosed tag, so the panel that says *this is what will be written* rendered it as the empty string and wrote all of it anyway. The same guess drew package descriptions from an ebuild as markup, which made an image tag in one of them a network request from a program documented as making none."
       },
       {
-        "title": "USE flags of a package from an overlay finally have descriptions",
-        "body": "`use.desc` lives in the master repository, and it was being looked for beside the ebuild, where no overlay carries it."
+        "title": "One line from an ebuild could stop the window answering",
+        "body": "Two expressions in the `emerge` output parser backtracked: 200,000 characters took 128 seconds, and an ebuild's `pkg_pretend()` runs during `--pretend` and may print anything. Both are linear now — a million characters take milliseconds — and output is capped at 16 KiB per line, which also stops the buffer growing for as long as a build with a progress bar runs."
       },
       {
-        "title": "1.1.1 is withdrawn",
-        "body": "The release, its asset and its tag are deleted, and the ebuild is out of the overlay, so Portage cannot resolve to a version that cannot be built. The changelog keeps the section, marked `[YANKED]` — a withdrawn release is a fact about the project."
+        "title": "Reinstall the privileged half after updating",
+        "body": "`sudo make install-system`, or reinstall the package. The helper's protocol went from 2 to 3, because `replace_line` no longer compiles a regular expression out of the request — `^(a+)+$` is seven characters and never finishes, in a process running as root that you cannot signal. An older helper refuses every line replacement; the window notices and says so, but it is easier to know first."
       }
     ],
     "changelog_link": "The full changelog →"
