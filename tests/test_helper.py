@@ -418,7 +418,7 @@ def test_replace_line_checks_the_new_line_and_not_only_the_pattern(
         'ACCEPT_LICENSE="-* @FREE @BINARY-REDISTRIBUTABLE"',
         'VIDEO_CARDS="amdgpu radeonsi"',
         'CPU_FLAGS_X86="aes avx avx2 sse4_2"',
-        'FEATURES="parallel-fetch -sandbox candy"',
+        'FEATURES="parallel-fetch ccache candy"',
         'L10N="pl en pt-BR"',
         'USE=""',
         '\tMAKEOPTS="-j4"',
@@ -772,7 +772,7 @@ def test_the_helper_and_the_interface_agree_on_what_is_editable() -> None:
         ("ACCEPT_LICENSE", "-* @FREE"),
         ("VIDEO_CARDS", "amdgpu radeonsi"),
         ("CPU_FLAGS_X86", "aes avx avx2"),
-        ("FEATURES", "parallel-fetch -sandbox"),
+        ("FEATURES", "parallel-fetch ccache -candy"),
         ("L10N", "pl en pt-BR"),
         ("USE", ""),
     ],
@@ -1403,3 +1403,131 @@ def test_cfg_apply_still_works_where_only_root_can_write(portage: Path, tmp_path
 
     assert call("cfg_apply", path=str(candidate), decision="accept")["ok"]
     assert target.read_text(encoding="utf-8") == "new\n"
+
+
+# -- the two variables whose value is the question --------------------------
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "-sandbox",
+        "-usersandbox -network-sandbox",
+        "-userpriv",
+        "parallel-fetch -sandbox",
+        "-rsync-verify",
+        "-webrsync-gpg",
+        "-strict",
+        "-collision-protect",
+        "-preserve-libs",
+    ],
+)
+def test_features_may_not_switch_a_protection_off(portage: Path, value: str) -> None:
+    """The nine variables are on the list because they were taken to decide
+    *which packages* get installed rather than *what Portage does*.
+
+    FEATURES does not meet that test, and the character set cannot tell:
+    ``-sandbox`` is ordinary letters and a hyphen. Written once, it takes the
+    walls off every build the machine does afterwards — which is not a package
+    being installed, and not what the dialog in front of this program says.
+    """
+    target = portage / "make.conf"
+    target.write_text('USE="X"\n', encoding="utf-8")
+
+    answer = call("append_line", path=str(target), line=f'FEATURES="{value}"')
+
+    assert answer["code"] == "make_conf_line", answer
+    assert target.read_text(encoding="utf-8") == 'USE="X"\n'
+
+
+@pytest.mark.parametrize(
+    "value", ["ccache", "-candy", "parallel-fetch ccache buildpkg", "sandbox", "test"]
+)
+def test_features_the_settings_screen_offers_still_go_through(
+    portage: Path, value: str
+) -> None:
+    """Turning a protection *on* is always allowed, and a preference either way."""
+    target = portage / "make.conf"
+    target.write_text("# notes\n", encoding="utf-8")
+    assert call("append_line", path=str(target), line=f'FEATURES="{value}"')["ok"]
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "-j1 -f/home/someone/theirs.mk",
+        "-f/tmp/x.mk",
+        "--eval=x",
+        "-j4 --directory=/tmp",
+        "-I/tmp",
+    ],
+)
+def test_makeopts_takes_only_parallelism_options(portage: Path, value: str) -> None:
+    """MAKEOPTS is a command line for make, which emake expands unquoted.
+
+    ``-f`` in it names a makefile, so it replaces the one the ebuild shipped —
+    and every character of that fits the allowed alphabet.
+    """
+    target = portage / "make.conf"
+    target.write_text('USE="X"\n', encoding="utf-8")
+
+    answer = call("append_line", path=str(target), line=f'MAKEOPTS="{value}"')
+
+    assert answer["code"] == "make_conf_line", answer
+    assert target.read_text(encoding="utf-8") == 'USE="X"\n'
+
+
+@pytest.mark.parametrize(
+    "value", ["-j4", "-j4 -l4", "-j16 -l16", "-l4.5", "--jobs=8", "--load-average=4.5"]
+)
+def test_the_makeopts_the_screen_suggests_still_go_through(
+    portage: Path, value: str
+) -> None:
+    target = portage / "make.conf"
+    target.write_text("# notes\n", encoding="utf-8")
+    assert call("append_line", path=str(target), line=f'MAKEOPTS="{value}"')["ok"]
+
+
+def test_what_suggest_makeopts_produces_is_what_the_helper_accepts(portage: Path) -> None:
+    """The screen's own suggestion has to survive the boundary it is written
+    across — otherwise the one value Gentstore proposes is one it refuses."""
+    from gentstore.core import makeconf  # noqa: PLC0415
+
+    target = portage / "make.conf"
+    target.write_text("# notes\n", encoding="utf-8")
+    suggestion = makeconf.suggest_makeopts().value
+
+    line = makeconf.format_line("MAKEOPTS", suggestion)
+    assert call("append_line", path=str(target), line=line)["ok"], suggestion
+
+
+def test_the_helper_and_the_interface_agree_on_features() -> None:
+    """The third copied list, and the same rent as the other two."""
+    from gentstore.core import makeconf  # noqa: PLC0415
+
+    assert helper.FEATURES_OPTIONAL == makeconf.FEATURES_OPTIONAL
+    assert helper.FEATURES_PROTECTIVE == makeconf.FEATURES_PROTECTIVE
+    # No token may be in both: "may be switched off" and "protects something"
+    # are the two halves of one question.
+    assert not (helper.FEATURES_OPTIONAL & helper.FEATURES_PROTECTIVE)
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("FEATURES", "-sandbox"),
+        ("FEATURES", "not-a-real-feature"),
+        ("MAKEOPTS", "-f/tmp/x.mk"),
+        ("MAKEOPTS", "--eval=x"),
+    ],
+)
+def test_the_screen_refuses_what_the_helper_refuses(name: str, value: str) -> None:
+    """The other direction of the seam.
+
+    A stricter helper than the screen it serves is a refusal the user cannot
+    act on; the screen has to say no first, while they are still looking at
+    what they typed.
+    """
+    from gentstore.core import makeconf  # noqa: PLC0415
+
+    assert makeconf.unsafe_value(name, value) is not None

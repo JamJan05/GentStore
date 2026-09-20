@@ -69,7 +69,26 @@ tag was made.
   The niche `file://` served — a local overlay kept in a git repository — is served by
   `eselect repository create`, or by a `repos.conf` entry with a `location` and no sync at all.
 
-  All five were found by a read-through of the two privileged programs; the report and the
+- **`FEATURES` can no longer be used to switch the sandbox off, and `MAKEOPTS` is only ever a
+  number of jobs.** Nine variables are editable on the grounds that they decide which packages
+  get installed rather than what Portage does. Two of them never met that test, and the allowed
+  character set could not tell, because what makes them dangerous is spelt in ordinary letters
+  and a hyphen: `FEATURES="-sandbox -usersandbox -network-sandbox -userpriv"` takes the walls off
+  every build the machine does afterwards, and `MAKEOPTS="-j1 -f/somewhere/theirs.mk"` replaces
+  the makefile the ebuild shipped, because `emake` expands that variable unquoted. Together they
+  are somebody else's code running as root the next time anything is built — behind a dialog that
+  offers to change files in `/etc/portage`.
+
+  A `FEATURES` token may now be switched *on* if Portage has it, and switched *off* only if it
+  is a preference rather than a protection: `-ccache` yes, `-sandbox` no. Turning a protection
+  back on is always allowed, so somebody who disabled the sandbox by hand can re-enable it from
+  the settings screen. `MAKEOPTS` takes `-j4`, `-l4.5`, `--jobs=4` and `--load-average=4.5`.
+  Both lists are the usual shape — what Gentstore writes, not what looks dangerous — because
+  Portage keeps growing new protections and a list of forbidden names would miss the next one.
+  Anything else is still editable by hand, which is what the file already said about values the
+  alphabet cannot hold.
+
+  All six were found by a read-through of the two privileged programs; the report and the
   scripts that reproduce them are in `security-review/`.
 
 ## [1.3.6] — 2026-09-20

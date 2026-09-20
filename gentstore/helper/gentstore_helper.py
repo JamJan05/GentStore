@@ -141,6 +141,58 @@ MAKE_CONF_VARIABLES = (
     "L10N",
 )
 
+#: ``FEATURES`` tokens whose presence or absence is a preference.
+#:
+#: Writable either way — ``ccache`` or ``-ccache``, whichever the user wants.
+#: Nothing here protects anything; they decide how a build runs, not whether it
+#: is allowed to reach out of its sandbox.
+FEATURES_OPTIONAL = frozenset(
+    {
+        "binpkg-docompress", "binpkg-dostrip", "binpkg-logs",
+        "binpkg-multi-instance", "buildpkg", "buildsyspkg", "candy", "ccache",
+        "cgroup", "clean-logs", "compress-build-logs", "compressdebug",
+        "distcc", "distcc-pump", "fail-clean", "getbinpkg", "installsources",
+        "keeptemp", "keepwork", "metadata-transfer", "news", "noclean",
+        "nodoc", "noinfo", "noman", "nostrip", "notitles", "parallel-fetch",
+        "parallel-install", "sign", "splitdebug", "test", "xattr",
+    }
+)
+
+#: ``FEATURES`` tokens that protect something, and may therefore only be
+#: written *on*.
+#:
+#: This is the whole point of checking the value of this variable rather than
+#: only its name. ``FEATURES="-sandbox -usersandbox -network-sandbox
+#: -userpriv"`` is nine characters of allowed alphabet and it takes the walls
+#: off every build the machine does afterwards; ``-rsync-verify`` stops the
+#: sync checking the signature on the tree it just pulled. None of that is a
+#: package this application is installing, and none of it is what the dialog in
+#: front of the helper describes.
+#:
+#: Turning one *on* is always fine, so they are here rather than absent: a user
+#: who has switched the sandbox off by hand should be able to switch it back on
+#: from the settings screen.
+FEATURES_PROTECTIVE = frozenset(
+    {
+        "collision-protect", "config-protect-if-modified", "ebuild-locks",
+        "ipc-sandbox", "merge-sync", "mount-sandbox", "multilib-strict",
+        "network-sandbox", "pid-sandbox", "preserve-libs", "protect-owned",
+        "rsync-verify", "sandbox", "sfperms", "strict", "strict-keepdir",
+        "suidctl", "unmerge-orphans", "userfetch", "userpriv", "usersandbox",
+        "usersync", "webrsync-gpg",
+    }
+)
+
+#: What one token of ``MAKEOPTS`` may be.
+#:
+#: ``MAKEOPTS`` is a command line for ``make``, which ``emake`` expands
+#: unquoted. ``-f`` there names a makefile, so a value inside the allowed
+#: alphabet — ``-j1 -f/home/someone/theirs.mk`` — replaces the one the ebuild
+#: shipped. The settings screen offers this field to say how many jobs to run;
+#: that is what this allows, and ``suggest_makeopts`` produces nothing else.
+_MAKEOPTS_TOKEN = re.compile(r"^(?:-j\d{1,4}|-l\d{1,4}(?:\.\d{1,3})?"
+                             r"|--jobs=\d{1,4}|--load-average=\d{1,4}(?:\.\d{1,3})?)$")
+
 #: ``NAME=value``, indented or not, quoted or not.
 _MAKE_CONF_ASSIGNMENT = re.compile(r"^[ \t]*(?P<name>[A-Z][A-Z0-9_]*)=(?P<value>.*)$")
 
@@ -584,6 +636,61 @@ def _check_make_conf_line(line: str) -> None:
             "make_conf_line",
             f"the value of {name} has characters Gentstore does not write: {line!r}",
         )
+
+    _check_make_conf_value(name, value)
+
+
+def _check_make_conf_value(name: str, value: str) -> None:
+    """Two of the nine variables need their *value* looked at as well.
+
+    The list of nine was drawn up on the grounds that they decide *which
+    packages* get installed rather than *what Portage does*. Two of them do not
+    actually meet that test, and the alphabet check does not notice because
+    what makes them dangerous is spelt in ordinary letters and a hyphen:
+
+    * ``FEATURES="-sandbox -usersandbox -network-sandbox -userpriv"`` takes the
+      walls off every build afterwards, and ``-rsync-verify`` stops the sync
+      checking the signature on what it pulled;
+    * ``MAKEOPTS`` is a command line for ``make``, and ``-f/somewhere/theirs.mk``
+      in it replaces the makefile the ebuild shipped.
+
+    Together those two lines are somebody else's code running as root the next
+    time the user builds anything — which is not what the dialog in front of
+    this program describes, and not something the settings screen has ever
+    offered to write.
+
+    Kept as a list of what the screen produces rather than a list of what looks
+    dangerous, for the reason given at :data:`LINE_EDITABLE`: Portage grows new
+    protections (``network-sandbox``, ``ipc-sandbox`` and ``pid-sandbox`` all
+    arrived after the others), and a list of forbidden names would not have
+    covered them on the day they appeared. Anything else is still editable by
+    hand, which is what ``core/makeconf.py`` already says about values this
+    alphabet cannot hold.
+    """
+    if name == "FEATURES":
+        for token in value.split():
+            bare = token[1:] if token.startswith("-") else token
+            if token.startswith("-"):
+                if bare not in FEATURES_OPTIONAL:
+                    raise HelperError(
+                        "make_conf_line",
+                        f"{token!r} switches off {bare}, which is a protection "
+                        f"rather than a preference; Gentstore does not write it",
+                    )
+            elif bare not in FEATURES_OPTIONAL and bare not in FEATURES_PROTECTIVE:
+                raise HelperError(
+                    "make_conf_line",
+                    f"{token!r} is not one of the FEATURES Gentstore writes",
+                )
+    elif name == "MAKEOPTS":
+        for token in value.split():
+            if not _MAKEOPTS_TOKEN.match(token):
+                raise HelperError(
+                    "make_conf_line",
+                    f"{token!r} is not a parallelism option; MAKEOPTS is a "
+                    f"command line for make, and Gentstore only writes how "
+                    f"many jobs to run",
+                )
 
 
 def _require_owned(path: Path) -> str:

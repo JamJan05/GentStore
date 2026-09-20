@@ -94,10 +94,34 @@ Hard rules inside the helper, enforced regardless of what the GUI sent:
    line: a request could say “find the line matching `USE=`” quite honestly and hand over
    `ROOT="/somewhere"` to put in its place. Two claims, checked separately.
 
-   The variable names and the character set are a **copy** of `EDITABLE` in
-   `core/makeconf.py`, not an import: the helper imports nothing from the rest of Gentstore so
-   that reading it is reading one file. The test suite compares the two lists and runs what the
-   screen produces through the helper, which is where a copy is allowed to live.
+   **Two of the nine need their value looked at as well.** The list of nine was drawn up on the
+   grounds that they decide *which packages* get installed rather than *what Portage does*. Two
+   of them do not actually meet that test, and the character set cannot tell, because what makes
+   them dangerous is spelt in ordinary letters and a hyphen:
+
+   - `FEATURES="-sandbox -usersandbox -network-sandbox -userpriv"` takes the walls off every
+     build the machine does afterwards, and `-rsync-verify` stops the sync checking the signature
+     on the tree it just pulled. So a `FEATURES` token may be written *on* if it is one Portage
+     has, and written *off* only if it is a preference rather than a protection — `-ccache` yes,
+     `-sandbox` no. Switching a protection back on is always allowed, which is why the protective
+     names are on a list of their own rather than absent from every list.
+   - `MAKEOPTS` is a command line for `make`, which `emake` expands unquoted, so `-f` in it names
+     a makefile to use instead of the one the ebuild shipped. The settings screen offers this
+     field to say how many jobs to run, and that is what may be written: `-j4`, `-l4.5`,
+     `--jobs=4`, `--load-average=4.5`.
+
+   Both lists are the usual shape — what Gentstore writes, not what looks dangerous — for the
+   reason in rule 1a. Portage grows new protections (`network-sandbox`, `ipc-sandbox` and
+   `pid-sandbox` all arrived after the rest), and a list of forbidden names would not have
+   covered them on the day they appeared. Anything else stays editable by hand, which is already
+   what `core/makeconf.py` says about values its alphabet cannot hold.
+
+   The variable names, the character set and those two lists are a **copy** of `EDITABLE`,
+   `FEATURES_OPTIONAL` and `FEATURES_PROTECTIVE` in `core/makeconf.py`, not an import: the helper
+   imports nothing from the rest of Gentstore so that reading it is reading one file. The test
+   suite compares them and runs what the screen produces through the helper, which is where a
+   copy is allowed to live. The screen refuses the same two things first, so that the reason
+   arrives while the user is still looking at what they typed.
 1c. `append_lines` is narrower again: `package.accept_keywords`, `package.license`,
    `package.use` and `package.unmask`, and nothing else. Those four are what
    `emerge --autounmask` prints blocks of lines for, which is the only thing this operation

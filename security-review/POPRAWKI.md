@@ -3,7 +3,7 @@
 Ta sama treść co w [RAPORT.md](RAPORT.md), ale ułożona według plików, żeby dało się po niej
 pracować. Uzasadnienia, scenariusze ataku i dowody są w raporcie — tutaj jest tylko „gdzie" i „co".
 
-**Stan: GS-01, GS-02, GS-03, GS-04 i GS-09 są naprawione** na gałęzi `fix/helper-content-validation`. Zmienione
+**Stan: GS-01, GS-02, GS-03, GS-04, GS-06 i GS-09 są naprawione** — czyli wszystkie o wadze Wysokiej na gałęzi `fix/helper-content-validation`. Zmienione
 pliki: `gentstore/helper/gentstore_helper.py`, `gentstore/ui/pages/cfgfiles.py` (musi teraz
 wysyłać `expect` przy scalaniu), `tests/test_helper.py` (+18 testów),
 `tests/test_cfgfiles.py`, `Docs/04-privileges.md` (reguły 1a, 1a′, 7, 9), `CHANGELOG.md`.
@@ -18,7 +18,7 @@ Reszta listy czeka — nic z niej nie zostało zastosowane.
 | ✅ | [GS-01](RAPORT.md#gs-01--write_file-sprawdza-ścieżkę-ale-nie-treść--plik-w-reposconf-może-przedefiniować-sync-uri-repozytorium-gentoo) — `write_file` nie sprawdza treści | Wysoka | `gentstore/helper/gentstore_helper.py` | ~40 linii + 2 testy |
 | ✅ | [GS-02](RAPORT.md#gs-02--cfg_apply-z-decisionmerge-zapisuje-dowolną-treść-i-nie-wymaga-expect) — `cfg_apply merge` bez `expect` | Wysoka | `gentstore/helper/gentstore_helper.py` | 3 linie + 1 test |
 | ✅ | [GS-03](RAPORT.md#gs-03--katalog-w-którym-leży-plik-_cfg-nigdy-nie-jest-pytany-o-to-kto-może-w-nim-pisać) — katalog `._cfg` niesprawdzany | Średnia | `gentstore/helper/gentstore_helper.py` | 5 linii + 1 test |
-| 4 | [GS-06](RAPORT.md#gs-06--features-i-makeopts-mieszczą-w-dozwolonym-zestawie-znaków-wyłączenie-sandboksa) — `FEATURES="-sandbox"` przechodzi | Wysoka | `gentstore_helper.py` + `core/makeconf.py` | ~35 linii + 2 testy |
+| ✅ | [GS-06](RAPORT.md#gs-06--features-i-makeopts-mieszczą-w-dozwolonym-zestawie-znaków-wyłączenie-sandboksa) — `FEATURES="-sandbox"` przechodzi | Wysoka | `gentstore_helper.py` + `core/makeconf.py` | ~35 linii + 2 testy |
 | ✅ | [GS-09](RAPORT.md#gs-09--eselect-repository-add-przyjmuje-file-i-nazwę-kolidującą-z-gentoo) — `file://` i nazwa `gentoo` | Wysoka | `gentstore_launcher.py` + `core/overlays.py` | 6 linii + 2 testy |
 | ✅ | [GS-04](RAPORT.md#gs-04--emerge---unmerge-kategoria-przechodzi-przez-tabelę) — `--unmerge sys-apps/*` | Wysoka | `gentstore/helper/gentstore_launcher.py` | ~12 linii + 1 test |
 | 7 | [GS-05](RAPORT.md#gs-05--wzorzec-match-w-replace_line-to-regex-z-żądania-uruchamiany-w-procesie-roota) — regex z żądania | Średnia | `gentstore_helper.py` + `core/makeconf.py` + `core/confedit.py` | ~25 linii, zmiana protokołu |
@@ -46,7 +46,7 @@ Reszta listy czeka — nic z niej nie zostało zastosowane.
       `if not _only_root_can_write(candidate.parent): raise HelperError("unsafe_directory", …)`.
       Przy okazji poprawić docstringi `_only_root_can_write` i `protected_roots`, które dziś
       obiecują dokładnie to sprawdzenie.
-- [ ] **GS-06** — nowa `_check_make_conf_value(name, value)` wołana na końcu
+- [x] **GS-06** — nowa `_check_make_conf_value(name, value)` wołana na końcu
       `_check_make_conf_line` (`:540`): dla `FEATURES` lista dozwolonych tokenów, dla `MAKEOPTS`
       wyłącznie opcje zrównoleglenia. Kopia listy w `core/makeconf.py` + test porównujący.
 - [ ] **GS-05** — `op_replace_line` (`:896`): zamienić pole `match` (regex) na parę
@@ -83,7 +83,7 @@ Reszta listy czeka — nic z niej nie zostało zastosowane.
 - [ ] **GS-13** — `overlays.py:183` (`parse`): limit rozmiaru, jak `METADATA_MAX_BYTES`
       w `useflags.py:360`.
 - [ ] **GS-05** — `makeconf.py:298` i `confedit.py:249,289`: przejść na nowe pola żądania.
-- [ ] **GS-06** — `makeconf.py`: kopia listy dozwolonych tokenów `FEATURES`/`MAKEOPTS`.
+- [x] **GS-06** — `makeconf.py`: kopia listy dozwolonych tokenów `FEATURES`/`MAKEOPTS`.
 - [ ] **GS-16** — `index_cache.py:28-38`: poprawić komentarz — odcisk chroni przed
       *nieświeżością*, nie przed *podmianą* przez tego samego użytkownika.
 
@@ -132,7 +132,7 @@ Szkice są przy każdym znalezisku w raporcie. Braki zebrane:
       `decision="accept"`, więc został bez zmian; poprawki wymagał natomiast
       `tests/test_cfgfiles.py::test_merging_writes_what_the_user_ended_up_with`.
 - [ ] `test_helper.py` — katalog kandydata `._cfg` a `_only_root_can_write` (GS-03)
-- [ ] `test_helper.py` — `FEATURES`/`MAKEOPTS` (GS-06, parametryzowany)
+- [x] `test_helper.py` — `FEATURES`/`MAKEOPTS` (GS-06) — 27 testów po obu stronach szwu
 - [ ] `test_helper.py` — „jedna linia" wobec `\r`, U+2028 i NUL (GS-10)
 - [ ] `test_helper.py` — `replace_line` zostawia resztę pliku bajt w bajt (GS-10b)
 - [ ] `test_helper.py` — zagnieżdżony JSON i limit stdin (GS-12)
