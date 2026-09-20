@@ -29,7 +29,6 @@ from __future__ import annotations
 import ast
 import importlib.util
 import re
-import shutil
 import subprocess
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -268,7 +267,12 @@ def test_every_translatable_string_is_already_in_the_catalogues(tmp_path: Path) 
     the GLSA dialog and one to the configuration-files screen. This runs the
     extractor into a copy and fails if it has anything to add.
     """
-    extractor = shutil.which(i18n.EXTRACTOR)
+    # find_tool, not shutil.which: the latter searches PATH alone, and the Qt
+    # tools do not all live there. On this machine `which lrelease` finds
+    # nothing while find_tool returns /usr/lib64/qt6/bin/lrelease — which is
+    # the mistake that hid the missing catalogue messages in the first place,
+    # and a skip here would hide them again.
+    extractor = i18n.find_tool(i18n.EXTRACTOR)
     if extractor is None:  # pragma: no cover - not installed
         pytest.skip(f"{i18n.EXTRACTOR} is not installed; it comes with dev-python/pyqt6")
 
@@ -278,7 +282,7 @@ def test_every_translatable_string_is_already_in_the_catalogues(tmp_path: Path) 
         copy.write_text(original.read_text(encoding="utf-8"), encoding="utf-8")
 
         result = subprocess.run(
-            [extractor, *i18n.sources(), "-ts", str(copy)],
+            [str(extractor), *i18n.sources(), "-ts", str(copy)],
             capture_output=True,
             text=True,
             check=False,
