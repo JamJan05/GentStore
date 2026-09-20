@@ -357,7 +357,6 @@ FORBIDDEN_MAKE_CONF = [
     "USE='X' 'Y'",
     'USE="X',
     'USE=X"',
-    "USE=\"X\"\x00",
     "not an assignment at all",
     "# USE=\"X\"",
     "  export USE=\"X\"",
@@ -381,7 +380,9 @@ def test_make_conf_takes_only_the_assignments_gentstore_makes(
     target = portage / "make.conf"
     target.write_text('USE="X"\n', encoding="utf-8")
 
-    answer = call(op, path=str(target), line=line, match="^USE=")
+    answer = call(
+        op, path=str(target), line=line, match_kind="assignment", match_literal="USE"
+    )
 
     assert answer["ok"] is False, answer
     assert answer["code"] == "make_conf_line", answer
@@ -403,6 +404,33 @@ def test_a_line_break_in_a_make_conf_value_is_still_a_line_break(portage: Path) 
 
     assert answer["code"] == "multiline"
     assert target.read_text(encoding="utf-8") == 'USE="X"\n'
+
+
+@pytest.mark.parametrize("op", ["append_line", "replace_line", "remove_line"])
+def test_a_null_byte_is_refused_a_step_earlier_and_for_every_file(
+    portage: Path, op: str
+) -> None:
+    """It used to be a make.conf rule, which left the question unanswered for
+    every other file this program writes.
+
+    "The file already contains that line" is not something anybody can decide
+    about a file with a NUL in it, and none of the four operations has a reason
+    to put one there. Refused in the step that takes the line apart, so it is
+    refused once rather than in four places.
+    """
+    target = portage / "package.use"
+    target.write_text("media-video/mpv vulkan\n", encoding="utf-8")
+
+    answer = call(
+        op,
+        path=str(target),
+        line="app-x/y flag\x00hidden",
+        match_kind="entry",
+        match_literal="app-x/y",
+    )
+
+    assert answer["code"] == "nul_byte", answer
+    assert target.read_bytes() == b"media-video/mpv vulkan\n"
 
 
 def test_replace_line_checks_the_new_line_and_not_only_the_pattern(
@@ -1629,3 +1657,113 @@ def test_the_screen_refuses_what_the_helper_refuses(name: str, value: str) -> No
     from gentstore.core import makeconf  # noqa: PLC0415
 
     assert makeconf.unsafe_value(name, value) is not None
+
+
+# -- what counts as one line ------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "app-x/y flag\rsys-apps/portage -rsync-verify",
+        "app-x/y flag\r\nsys-apps/portage -rsync-verify",
+        "app-x/y flag\vsys-apps/portage -rsync-verify",
+        "app-x/y flag\fsys-apps/portage -rsync-verify",
+        "app-x/y flag sys-apps/portage -rsync-verify",
+        "app-x/y flag\u0085sys-apps/portage -rsync-verify",
+        "app-x/y flag\x1csys-apps/portage -rsync-verify",
+    ],
+)
+def test_a_line_another_program_would_read_as_two_is_not_one_line(
+    portage: Path, line: str
+) -> None:
+    """The check was against "\\n", and that is not what a line is to the
+    program that reads these files afterwards.
+
+    portage.util.grablines opens them in universal-newline mode, so a "\\r" in
+    the middle of what this program called one line is a line break to Portage:
+    the request wrote two configuration entries and the preview the user agreed
+    to had shown one.
+    """
+    target = portage / "package.use"
+    target.write_text("media-video/mpv vulkan\n", encoding="utf-8")
+
+    answer = call("append_line", path=str(target), line=line)
+
+    assert answer["code"] == "multiline", answer
+    assert target.read_bytes() == b"media-video/mpv vulkan\n"
+
+
+def test_a_grouped_write_counts_a_line_the_same_way(portage: Path) -> None:
+    """Every entry is checked exactly as if it had arrived on its own."""
+    (portage / "package.use").mkdir()
+    answer = call(
+        "append_lines",
+        entries=[
+            {"path": str(portage / "package.use" / "mpv"), "line": "media-video/mpv vulkan"},
+            {
+                "path": str(portage / "package.use" / "other"),
+                "line": "app-x/y flag\rsys-apps/portage -rsync-verify",
+            },
+        ],
+    )
+
+    assert answer["code"] == "multiline", answer
+    assert answer["error"].startswith("entry 2")
+    assert not (portage / "package.use" / "mpv").exists()
+
+
+def test_what_this_program_calls_a_line_is_what_portage_calls_a_line(
+    portage: Path,
+) -> None:
+    """The two have to agree, so ask the one that decides.
+
+    ``_lines`` used to be ``splitlines()``, which breaks on \\v, \\f, U+0085 and
+    U+2028 as well — none of which Portage treats as a line ending. A file
+    holding one of those had more lines here than it had there, and "exactly
+    one line matches" was then a statement about a different file.
+    """
+    portage_util = pytest.importorskip("portage.util")
+
+    target = portage / "package.use"
+    body = "media-video/mpv vulkan\napp-x/y flag still-the-same-line\nsys-apps/portage x\n"
+    target.write_text(body, encoding="utf-8")
+
+    theirs = [line.rstrip("\n") for line in portage_util.grablines(str(target))]
+    assert helper._lines(helper._read(target)) == theirs
+
+
+def test_the_file_keeps_its_shape_when_a_line_is_replaced(portage: Path) -> None:
+    """Docs/04-privileges.md §4: the rest of the file, comments and blank lines
+    included, is left exactly as it was."""
+    target = portage / "make.conf"
+    body = '# tuned for this box\n\nUSE="X"\n\n# keep this comment\nMAKEOPTS="-j4"\n'
+    target.write_text(body, encoding="utf-8")
+
+    answer = call(
+        "replace_line",
+        path=str(target),
+        line='USE="X wayland"',
+        match_kind="assignment",
+        match_literal="USE",
+    )
+
+    assert answer["ok"], answer
+    assert target.read_text(encoding="utf-8") == body.replace('USE="X"', 'USE="X wayland"')
+
+
+def test_a_line_that_is_already_there_is_recognised_as_already_there(
+    portage: Path,
+) -> None:
+    """The duplicate check compares against _lines, so the two notions of a
+    line have to be the same one or the promise in Docs §4 quietly stops
+    holding."""
+    target = portage / "package.use"
+    target.write_text("media-video/mpv vulkan\n", encoding="utf-8")
+
+    first = call("append_line", path=str(target), line="app-x/y flag")
+    second = call("append_line", path=str(target), line="app-x/y flag")
+
+    assert first["changed"] is True
+    assert second["changed"] is False
+    assert target.read_text(encoding="utf-8").count("app-x/y flag") == 1

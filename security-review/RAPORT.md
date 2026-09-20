@@ -6,7 +6,7 @@ uprzywilejowanego nie zostało uruchomione. Wszystkie dowody pochodzą ze skrypt
 `gentstore_helper` / `gentstore_launcher` i wołają ich funkcje na katalogu tymczasowym, tak jak
 robi to `tests/test_helper.py`.
 
-> **Stan po przeglądzie.** Raport opisuje kod w chwili audytu (`9b6ba1d`). **GS-01 do GS-09 zostały od tego czasu naprawione** na gałęzi `fix/helper-content-validation`; szczegóły
+> **Stan po przeglądzie.** Raport opisuje kod w chwili audytu (`9b6ba1d`). **GS-01 do GS-10 zostały od tego czasu naprawione** na gałęzi `fix/helper-content-validation`; szczegóły
 > w [POPRAWKI.md](POPRAWKI.md) i w `CHANGELOG.md`. Pozostałe znaleziska stoją niezmienione.
 
 ---
@@ -879,7 +879,7 @@ def test_the_launcher_refuses_to_shadow_the_main_repository():
 
 ### GS-10 · Treść linii w `package.*` nie jest sprawdzana wcale; `\r` przechodzi tam, gdzie `\n` nie
 
-**Waga: Średnia**  **Pewność: potwierdzone (PoC)**
+**Waga: Wysoka** (podniesiona po weryfikacji — patrz sprostowanie niżej)  **Pewność: potwierdzone (PoC)**
 **Miejsce:** `gentstore/helper/gentstore_helper.py:758-760` (`op_append_line`), `:612-617` (`_lines`, `_joined`)
 **Napastnik i warunki wstępne:** A, jedno zatwierdzenie `modify-config`.
 
@@ -918,10 +918,27 @@ nie:
    ok 'sys-apps/portage \x00hidden'
 ```
 
-**Skutek:** rozjazd między tym, co helper mówi, że zrobił (jedna linia, bez duplikatu, reszta pliku
-nietknięta), a tym, co jest na dysku. Nie prowadzi bezpośrednio do roota — Portage dzieli linie
-`package.*` przez `.split()`, więc `\r` nie przemyci drugiego wpisu — ale łamie trzy obietnice
-z dokumentu i jest budulcem dla GS-07.
+**Skutek:** rozjazd między tym, co helper mówi, że zrobił (jedna linia, bez duplikatu, reszta
+pliku nietknięta), a tym, co jest na dysku.
+
+> **SPROSTOWANIE (dopisane po naprawie).** Pierwotnie napisałem tu: *„Nie prowadzi bezpośrednio
+> do roota — Portage dzieli linie `package.*` przez `.split()`, więc `\r` nie przemyci drugiego
+> wpisu"*. **To było błędne.** Patrzyłem na `.split()` na poziomie tokenów i przeoczyłem, że
+> `portage.util.grablines` otwiera te pliki w trybie universal newlines, więc `readlines()`
+> dzieli na `\r` **wcześniej**. Sprawdzone na zainstalowanym Portage:
+>
+> ```
+> bajty w pliku: b'media-video/mpv vulkan\napp-x/y flag\rsys-apps/portage -rsync-verify\n'
+> co widzi Portage (grabfile):
+>     'media-video/mpv vulkan'
+>     'app-x/y flag'
+>     'sys-apps/portage -rsync-verify'
+> ```
+>
+> Czyli jedno `append_line`, którego cała umowa brzmi „dokładnie jedna linia", zapisuje **drugi
+> wpis konfiguracyjny**, którego podgląd nie pokazał. To nie jest usterka wyświetlania — to jest
+> naczelna zasada projektu odwrócona, i to przez kontrolę, której jedynym zadaniem było temu
+> zapobiec. Waga powinna brzmieć **Wysoka**, nie Średnia.
 
 **Poprawka:**
 

@@ -125,7 +125,25 @@ tag was made.
   halves disagree, and a helper of either age gives a refusal that names the problem instead of a
   puzzle.
 
-  All eight were found by a read-through of the two privileged programs; the report and the
+- **"Exactly one line" now means one line to whoever reads the file next.** The check was
+  against `\n`. `portage.util.grablines` opens these files in universal-newline mode, so a `\r`
+  in the middle of what the helper called one line is a line break to Portage — and
+  `append_line` with `"app-x/y flag\rsys-apps/portage -rsync-verify"` wrote **two** configuration
+  entries where the preview had shown one. That is the principle the application is built on,
+  inverted, past the one check whose entire job was to stop it.
+
+  The test is `splitlines()` now, which covers everything universal newlines covers and `\v`,
+  `\f`, `U+0085` and `U+2028` as well; being stricter than Portage is the right direction, since
+  a line Gentstore cannot describe in one piece is one it has no business writing. A null byte is
+  refused with them, for every file rather than only for `make.conf`.
+
+  Counting the lines already in the file was the same mistake mirrored: `splitlines()` broke on
+  those four characters where Portage does not, so a file holding one of them had more lines in
+  the helper's view than in Portage's, and "exactly one line matches this" was a statement about
+  a different file. It splits on `\n` now, which after universal-newline reading is what Portage
+  does exactly.
+
+  All nine were found by a read-through of the two privileged programs; the report and the
   scripts that reproduce them are in `security-review/`.
 
 ## [1.3.6] — 2026-09-20

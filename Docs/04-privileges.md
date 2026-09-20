@@ -172,6 +172,24 @@ Hard rules inside the helper, enforced regardless of what the GUI sent:
    is what calls the path check. An empty `package.unmask` means exactly what no
    `package.unmask` means — nothing — so the guarantee that matters, that a refused batch writes
    no *line*, is untouched.
+1e. **One line means one line to whoever reads the file next.** The check was against `\n`,
+   and that is not what a line is to `portage.util.grablines`, which opens these files in
+   universal-newline mode: a `\r` in the middle of what this program called one line is a line
+   break to Portage. `append_line` with `"app-x/y flag\rsys-apps/portage -rsync-verify"` wrote
+   **two** configuration entries and the preview the user agreed to had shown one — the whole
+   principle of this application inverted, past the one check whose job was to stop it.
+
+   The test is now `splitlines()`, which breaks on everything universal newlines breaks on and
+   on `\v`, `\f`, `U+0085` and `U+2028` besides. Being stricter than Portage is the right
+   direction: a line Gentstore cannot describe in one piece is a line it has no business writing.
+   A null byte goes with it, for every file rather than only for `make.conf`, because "the file
+   already contains that line" is not a question anybody can answer about a file with a NUL in it.
+
+   The other half is counting the lines that are already there. That was `splitlines()` too,
+   which broke on those same four characters where Portage does not — so a file holding one of
+   them had more lines here than it had there, and "exactly one line matches" was a statement
+   about a different file. It splits on `\n` now, which after universal-newline reading is
+   exactly what Portage does.
 2. It refuses to follow symbolic links that lead outside the permitted area.
 3. Atomic writes: a temporary file in the same directory → `fsync` → `os.replace`. A file is
    never left damaged halfway through a write.

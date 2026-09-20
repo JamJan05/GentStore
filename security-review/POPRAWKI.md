@@ -3,7 +3,8 @@
 Ta sama treść co w [RAPORT.md](RAPORT.md), ale ułożona według plików, żeby dało się po niej
 pracować. Uzasadnienia, scenariusze ataku i dowody są w raporcie — tutaj jest tylko „gdzie" i „co".
 
-**Stan: GS-01, GS-02, GS-03, GS-04, GS-05, GS-06, GS-07, GS-08 i GS-09 są naprawione** — wszystkie o wadze Wysokiej i wszystkie o wadze Średniej poza GS-10 na gałęzi `fix/helper-content-validation`. Zmienione
+**Stan: GS-01 do GS-10 są naprawione** — wszystkie o wadze Wysokiej i Średniej.
+Zostały tylko GS-11 do GS-18 (Niska/Info) na gałęzi `fix/helper-content-validation`. Zmienione
 pliki: `gentstore/helper/gentstore_helper.py`, `gentstore/ui/pages/cfgfiles.py` (musi teraz
 wysyłać `expect` przy scalaniu), `tests/test_helper.py` (+18 testów),
 `tests/test_cfgfiles.py`, `Docs/04-privileges.md` (reguły 1a, 1a′, 7, 9), `CHANGELOG.md`.
@@ -23,7 +24,7 @@ Reszta listy czeka — nic z niej nie zostało zastosowane.
 | ✅ | [GS-04](RAPORT.md#gs-04--emerge---unmerge-kategoria-przechodzi-przez-tabelę) — `--unmerge sys-apps/*` | Wysoka | `gentstore/helper/gentstore_launcher.py` | ~12 linii + 1 test |
 | ✅ | [GS-05](RAPORT.md#gs-05--wzorzec-match-w-replace_line-to-regex-z-żądania-uruchamiany-w-procesie-roota) — regex z żądania | Średnia | `gentstore_helper.py` + `core/makeconf.py` + `core/confedit.py` | ~25 linii, zmiana protokołu |
 | ✅ | [GS-07](RAPORT.md#gs-07--podgląd--zapis-qlabel-w-trybie-autotext-zjada-linię-zaczynającą-się-od-) + [GS-08](RAPORT.md#gs-08--tekst-z-ebuilda-metadataxml-i-katalogu-overlayów-jest-renderowany-jako-html) — `setTextFormat` | Średnia | `gentstore/ui/**` | ~20 jednoliniowych zmian |
-| 9 | [GS-10](RAPORT.md#gs-10--treść-linii-w-package-nie-jest-sprawdzana-wcale-r-przechodzi-tam-gdzie-n-nie) — `\r` i NUL w linii | Średnia | `gentstore/helper/gentstore_helper.py` | ~15 linii + 2 testy |
+| ✅ | [GS-10](RAPORT.md#gs-10--treść-linii-w-package-nie-jest-sprawdzana-wcale-r-przechodzi-tam-gdzie-n-nie) — `\r` i NUL w linii | Średnia | `gentstore/helper/gentstore_helper.py` | ~15 linii + 2 testy |
 | 10 | [GS-12](RAPORT.md#gs-12--helper-nie-odpowiada-json-em-na-zagnieżdżony-json-i-czyta-stdin-bez-ograniczenia) — `RecursionError`, brak limitu stdin | Niska | `gentstore/helper/gentstore_helper.py` | ~10 linii + 2 testy |
 | 11 | [GS-11](RAPORT.md#gs-11--glsa-check--f-instaluje-pakiety-jako-root-bez-potwierdzenia-i-bez-podglądu) — `glsa-check -f` bez pytania | Niska | `gentstore/ui/pages/update.py` | ~20 linii |
 | 12 | [GS-13](RAPORT.md#gs-13--coreoverlayspy-czyta-repositoriesxml-bez-limitu-rozmiaru) — brak limitu na `repositories.xml` | Niska | `gentstore/core/overlays.py` | 6 linii + 1 test |
@@ -53,12 +54,14 @@ Reszta listy czeka — nic z niej nie zostało zastosowane.
       `match_kind` + `match_literal`; wzorzec buduje helper przez `re.escape`. Zaktualizować
       `core/makeconf.py:298` i `core/confedit.py:249,289`. `match` zostawić na jedno wydanie jako
       odrzucane z `bad_pattern`, żeby starszy interfejs dostał zrozumiałą odmowę.
-- [ ] **GS-10** — wydzielić `_one_line(raw, where="")`: odmawiać na NUL i na każdym znaku, który
+- [x] **GS-10** — wydzielić `_one_line(raw, where="")`: odmawiać na NUL i na każdym znaku, który
       `str.splitlines()` uznaje za koniec linii (`\r`, `\v`, `\f`, `\x1c`, U+2028, U+0085).
       Użyć w `op_append_line`, `_batch_entries`, `op_replace_line`, `op_remove_line`.
-- [ ] **GS-10b** — `_read`/`_joined` (`:603`, `:616`): zachowywać oryginalne zakończenia linii
-      albo odmawiać na pliku zawierającym `\r`. Dziś `replace_line` po cichu konwertuje CRLF→LF
-      w całym pliku, wbrew `Docs §4` („byte for byte").
+- [x] **GS-10b** — rozwiązane inaczej: `_lines` dzieli teraz na `\n`, a nie przez
+      `splitlines()`. Ponieważ `_read` czyta w trybie universal newlines — dokładnie tak jak
+      `portage.util.grablines` — helper i Portage liczą linie identycznie. Normalizacja CRLF→LF
+      zostaje i jest teraz świadoma: to konsekwencja czytania pliku tak, jak czyta go Portage,
+      dla którego oba zapisy znaczą to samo.
 - [ ] **GS-12** — `main` (`:1154`): `stdin.read(STDIN_MAX + 1)` + odmowa `too_large`;
       dołożyć `except RecursionError` do sita wyjątków.
 
@@ -133,8 +136,9 @@ Szkice są przy każdym znalezisku w raporcie. Braki zebrane:
       `tests/test_cfgfiles.py::test_merging_writes_what_the_user_ended_up_with`.
 - [ ] `test_helper.py` — katalog kandydata `._cfg` a `_only_root_can_write` (GS-03)
 - [x] `test_helper.py` — `FEATURES`/`MAKEOPTS` (GS-06) — 27 testów po obu stronach szwu
-- [ ] `test_helper.py` — „jedna linia" wobec `\r`, U+2028 i NUL (GS-10)
-- [ ] `test_helper.py` — `replace_line` zostawia resztę pliku bajt w bajt (GS-10b)
+- [x] `test_helper.py` — „jedna linia" wobec `\r`, U+2028 i NUL (GS-10) — 11 testów,
+      w tym jeden biorący prawdziwe `portage.util.grablines` za wyrocznię
+- [x] `test_helper.py` — `replace_line` zostawia resztę pliku bajt w bajt (GS-10b)
 - [ ] `test_helper.py` — zagnieżdżony JSON i limit stdin (GS-12)
 - [x] `test_runner.py` — `--unmerge sys-apps/*` odrzucone, podgląd nadal dozwolony (GS-04)
 - [x] `test_runner.py` — `file://` i nazwa `gentoo` odrzucone (GS-09)

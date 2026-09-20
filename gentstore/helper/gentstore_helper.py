@@ -715,6 +715,42 @@ def _check_make_conf_value(name: str, value: str) -> None:
                 )
 
 
+def _one_line(raw: str, where: str = "") -> str:
+    """*raw* as exactly one line, or a refusal.
+
+    "Exactly one line" was checked against ``\n`` alone, and that is not what
+    a line is to either of the programs that read these files afterwards.
+    ``portage.util.grablines`` opens them in universal-newline mode, so a
+    ``\r`` in the middle of what this program called one line is a line break
+    to Portage: ``append_line`` with ``"app-x/y flag\rsys-apps/portage
+    -rsync-verify"`` wrote *two* configuration entries, and the preview the
+    user agreed to had shown one. That is the whole principle of this
+    application inverted — and it went past a check whose entire job was to
+    stop it.
+
+    So the test is ``splitlines()``, which breaks on everything universal
+    newlines breaks on and on a few more besides (``\v``, ``\f``, ``U+2028``).
+    Being stricter than Portage is the right direction here: a line Gentstore
+    cannot describe in one piece is a line it has no business writing.
+
+    The null byte goes with it. ``make.conf`` has refused one since the value
+    check was written; a ``package.*`` line had nothing to say about it, and
+    "the file already contains that line" is not a question anyone can answer
+    about a file with a NUL in it.
+    """
+    line = raw.rstrip("\n")
+    if "\x00" in line:
+        raise HelperError("nul_byte", f"{where}a configuration line cannot contain a null byte")
+    parts = line.splitlines()
+    if len(parts) > 1 or (parts and parts[0] != line):
+        raise HelperError(
+            "multiline",
+            f"{where}exactly one line, and nothing that another program would "
+            f"read as two",
+        )
+    return line
+
+
 def _require_owned(path: Path) -> str:
     """Only files Gentstore creates whole may be written or deleted whole.
 
@@ -878,7 +914,24 @@ def _read(path: Path) -> str:
 
 
 def _lines(text: str) -> list[str]:
-    return text.splitlines()
+    """The file's lines, counted the way Portage counts them.
+
+    ``split("\n")`` rather than ``splitlines()``, and the difference is not
+    academic. :func:`_read` opens the file in universal-newline mode, which is
+    what ``portage.util.grablines`` does too, so ``\r`` and ``\r\n`` have
+    already become ``\n`` by the time this sees the text and the two programs
+    agree about those. ``splitlines()`` then went further and broke on ``\v``,
+    ``\f``, ``\x1c``, ``U+0085`` and ``U+2028`` as well, which Portage does
+    not — so a file holding one of those had more lines here than it had there,
+    and "exactly one line matches" was being decided about a different file
+    from the one Portage reads.
+    """
+    if not text:
+        return []
+    lines = text.split("\n")
+    if lines[-1] == "":
+        lines.pop()
+    return lines
 
 
 def _joined(lines: list[str]) -> str:
@@ -1023,9 +1076,7 @@ def op_append_line(request: dict[str, Any]) -> dict[str, Any]:
     created = ensure_line_directory(raw)
     path = check_path(raw)
     target = _require_line_target(path)
-    line = _string(request, "line").rstrip("\n")
-    if "\n" in line:
-        raise HelperError("multiline", "append_line takes exactly one line")
+    line = _one_line(_string(request, "line"))
     if target == "make.conf":
         _check_make_conf_line(line)
 
@@ -1094,9 +1145,7 @@ def _batch_entries(request: dict[str, Any]) -> list[tuple[Path, str]]:
         except HelperError as exc:
             raise HelperError(exc.code, f"{where}: {exc}") from exc
 
-        line = raw_line.rstrip("\n")
-        if "\n" in line:
-            raise HelperError("multiline", f"{where}: each entry is exactly one line")
+        line = _one_line(raw_line, f"{where}: ")
         if not line.strip():
             raise HelperError("bad_request", f"{where}: the line is empty")
         prepared.append((path, line))
@@ -1149,13 +1198,10 @@ def op_append_lines(request: dict[str, Any]) -> dict[str, Any]:
 def op_replace_line(request: dict[str, Any]) -> dict[str, Any]:
     path = check_path(_string(request, "path"), must_exist=True)
     target = _require_line_target(path)
-    line = _string(request, "line").rstrip("\n")
-    if "\n" in line:
-        # One line in, one line out. Otherwise the ``previous`` and ``line``
-        # this reports back — which is what the interface shows the user as an
-        # account of what happened — would describe one line where several
-        # were written.
-        raise HelperError("multiline", "replace_line takes exactly one line")
+    # One line in, one line out. Otherwise the ``previous`` and ``line`` this
+    # reports back — which is what the interface shows the user as an account
+    # of what happened — would describe one line where several were written.
+    line = _one_line(_string(request, "line"))
     if target == "make.conf":
         # Before the pattern is even compiled: what is going in is a claim of
         # its own, and "the line I am replacing looked reasonable" says nothing
@@ -1220,7 +1266,7 @@ def _matcher(request: dict[str, Any]) -> re.Pattern[str]:
 def op_remove_line(request: dict[str, Any]) -> dict[str, Any]:
     path = check_path(_string(request, "path"), must_exist=True)
     target = _require_line_target(path)
-    line = _string(request, "line").rstrip("\n")
+    line = _one_line(_string(request, "line"))
     if target == "make.conf":
         # Nothing in the interface removes a line from make.conf, and a line
         # this program would not write is not one it should be talked into
