@@ -25,6 +25,7 @@ documented format rather than invented.
 
 from __future__ import annotations
 
+import time
 from datetime import date
 from pathlib import Path
 
@@ -573,3 +574,81 @@ def test_nothing_is_offered_when_nothing_is_affected(update_page, monkeypatch) -
     update_page._glsa = glsa.Report()
     update_page._on_fix_security()
     assert asked == []
+
+
+# -- how long the parser may take on a line an ebuild chose -----------------
+
+#: Generous on purpose. A linear parser does these in single-digit milliseconds;
+#: the quadratic and cubic patterns that were here took more than six seconds on
+#: inputs a fraction of this size, so anything between the two makes the test
+#: say the same thing. The margin is for a loaded CI runner, not for the parser.
+PARSER_BUDGET_SECONDS = 3.0
+
+#: Big enough that superlinear behaviour cannot hide inside the budget above,
+#: and small enough to build and parse without noticing.
+HOSTILE_LENGTH = 200_000
+
+
+@pytest.mark.parametrize(
+    ("what", "line"),
+    [
+        # _ROW: [a-z-]+ and [^\]]* overlap, so a bracket that never closes let
+        # them divide the letters between them in every possible way.
+        ("an unclosed bracket", "[" + "a" * HOSTILE_LENGTH),
+        # _SIZE: the lazy run of digits and separators overlapped the \s* beside
+        # it, and search restarted the pair at every position. A row with no
+        # quotation mark in it hands parse_size the whole tail.
+        (
+            "a tail of spaces",
+            "[ebuild  N     ] media-video/mpv-0.41.0  1" + " " * HOSTILE_LENGTH + "2",
+        ),
+        ("both at once", "[" + "a" * HOSTILE_LENGTH + "  1" + " " * HOSTILE_LENGTH + "2"),
+    ],
+)
+def test_one_line_cannot_hold_the_parser_up(what: str, line: str) -> None:
+    """Every line of emerge output goes through parse_row, and an ebuild's
+    pkg_pretend() — which Portage runs during --pretend — can print anything.
+
+    The process is unprivileged, so the worst case was a window that stopped
+    answering rather than anything reaching root. It was still six seconds for
+    64k of lowercase, and there is no upper bound on what an ebuild may echo.
+    """
+    started = time.monotonic()
+    parse_row(line)
+    elapsed = time.monotonic() - started
+    assert elapsed < PARSER_BUDGET_SECONDS, f"{what}: {elapsed:.1f}s for {len(line)} characters"
+
+
+def test_a_whole_preview_of_hostile_lines_is_still_read_promptly() -> None:
+    """The same thing through the path the search screen actually uses."""
+    from gentstore.core.install_plan import from_output  # noqa: PLC0415
+
+    output = "These are the packages that would be merged, in order:\n" + "\n".join(
+        "[" + "a" * HOSTILE_LENGTH for _ in range(5)
+    )
+
+    started = time.monotonic()
+    from_output(output)
+    elapsed = time.monotonic() - started
+    assert elapsed < PARSER_BUDGET_SECONDS, f"{elapsed:.1f}s for five hostile lines"
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        # The scan that replaced the pattern has to keep every answer the
+        # pattern gave, including the odd ones.
+        ("1.5 MiB", int(1.5 * 1024**2)),
+        ("1 445 KiB", 1445 * 1024),
+        ("1\xa0445 KiB", 1445 * 1024),
+        ("5B", 5),
+        ("0 B", 0),
+        ("media-video/mpv-0.41.0  1445 KiB", None),
+        ("1 445", None),
+        ("KiB", None),
+        ("abc KiB", None),
+        ("", None),
+    ],
+)
+def test_the_scan_answers_what_the_pattern_answered(text: str, expected) -> None:
+    assert parse_size(text) == expected

@@ -55,17 +55,42 @@ class Action(StrEnum):
 
 
 #: ``[ebuild  N     ] `` — the fixed-width block that opens every row.
-_ROW = re.compile(r"^\[(?P<kind>[a-z-]+)(?P<flags>[^\]]*)\]\s+(?P<rest>.*)$")
+#:
+#: ``++`` rather than ``+``, and the extra character is the whole of the fix.
+#: ``[^\]]`` is a superset of ``[a-z-]``, so on a line that opens a bracket and
+#: never closes it the two quantifiers can divide the letters between them in as
+#: many ways as there are letters, and the engine tries all of them before
+#: giving up. Every line of ``emerge`` output goes through this, and an ebuild's
+#: ``pkg_pretend()`` — which Portage runs during ``--pretend`` — can print
+#: whatever it likes: 64k of lowercase after a ``[`` took six seconds.
+#:
+#: Possessive, so *kind* takes the whole run and never hands any of it back.
+#: That is not a narrowing: greedy already took the longest run, and anything
+#: the old pattern could match by backtracking, ``[^\]]*`` can match instead.
+_ROW = re.compile(r"^\[(?P<kind>[a-z-]++)(?P<flags>[^\]]*)\]\s+(?P<rest>.*)$")
 
 #: ``USE="a -b" PYTHON_TARGETS="python3_14"`` — one or more VAR="…" groups.
 _VARIABLE = re.compile(r'(?P<name>[A-Z][A-Z0-9_]*)="(?P<value>[^"]*)"')
 
-#: ``1445 KiB`` at the end of a row, with any of the separators a locale may use.
+#: The characters a size may be written with, separators included.
+#:
+#: This used to be half of a regular expression — a lazy run of digits and
+#: separators beside a ``\s*`` that matches the same spaces — and the overlap
+#: made it cubic: the lazy run expands, the ``\s*`` divides the spaces with it,
+#: and ``search`` starts the whole thing again at every position in the string.
+#: A thousand characters took more than six seconds, and a merge row with no
+#: quotation mark in it hands this function its entire tail.
+#:
+#: A backwards walk instead. It is longer to read and it cannot backtrack,
+#: which for a string that arrives from an ebuild is the trade worth making.
+#:
 #: The bare ``B`` is spelled out because _UNITS has an entry for it: emerge
-#: prints KiB and up in practice, but a pattern that cannot match a unit the
-#: table beside it claims to understand is a trap for whoever reads the two
-#: together.
-_SIZE = re.compile(r"(?P<number>[\d   ,.]+?)\s*(?P<unit>(?:[KMGT]i)?B)\s*$")
+#: prints KiB and up in practice, but a list that cannot name a unit the table
+#: beside it claims to understand is a trap for whoever reads the two together.
+_SIZE_CHARACTERS = frozenset("0123456789,.\xa0\u202f ")
+
+#: Longest first, so that ``KiB`` is found before the ``B`` inside it.
+_SIZE_UNITS = ("TiB", "GiB", "MiB", "KiB", "B")
 
 #: ``[1.0]`` — the version being replaced.
 _OLD_VERSION = re.compile(r"\[([^\]]+)\]")
@@ -341,16 +366,34 @@ class Preview:
 
 
 def parse_size(text: str) -> int | None:
-    """``1 445 KiB`` → bytes. Tolerates every thousands separator seen in the wild."""
-    match = _SIZE.search(text.strip())
-    if match is None:
+    """``1 445 KiB`` → bytes. Tolerates every thousands separator seen in the wild.
+
+    Written as a scan rather than as a pattern — see :data:`_SIZE_CHARACTERS`.
+    The unit is a suffix, so it is found by asking whether the text ends with
+    one; the number is the run of digits and separators in front of it, so it is
+    found by walking back until something else turns up. Both are one pass, and
+    neither can be made to reconsider.
+    """
+    text = text.strip()
+    for unit in _SIZE_UNITS:
+        if text.endswith(unit):
+            break
+    else:
         return None
-    digits = re.sub(r"[   ,]", "", match.group("number"))
+
+    head = text[: len(text) - len(unit)]
+    cut = len(head)
+    while cut and head[cut - 1] in _SIZE_CHARACTERS:
+        cut -= 1
+    if cut == len(head):
+        return None
+
+    digits = re.sub(r"[\xa0\u202f ,]", "", head[cut:])
     try:
         value = float(digits)
     except ValueError:
         return None
-    return int(value * _UNITS.get(match.group("unit"), 1))
+    return int(value * _UNITS.get(unit, 1))
 
 
 def parse_use(value: str) -> tuple[UseChange, ...]:

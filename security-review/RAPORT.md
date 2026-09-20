@@ -1304,6 +1304,70 @@ Drobiazgi, po jednym zdaniu:
 
 ---
 
+---
+
+### GS-19 · Dwa nadliniowe wyrażenia w `core/emerge_parse.py` zawieszają okno na jedną linię z ebuilda
+
+**Waga: Średnia**  **Pewność: potwierdzone (pomiary)**
+**Miejsce:** `gentstore/core/emerge_parse.py:56` (`_ROW`), `:68` (`_SIZE`, przed poprawką)
+**Napastnik i warunki wstępne:** B — autor overlaya, którego użytkownik dodał. Bez dialogu, bez
+uwierzytelnienia: wystarczy, że użytkownik naciśnie „Analizuj wymagania" albo „Podgląd".
+
+**Dopisane po oddaniu raportu**, jako uzupełnienie luki zgłoszonej w §4. Przejrzałem wszystkie 25
+literałów wyrażeń w pięciu plikach. `core/required_use.py` nie ma ich wcale. **Żaden nie ma
+zagnieżdżonego kwantyfikatora**, więc wykładniczego ReDoS-a tu nie ma. Dwa mają sąsiadujące,
+nakładające się kwantyfikatory:
+
+`_ROW = ^\[(?P<kind>[a-z-]+)(?P<flags>[^\]]*)\]\s+(?P<rest>.*)$` — `[^\]]` jest nadzbiorem
+`[a-z-]`, więc na linii, która otwiera nawias i nigdy go nie zamyka, oba kwantyfikatory mogą
+podzielić między siebie litery na tyle sposobów, ile jest liter. **Kwadratowe.**
+
+`_SIZE = (?P<number>[\d\xa0\u202f ,.]+?)\s*(?P<unit>(?:[KMGT]i)?B)\s*$` — leniwy przebieg
+cyfr i separatorów nakłada się na `\s*` obok, a `search` zaczyna całość od nowa na każdej
+pozycji. **Sześcienne.**
+
+**Scenariusz:**
+1. Ebuild w dodanym overlayu ma `pkg_pretend() { printf '[%0.s' {1..200000}; }` — Portage
+   uruchamia `pkg_pretend` właśnie przy `--pretend`, a ebuild może wypisać cokolwiek.
+2. Użytkownik naciska „Analizuj wymagania". `install_plan.from_output()`
+   (`ui/pages/search.py:881`) stosuje `parse_row()` do **każdej** linii wyjścia.
+3. Okno przestaje odpowiadać.
+
+**Dowód** (zmierzone przez prawdziwe funkcje, nie przez surowe wyrażenia):
+
+| wejście | przed | po |
+|---|---|---|
+| `_ROW`, 64 tys. znaków | >6 s | 0,33 ms |
+| `_ROW`, 200 tys. znaków | **128,8 s** | ~1 ms |
+| `_ROW`, milion znaków | — | 5,04 ms |
+| `_SIZE`, 1000 spacji w ogonie wiersza | >6 s | poniżej 1 ms |
+| `_SIZE`, milion spacji | — | 10,97 ms |
+
+Do `_SIZE` prowadzi `parse_row`: `size = parse_size(tail.rsplit('"', 1)[-1])`, więc wiersz bez
+cudzysłowu oddaje tej funkcji **cały swój ogon**.
+
+**Skutek:** zawieszenie procesu GUI. Proces jest nieuprzywilejowany, więc nic nie sięga roota —
+to jest odmowa usługi dla okna, nie eskalacja. Waga Średnia, nie wyższa, właśnie dlatego.
+
+**Poprawka:** `_ROW` dostał kwantyfikator zaborczy (`[a-z-]++`) — jeden znak, i nie jest to
+zawężenie: zachłanny i tak brał najdłuższy przebieg, a wszystko, co stary wzorzec umiał dopasować
+przez nawroty, `[^\]]*` dopasuje bez nich. `_SIZE` przestał być wyrażeniem: jednostka to sufiks,
+więc szuka się jej przez `endswith`, a liczba to przebieg przed nią, więc znajduje się ją idąc
+wstecz. Jedno przejście, bez możliwości nawrotu.
+
+**Sprawdzenie równoważności:** stara i nowa implementacja porównane na 80 tysiącach losowych
+ciągów i na wszystkich dziewięciu fixture'ach z `tests/fixtures/` — **zero rozbieżności**.
+
+**Test regresyjny:** `test_one_line_cannot_hold_the_parser_up` w `tests/test_update.py`, z
+budżetem 3 s na 200 tys. znaków. Przeciwko kodowi sprzed poprawki pada po 128,8 s.
+
+**Co zostaje nienaprawione:** `runner/command.py:_read()` zbiera bufor aż do znaku nowej linii
+**bez żadnego limitu długości**, a `log_view.MAX_LINES` ogranicza liczbę linii, nie ich rozmiar.
+Te dwa wzorce są liniowe, ale następny dodany taki nie będzie, a jedna linia bez końca to też
+nieograniczona pamięć w procesie GUI. Ograniczenie długości linii byłoby poprawką strukturalną
+zamiast dwóch punktowych — świadomie nie zrobione tutaj, bo zmienia widoczne zachowanie logu
+i zasługuje na osobną decyzję.
+
 ## 4. Czego nie sprawdzono
 
 Uczciwa lista. Wolę ją dłuższą niż wrażenie kompletności.
@@ -1329,11 +1393,10 @@ są wnioskami z dokumentacji Portage, a nie obserwacją:
   opierają się na wyszukaniu wszystkich `QLabel`/`setToolTip` i sprawdzeniu, że `setTextFormat`
   nie pada nigdzie — ale **nie** prześledziłem każdej z ~150 etykiet do jej źródła danych. Lista
   w GS-08 to te, które sprawdziłem; jest prawie na pewno niepełna.
-- `core/emerge_parse.py` (782 linie), `core/elog.py`, `core/news.py`, `core/required_use.py`,
-  `core/depgraph_hints.py` — **nie** przeanalizowałem wyrażeń regularnych w tych plikach pod kątem
-  ReDoS. Wejście do nich pochodzi od napastnika B (wyjście `emerge`, elogi, newsy), a proces jest
-  nieuprzywilejowany, więc skutkiem byłoby zawieszenie GUI. To jest realna luka w tym przeglądzie
-  i pierwsza rzecz, którą bym dorobił.
+- ~~`core/emerge_parse.py`, `core/elog.py`, `core/news.py`, `core/required_use.py`,
+  `core/depgraph_hints.py` — nie przeanalizowałem wyrażeń regularnych pod kątem ReDoS.~~
+  **Uzupełnione po oddaniu raportu — patrz GS-19 niżej.** Znalazły się dwa nadliniowe wzorce,
+  oba w `core/emerge_parse.py`, oba osiągalne. Naprawione.
 - `core/masking.py`, `core/licenses.py`, `core/packages.py`, `core/worldset.py`,
   `core/binrepos.py`, `core/profiles.py`, `core/glsa.py` — przejrzane pod kątem tego, czy budują
   ścieżkę lub linię idącą do helpera; poza tym nie.
