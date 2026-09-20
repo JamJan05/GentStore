@@ -23,7 +23,7 @@ the five principles below costs in practice — is at
 > other setups are the fastest way to make the next release better.
 >
 > **This is a security release.** A line-by-line review of the two privileged programs, and of
-> what reaches them, turned up nineteen findings — nine of them in those two programs, the rest
+> what reaches them, turned up nineteen findings - nine of them in those two programs, the rest
 > in the window and in the parsers that read `emerge`'s output.
 > Two of them ended in code running as root: a whole-file write that checked the path and not
 > the content, so a file in `repos.conf` could redefine where every package on the system comes
@@ -47,13 +47,13 @@ the five principles below costs in practice — is at
 | | |
 |---|---|
 | ![Search and install](Docs/screenshots/search-and-install.png) | ![USE flags](Docs/screenshots/use-flags.png) |
-| **Search and install** — results from four repositories, package details, versions with their keywords | **USE flags** — where each flag's value comes from, and exactly what turning it on changes |
+| **Search and install** - results from four repositories, package details, versions with their keywords | **USE flags** - where each flag's value comes from, and exactly what turning it on changes |
 | ![Repositories](Docs/screenshots/repositories.png) | ![Available repositories](Docs/screenshots/repositories-available.png) |
-| **Repositories** — the `repos.conf` section verbatim, and the 2303 packages that come from `::guru` and nowhere else | **Adding one** — the rest of Gentoo's catalogue, who runs each of them, and the two commands enabling one would run |
+| **Repositories** - the `repos.conf` section verbatim, and the 2303 packages that come from `::guru` and nowhere else | **Adding one** - the rest of Gentoo's catalogue, who runs each of them, and the two commands enabling one would run |
 | ![Repository filter](Docs/screenshots/repository-filter.png) | ![System update](Docs/screenshots/update.png) |
-| **One repository at a time** — the same package lives in `::gentoo` and in `::guru`; the badge you pick decides which one the install comes from | **System update** — six steps, with a preview table built from the output of `emerge -pv` |
+| **One repository at a time** - the same package lives in `::gentoo` and in `::guru`; the badge you pick decides which one the install comes from | **System update** - six steps, with a preview table built from the output of `emerge -pv` |
 | ![Configuration files](Docs/screenshots/config-files.png) | ![Settings](Docs/screenshots/settings.png) |
-| **`._cfg` files** — the difference, and three answers | **Settings** — language, interface size, how the application becomes root, and how many backups to keep |
+| **`._cfg` files** - the difference, and three answers | **Settings** - language, interface size, how the application becomes root, and how many backups to keep |
 
 *(`python tools/readme_shots.py` retakes them. All but one are current and in English; the `._cfg`
 one is older and Polish, because that screen has nothing to show on a machine with no
@@ -102,7 +102,7 @@ interface — it does not bring the application down.
 
 Two routes. The choice comes down to whether Portage should know about Gentstore.
 
-### Through Portage — a local overlay
+### Through Portage - a local overlay
 
 No clone needed. Fetch the overlay script, read it, run it:
 
@@ -284,7 +284,7 @@ pinned to a specific version. The **Masks and licences** screen shows everything
 already accepted, and lets you take it back.
 
 The **Repositories** screen shows what you have configured — together with the `repos.conf`
-section verbatim — and lets you search the catalogue of Gentoo repositories. Enabling an
+section verbatim - and lets you search the catalogue of Gentoo repositories. Enabling an
 overlay is one click (`eselect repository enable` + `emaint sync -r`), with the command shown
 before it runs. Removing one tells you how many installed packages will lose their ebuild.
 Adding a repository from outside the catalogue gets its own dialog with a warning — ebuilds
@@ -296,7 +296,7 @@ it replaces the one every package comes from.
 
 The **System update** screen breaks the update cycle into six steps, each of which runs
 separately and shows its own command: sync, Gentoo news (only the items that concern this
-system — with the reason next to each), a preview in the form of a table, the update itself
+system - with the reason next to each), a preview in the form of a table, the update itself
 with a live log and an “Interrupt” button, `--depclean` with the list shown before anything is
 removed, and the configuration files. Alongside it is a security-warning panel (`glsa-check`,
 with a readable message when `gentoolkit` is missing); applying the fixes lists the advisories
