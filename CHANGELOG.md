@@ -38,9 +38,10 @@ tag was made.
   `wget` and anything else with a progress bar overwrite a single line with carriage returns and
   send no newline at all, so the buffer grew for as long as the build ran.
 
-  There is a 16 KiB cap now. A progress bar is compressed to its last frame, which is what a
-  terminal shows anyway; anything still over the cap is passed on in pieces, so nothing is lost
-  and nothing downstream receives a string with no upper bound on its length. The size is about
+  There is a 16 KiB cap now, applied on every way out of the class rather than to the buffer
+  alone. A progress bar is compressed to its last frame, which is what a terminal shows anyway;
+  anything still over the cap is passed on in pieces, so nothing is lost and nothing downstream
+  receives a string with no upper bound on its length. The size is about
   twenty times the longest line in the logs on the machine this was written on, and several times
   a compiler invocation with a hundred include paths — the longest thing a build realistically
   prints.

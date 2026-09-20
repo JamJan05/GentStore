@@ -1118,3 +1118,53 @@ def test_an_ordinary_long_line_is_still_one_line(runner: Command) -> None:
 
     assert codes == [0]
     assert lines == [line]
+
+
+def test_a_finished_line_is_bounded_too(runner: Command) -> None:
+    """The first version of the cap bounded the unfinished buffer and left the
+    finished lines alone.
+
+    Splitting on newlines hands you complete lines of any length, so a line that
+    did end — three times the limit and then a newline — walked straight past
+    the bound it was supposed to be under. A bound that is not applied to every
+    way out is not a bound.
+    """
+    size = command.MAX_LINE * 3
+    spec = CommandSpec(
+        argv=(sys.executable, "-c", f"import sys; sys.stdout.write('a' * {size} + '\\n')"),
+    )
+    lines, codes = run_and_wait(runner, spec)
+
+    assert codes == [0]
+    assert max(len(line) for line in lines) <= command.MAX_LINE
+    assert "".join(lines) == "a" * size
+
+
+def test_the_boundary_itself(runner: Command) -> None:
+    """One character over, with a newline after it — the smallest input that
+    tells the two versions apart."""
+    size = command.MAX_LINE + 1
+    spec = CommandSpec(
+        argv=(sys.executable, "-c", f"import sys; sys.stdout.write('b' * {size} + '\\n')"),
+    )
+    lines, codes = run_and_wait(runner, spec)
+
+    assert codes == [0]
+    assert [len(line) for line in lines] == [command.MAX_LINE, 1]
+    assert "".join(lines) == "b" * size
+
+
+def test_a_line_exactly_at_the_limit_is_left_whole(runner: Command) -> None:
+    """The cap is a maximum, not a target: a line of exactly MAX_LINE is one
+    line, and splitting it would be the off-by-one nobody notices."""
+    spec = CommandSpec(
+        argv=(
+            sys.executable,
+            "-c",
+            f"import sys; sys.stdout.write('c' * {command.MAX_LINE} + '\\n')",
+        ),
+    )
+    lines, codes = run_and_wait(runner, spec)
+
+    assert codes == [0]
+    assert lines == ["c" * command.MAX_LINE]

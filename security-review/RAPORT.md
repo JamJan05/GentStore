@@ -1366,8 +1366,13 @@ znaku nowej linii **bez żadnego limitu długości**, a `log_view.MAX_LINES` ogr
 nie ich rozmiar. Te dwa wzorce są teraz liniowe, ale następny dodany taki nie będzie, a linia bez
 końca to również nieograniczona pamięć w procesie GUI.
 
-Doszło `MAX_LINE = 16 KiB`. Linia, która przekroczy ten rozmiar, jest przekazywana dalej
-w kawałkach — nic nie ginie, a nic poniżej nie dostaje ciągu bez górnego ograniczenia długości.
+Doszło `MAX_LINE = 16 KiB`, nakładane na **każdym** wyjściu z tej klasy, a nie tylko na buforze.
+Linia, która przekroczy ten rozmiar, jest przekazywana dalej w kawałkach — nic nie ginie, a nic
+poniżej nie dostaje ciągu bez górnego ograniczenia długości.
+
+Pierwsza wersja tej poprawki ograniczała wyłącznie **niedokończony** bufor, a `split("\n")` oddaje
+linie zakończone o dowolnej długości — więc sto megabajtów zwieńczone znakiem nowej linii
+przechodziło obok limitu, pod którym miało stać. Wyłapane w przeglądzie #11.
 Przy okazji domknęło to przypadek, który **nie wymaga żadnego napastnika**: `ninja`, `wget`
 i każdy inny program z paskiem postępu nadpisuje jedną linię powrotami karetki i nigdy nie wysyła
 znaku nowej linii, więc ten bufor rósł przez cały czas trwania budowania. Liczy się tu tylko

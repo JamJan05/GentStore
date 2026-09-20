@@ -204,7 +204,7 @@ class Command(QObject):
         self._buffer += chunk
         *complete, self._buffer = self._buffer.split("\n")
         for line in complete:
-            self.output.emit(line.rsplit(_CARRIAGE_RETURN, 1)[-1])
+            self._emit(line.rsplit(_CARRIAGE_RETURN, 1)[-1])
 
         if len(self._buffer) > MAX_LINE:
             # A progress bar overwrites itself and never sends a newline, so
@@ -213,16 +213,30 @@ class Command(QObject):
             # is usually the whole of the problem.
             self._buffer = self._buffer.rsplit(_CARRIAGE_RETURN, 1)[-1]
         while len(self._buffer) > MAX_LINE:
-            # Still too long: a line that is genuinely this long, or one that
-            # is never going to end. Pass it on in pieces rather than hold it,
-            # so that nothing is lost and nothing downstream is handed a string
-            # without an upper bound on its length.
-            self.output.emit(self._buffer[:MAX_LINE])
+            # Still too long: a line that is never going to end. Pass it on
+            # rather than hold it, so the buffer cannot grow without bound.
+            self._emit(self._buffer[:MAX_LINE])
             self._buffer = self._buffer[MAX_LINE:]
+
+    def _emit(self, line: str) -> None:
+        """Hand one line to whoever is listening, in pieces if it is too long.
+
+        Every way out of this class goes through here, and that is the whole
+        reason it exists. The first version of this bounded the *unfinished*
+        buffer and left finished lines alone — so a line that did end, a
+        hundred megabytes and then a newline, walked straight past the limit it
+        was supposed to be under. Splitting on newlines hands you complete
+        lines of any length; a bound that is not applied to them is not a
+        bound.
+        """
+        while len(line) > MAX_LINE:
+            self.output.emit(line[:MAX_LINE])
+            line = line[MAX_LINE:]
+        self.output.emit(line)
 
     def _flush(self) -> None:
         if self._buffer:
-            self.output.emit(self._buffer.rsplit(_CARRIAGE_RETURN, 1)[-1])
+            self._emit(self._buffer.rsplit(_CARRIAGE_RETURN, 1)[-1])
             self._buffer = ""
 
     # -- stopping ----------------------------------------------------------
