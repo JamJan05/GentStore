@@ -11,6 +11,27 @@ tag was made.
 
 ### Security
 
+- **One line from an ebuild could stop the window answering.** Two regular expressions in
+  `core/emerge_parse.py` had adjacent quantifiers that overlap, so they backtracked: `_ROW`'s
+  `[a-z-]+` and `[^\]]*` can divide the letters of an unclosed bracket between them in as many
+  ways as there are letters, and `_SIZE`'s lazy run of digits overlapped the `\s*` beside it while
+  `search` restarted the pair at every position. Quadratic and cubic respectively. Every line of
+  `emerge` output goes through `parse_row`, and an ebuild's `pkg_pretend()` — which Portage runs
+  during `--pretend`, which is what the Analyse requirements button does — can print anything it
+  likes. 200,000 characters took **128 seconds**; there is no upper bound on what an ebuild echoes.
+
+  `_ROW` now uses a possessive quantifier, which is one character and no narrowing: greedy already
+  took the longest run, and anything the old pattern matched by backtracking `[^\]]*` matches
+  without. `_SIZE` stopped being a pattern — the unit is a suffix, so it is found with `endswith`,
+  and the number is the run in front of it, so it is found by walking back. One pass each, with
+  nothing to reconsider. A million characters now parse in single-digit milliseconds.
+
+  The two implementations were compared on 80,000 random strings and all nine parser fixtures
+  before the old one was removed: no answer changed.
+
+  The process is unprivileged, so this was a window that stopped answering rather than anything
+  reaching root.
+
 - **A whole-file write now has to be the file Gentstore writes, not just live where one would.**
   `write_file` proved its path and then wrote whatever it was handed. Portage reads *every* file
   in `repos.conf` and merges them, and a section repeated in a file read later replaces the
