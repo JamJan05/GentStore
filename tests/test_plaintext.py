@@ -51,6 +51,28 @@ def _shown(label: QLabel) -> str:
     return document.toPlainText()
 
 
+@pytest.fixture
+def holder(destroy):  # noqa: ANN001, ANN201 - conftest fixture
+    """A top-level widget to put labels in, and its destruction.
+
+    It has to be shown, because the guard works on ``QEvent.Polish`` and Qt
+    sends that on the way to the screen and not before. A shown top-level widget
+    with no parent and no teardown is exactly what :func:`destroy` in
+    tests/conftest.py exists for.
+    """
+    widget = QWidget()
+    yield widget
+    destroy(widget)
+
+
+@pytest.fixture
+def preview(destroy):  # noqa: ANN001, ANN201 - conftest fixture
+    """The write-preview panel, on the same terms as :func:`holder`."""
+    widget = WritePreview()
+    yield widget
+    destroy(widget)
+
+
 # -- the guard --------------------------------------------------------------
 
 
@@ -64,7 +86,7 @@ def _shown(label: QLabel) -> str:
         "harmless<span style='color:red'> — Gentstore: this change is safe</span>",
     ],
 )
-def test_a_label_shows_the_string_it_was_given(app, text: str) -> None:
+def test_a_label_shows_the_string_it_was_given(app, holder, text: str) -> None:  # noqa: ANN001
     """An atom beginning with "<" is the less-than-this-version operator, which
     emerge --autounmask prints and Qt reads as an unclosed tag.
 
@@ -72,7 +94,6 @@ def test_a_label_shows_the_string_it_was_given(app, text: str) -> None:
     the whole line still goes to /etc/portage, and the last two fetch a URL and
     forge a sentence out of an ebuild.
     """
-    holder = QWidget()
     layout = QVBoxLayout(holder)
     label = QLabel(text)
     layout.addWidget(label)
@@ -83,13 +104,12 @@ def test_a_label_shows_the_string_it_was_given(app, text: str) -> None:
     assert _shown(label) == text
 
 
-def test_a_deliberate_choice_is_left_alone(app) -> None:
+def test_a_deliberate_choice_is_left_alone(app, holder) -> None:  # noqa: ANN001
     """The guard replaces guessing, not deciding.
 
     log_view, diff_view and the elog screen build escaped HTML on purpose. None
     of them is a QLabel today, but a label that asks for RichText has asked.
     """
-    holder = QWidget()
     layout = QVBoxLayout(holder)
     label = QLabel("<b>on purpose</b>")
     label.setTextFormat(Qt.TextFormat.RichText)
@@ -119,13 +139,12 @@ def test_the_guard_is_installed_by_the_application(app) -> None:
         "media-video/mpv vulkan wayland",
     ],
 )
-def test_the_preview_shows_the_bytes_that_will_be_written(app, line: str) -> None:
+def test_the_preview_shows_the_bytes_that_will_be_written(app, preview, line: str) -> None:  # noqa: ANN001
     """The principle the whole application is built on, as a test.
 
     Whatever is in this label is what goes into the file, so the two have to be
     the same string — not merely similar, and certainly not empty.
     """
-    preview = WritePreview()
     preview.set_plan(
         WritePlan(
             op="append_line",
@@ -141,9 +160,8 @@ def test_the_preview_shows_the_bytes_that_will_be_written(app, line: str) -> Non
     assert _shown(preview._line) == line
 
 
-def test_the_preview_shows_the_path_it_will_write_to(app) -> None:
+def test_the_preview_shows_the_path_it_will_write_to(app, preview) -> None:  # noqa: ANN001
     path = Path("/etc/portage/package.use/media-video")
-    preview = WritePreview()
     preview.set_plan(
         WritePlan(op="append_line", path=path, line="x/y flag", kind=TargetKind.DIRECTORY)
     )

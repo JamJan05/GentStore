@@ -40,9 +40,18 @@ from gentstore.ui.theme.qss import build_qss  # noqa: E402
 
 
 @pytest.fixture
-def window(app: GentstoreApplication) -> MainWindow:
+def window(app: GentstoreApplication, destroy):  # noqa: ANN001, ANN201 - conftest fixture
+    """The main window, and then its destruction.
+
+    Five of these are built in a full run and none of them used to be destroyed;
+    see :func:`destroy` in tests/conftest.py for why that is not a leak but a
+    crash waiting for the right heap layout.
+    """
     app.apply_language("en")
-    return MainWindow(app.settings)
+    window = MainWindow(app.settings)
+    yield window
+    wait_for_tasks()
+    destroy(window)
 
 
 def test_the_application_introduces_itself_to_the_desktop(

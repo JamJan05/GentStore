@@ -77,13 +77,22 @@ def index() -> SearchIndex:
 
 
 @pytest.fixture
-def window(app, index: SearchIndex) -> MainWindow:  # noqa: ANN001 - conftest fixture
+def window(app, index: SearchIndex, destroy):  # noqa: ANN001, ANN201 - conftest fixtures
+    """The whole window, and then its destruction.
+
+    Handed over through ``yield`` so that the teardown runs. Thirty-five of
+    these are built in a full run, and without the last two lines every one of
+    them was still standing when the session ended; see :func:`destroy` in
+    tests/conftest.py for what that costs.
+    """
     app.apply_language("en")
     window = MainWindow(app.settings)
     window.context.set_official_only(False, "hide")
     window.set_page("search")
     window.context.install_index(index)
-    return window
+    yield window
+    wait_for_tasks()
+    destroy(window)
 
 
 @pytest.fixture
@@ -390,19 +399,37 @@ The following USE changes are necessary to proceed:
 """
 
 
-def make_panel(config_dir=None):  # noqa: ANN001, ANN201 - a widget
+@pytest.fixture
+def make_panel(destroy):  # noqa: ANN001, ANN201 - conftest fixture
     """The panel, pointed at a throwaway ``/etc/portage`` when one is given.
 
     Without it the batch is worked out against the machine running the tests,
     and "this line is already accepted here" turns a test about grouping into a
     test about somebody's configuration.
+
+    A fixture handing out a factory, rather than a plain function, so that the
+    panels have an owner: each is a top-level widget with no parent, and ten of
+    them were reaching the end of the session. They stay parentless on purpose —
+    ``isHidden()`` is what several of these tests assert on, and it does not
+    mean the same thing for the child of a hidden parent.
     """
     from gentstore.ui.widgets.required_changes import RequiredChanges
 
-    return RequiredChanges(config_dir=config_dir)
+    made: list[RequiredChanges] = []
+
+    def make(config_dir=None):  # noqa: ANN001, ANN202 - a widget
+        panel = RequiredChanges(config_dir=config_dir)
+        made.append(panel)
+        return panel
+
+    yield make
+
+    wait_for_tasks()
+    for panel in made:
+        destroy(panel)
 
 
-def test_a_refusal_about_a_dependency_becomes_a_line_to_save(app, tmp_path) -> None:  # noqa: ANN001
+def test_a_refusal_about_a_dependency_becomes_a_line_to_save(app, tmp_path, make_panel) -> None:  # noqa: ANN001
     """emerge stops, and the line it wants is offered rather than just printed.
 
     The package itself is fine here — nothing is masked — so the block notice
@@ -431,7 +458,7 @@ def test_a_refusal_about_a_dependency_becomes_a_line_to_save(app, tmp_path) -> N
     assert "package.use" in str(batch.appends[0].path)
 
 
-def test_output_with_nothing_to_change_leaves_the_frame_away(app) -> None:  # noqa: ANN001
+def test_output_with_nothing_to_change_leaves_the_frame_away(app, make_panel) -> None:  # noqa: ANN001
     """An ordinary run must not leave a demand on the screen."""
     from gentstore.core.install_plan import from_output
 
@@ -441,7 +468,7 @@ def test_output_with_nothing_to_change_leaves_the_frame_away(app) -> None:  # no
     assert frame.selected == ()
 
 
-def test_an_unticked_line_stays_out_of_the_batch(app, tmp_path) -> None:  # noqa: ANN001
+def test_an_unticked_line_stays_out_of_the_batch(app, tmp_path, make_panel) -> None:  # noqa: ANN001
     """The checkbox is the decision, and it is the only thing consulted."""
     from gentstore.core.install_plan import from_output
 
@@ -457,7 +484,7 @@ def test_an_unticked_line_stays_out_of_the_batch(app, tmp_path) -> None:  # noqa
     assert batch is not None and batch.is_empty
 
 
-def test_unticking_survives_a_second_analysis(app) -> None:  # noqa: ANN001
+def test_unticking_survives_a_second_analysis(app, make_panel) -> None:  # noqa: ANN001
     """Re-running the analysis must not undo an answer the user has given.
 
     The second run reports the same line, because nothing was written. Ticking
@@ -475,7 +502,7 @@ def test_unticking_survives_a_second_analysis(app) -> None:  # noqa: ANN001
     assert frame.selected == ()
 
 
-def test_a_line_goes_in_even_when_its_directory_does_not_exist(app, tmp_path) -> None:  # noqa: ANN001
+def test_a_line_goes_in_even_when_its_directory_does_not_exist(app, tmp_path, make_panel) -> None:  # noqa: ANN001
     """Gentoo recommends the directory form, and now something creates it.
 
     The preview has always said "neither package.use nor a directory of that
@@ -498,7 +525,7 @@ def test_a_line_goes_in_even_when_its_directory_does_not_exist(app, tmp_path) ->
     assert batch.needs_replacement == ()
 
 
-def test_a_conflict_is_shown_and_offers_no_button(app) -> None:  # noqa: ANN001
+def test_a_conflict_is_shown_and_offers_no_button(app, make_panel) -> None:  # noqa: ANN001
     """Portage could not resolve the graph, and no line in /etc/portage will.
 
     The rule the screen follows is "what the parser does not understand stays
@@ -517,7 +544,7 @@ def test_a_conflict_is_shown_and_offers_no_button(app) -> None:  # noqa: ANN001
     assert not frame._conflict.isHidden()
 
 
-def test_masks_start_unticked_and_keywords_do_not(app) -> None:  # noqa: ANN001
+def test_masks_start_unticked_and_keywords_do_not(app, make_panel) -> None:  # noqa: ANN001
     """A keyword is ordinary Gentoo; an unmask undoes somebody's decision."""
     from gentstore.core.install_plan import from_output
 
@@ -535,7 +562,7 @@ def test_masks_start_unticked_and_keywords_do_not(app) -> None:  # noqa: ANN001
     assert [entry.line for entry in frame.selected] == ["=cat/keyworded-1 ~amd64"]
 
 
-def test_a_starred_keyword_and_a_live_atom_start_unticked(app) -> None:  # noqa: ANN001
+def test_a_starred_keyword_and_a_live_atom_start_unticked(app, make_panel) -> None:  # noqa: ANN001
     """``**`` and ``9999`` are decisions of a different size from ``~amd64``."""
     from gentstore.core.install_plan import from_output
 
@@ -672,7 +699,7 @@ def test_the_analysis_carries_the_options_the_install_would(page: SearchPage) ->
         assert forbidden not in analysis
 
 
-def test_cancelling_the_preview_sends_nothing(app, tmp_path) -> None:  # noqa: ANN001
+def test_cancelling_the_preview_sends_nothing(app, tmp_path, make_panel) -> None:  # noqa: ANN001
     """The second confirmation is a real one: dismissing it writes nothing."""
     from gentstore.core.install_plan import from_output
 
@@ -691,7 +718,7 @@ def test_cancelling_the_preview_sends_nothing(app, tmp_path) -> None:  # noqa: A
     assert sent == [], "nothing may reach the helper before Save is pressed"
 
 
-def test_only_ticked_lines_reach_the_helper(app, tmp_path) -> None:  # noqa: ANN001
+def test_only_ticked_lines_reach_the_helper(app, tmp_path, make_panel) -> None:  # noqa: ANN001
     """What the request carries is exactly what the boxes say."""
     from gentstore.core.install_plan import from_output
 
