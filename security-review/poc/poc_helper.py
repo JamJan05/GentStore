@@ -84,7 +84,8 @@ print("=== GS-10 · \\r przechodzi, a _lines() traktuje go jak koniec linii ==="
 package_use = root / "package.use"
 package_use.write_text("media-video/mpv vulkan\n", encoding="utf-8")
 smuggled = "app-x/y flag\rsys-apps/portage -rsync-verify"
-print("  pierwsze append:", call("append_line", path=str(package_use), line=smuggled).get("code", "ok"))
+first = call("append_line", path=str(package_use), line=smuggled)
+print("  pierwsze append:", first.get("code", "ok"))
 print("  bajty w pliku  :", package_use.read_bytes())
 print("  helper._lines():", helper._lines(package_use.read_bytes().decode()))
 print(
