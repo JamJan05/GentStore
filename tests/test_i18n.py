@@ -27,12 +27,22 @@ what would have caught it.
 from __future__ import annotations
 
 import ast
+import importlib.util
+import re
+import shutil
+import subprocess
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import pytest
 
 from gentstore.ui.pages.registry import CONTEXT, PAGES
+
+#: ``tools/`` is not a package, so it is loaded by path rather than imported.
+_I18N_TOOL = Path(__file__).resolve().parent.parent / "tools" / "i18n.py"
+_spec = importlib.util.spec_from_file_location("gentstore_i18n_tool", _I18N_TOOL)
+i18n = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(i18n)
 
 SOURCE_DIR = Path(__file__).resolve().parent.parent / "gentstore"
 
@@ -241,3 +251,44 @@ def test_the_source_is_written_in_english() -> None:
     assert not offenders, (
         "Polish belongs in gentstore_pl.ts, not in the source:\n" + "\n".join(offenders)
     )
+
+
+def test_every_translatable_string_is_already_in_the_catalogues(tmp_path: Path) -> None:
+    """A `self.tr()` added without running `make translations` shows up here.
+
+    The catalogue checks above all read the ``.ts`` files, so they can only see
+    a string once the extractor has put it there — which means a change that
+    adds `self.tr("…")` and stops leaves every one of them passing. `make check`
+    does not run the extractor either, and neither does CI: `tests.yml` runs
+    `tools/i18n.py compile`, which is `lrelease` alone. `lrelease` is perfectly
+    happy with a catalogue that is missing messages; Qt falls back to the source
+    string, so the interface quietly speaks English to a Polish user.
+
+    That is exactly what happened when the security review added four strings to
+    the GLSA dialog and one to the configuration-files screen. This runs the
+    extractor into a copy and fails if it has anything to add.
+    """
+    extractor = shutil.which(i18n.EXTRACTOR)
+    if extractor is None:  # pragma: no cover - not installed
+        pytest.skip(f"{i18n.EXTRACTOR} is not installed; it comes with dev-python/pyqt6")
+
+    for language in i18n.LANGUAGES:
+        original = i18n.I18N_DIR / f"gentstore_{language}.ts"
+        copy = tmp_path / original.name
+        copy.write_text(original.read_text(encoding="utf-8"), encoding="utf-8")
+
+        result = subprocess.run(
+            [extractor, *i18n.sources(), "-ts", str(copy)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, result.stderr
+
+        added = re.search(r"(\d+) new messages? (?:was|were) added", result.stdout)
+        count = int(added.group(1)) if added else 0
+        assert count == 0, (
+            f"{original.name} is missing {count} message(s) the source now has. "
+            f"Run `make translations`, then write the translations in.\n"
+            f"{result.stdout}"
+        )
