@@ -139,6 +139,17 @@ _PACKAGE_SUFFIXES = (".ebuild", ".tbz2", ".xpak", ".gpkg", ".gpkg.tar")
 #: The same convention ``gentstore/core/overlays.py`` validates against.
 _REPOSITORY = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_+.-]*$")
 
+#: Names a new repository may not be given.
+#:
+#: ``eselect repository add`` writes into ``repos.conf``, and Portage reads
+#: every file in that directory and merges them — a section repeated in a file
+#: read later replaces the earlier definition. So adding one called ``gentoo``
+#: is not adding a repository, it is replacing the one every package on the
+#: system comes from, with a URL that arrived in argv. The helper refuses the
+#: same name for the same reason (``RESERVED_SECTIONS``); this is the other
+#: door into the same room.
+_RESERVED_REPOSITORIES = frozenset({"gentoo", "DEFAULT"})
+
 #: Sync backends ``eselect repository add`` understands.
 _SYNC_TYPES = frozenset({"git", "rsync", "svn", "mercurial", "cvs", "bzr", "darcs"})
 
@@ -148,13 +159,23 @@ _SYNC_TYPES = frozenset({"git", "rsync", "svn", "mercurial", "cvs", "bzr", "darc
 #: because git reads ``ext::sh -c '…'`` as "run this command" — and that string
 #: contains "://" quite happily if you put one at the end of it.
 #:
+#: ``file://`` is deliberately not here, and used to be.
+#:
+#: It names a directory on this machine, which in practice means a directory
+#: belonging to whoever is calling this program. Syncing from it copies their
+#: ebuilds into ``/var/db/repos`` and merging one runs their shell script as
+#: root — without a network, without a server, and behind a dialog that says
+#: "install, update or remove packages". The niche it served, a local overlay
+#: kept in a git repository, is served by ``eselect repository create`` or by a
+#: ``repos.conf`` entry with a ``location`` and no sync at all.
+#:
 #: The same list as ``_SCHEME`` in gentstore/core/overlays.py, and it has to
 #: stay that way: the "Add overlay" dialog validates against that one and this
 #: file decides whether the command it built may run. When ``svn`` was in the
 #: first list and not in this one, the dialog enabled its OK button for an
 #: svn:// overlay and the launcher then refused the command it had just
 #: promised — an error nobody could act on.
-_URI = re.compile(r"^(?:https?|git|ssh|rsync|svn|file)://[^\s]+$")
+_URI = re.compile(r"^(?:https?|git|ssh|rsync|svn)://[^\s]+$")
 _SCP_URI = re.compile(r"^[A-Za-z0-9._-]+@[A-Za-z0-9._-]+:[^\s:]+$")
 
 #: ``202501-15``, or the word ``affected``.
@@ -202,8 +223,36 @@ def _is_package_atom(token: str) -> bool:
     return bool(_ATOM.match(token))
 
 
+def _is_exact_atom(token: str) -> bool:
+    """One named package, with no wildcard anywhere in it.
+
+    ``_is_everything`` has refused ``*/*`` since it was found, and stopped
+    there. ``sys-libs/*`` is the same command with the same effect spelt
+    differently — it is glibc — and ``sys-apps/*`` is portage, coreutils and
+    baselayout. A dialog that says "install, update or remove packages" does
+    not say that, and nothing the interface builds needs it: every row that
+    removes something is handed one ``cat/pkg`` at a time.
+
+    A wildcard is still an ordinary atom for the rows that only *look*, which
+    is why this is a second predicate rather than a change to the first.
+    """
+    return _is_package_atom(token) and "*" not in token
+
+
 def _is_repository(token: str) -> bool:
     return bool(_REPOSITORY.match(token))
+
+
+def _is_new_repository(token: str) -> bool:
+    """A name a repository may be *given*, which is narrower than one it may have.
+
+    Only ``repository add`` uses this. The other rows name a repository that is
+    already there, and ``gentoo`` is a perfectly ordinary thing to sync, disable
+    or list — refusing it everywhere would have taken "synchronise the main
+    repository" away to close a hole that is only in the one place a name is
+    chosen.
+    """
+    return _is_repository(token) and token not in _RESERVED_REPOSITORIES
 
 
 def _is_sync_type(token: str) -> bool:
@@ -222,11 +271,18 @@ def _is_index(token: str) -> bool:
 #: command it stands for; angle brackets, so they cannot collide with a literal.
 REPOSITORY, SYNC_TYPE, URI, INDEX = "<repository>", "<sync-type>", "<uri>", "<index>"
 
+#: A repository being named for the first time — see :func:`_is_new_repository`.
+NEW_REPOSITORY = "<new-repository>"
+
 #: One or more package atoms, and only ever at the end of a row.
 ATOMS = "<atoms>"
 
+#: The same, with no wildcard in any of them — for the rows that remove.
+EXACT_ATOMS = "<exact-atoms>"
+
 _VALIDATORS = {
     REPOSITORY: _is_repository,
+    NEW_REPOSITORY: _is_new_repository,
     SYNC_TYPE: _is_sync_type,
     URI: _is_uri,
     INDEX: _is_index,
@@ -237,7 +293,7 @@ _VALIDATORS = {
 ESELECT_COMMANDS = (
     ("repository", "list"),
     ("repository", "enable", REPOSITORY),
-    ("repository", "add", REPOSITORY, SYNC_TYPE, URI),
+    ("repository", "add", NEW_REPOSITORY, SYNC_TYPE, URI),
     ("repository", "disable", REPOSITORY),
     ("repository", "disable", "-f", REPOSITORY),
     ("repository", "remove", REPOSITORY),
@@ -302,8 +358,10 @@ EMERGE_COMMANDS = (
     ),
     # unmerge_pretend()
     (*_EMERGE_BASE, "--pretend", "--verbose", "--unmerge", ATOMS),
-    # unmerge()
-    (*_EMERGE_BASE, "--unmerge", ATOMS),
+    # unmerge(): named packages only. The preview above may still take a
+    # wildcard — it shows a list and changes nothing — but this row is the one
+    # that removes, and "sys-libs/*" removes glibc.
+    (*_EMERGE_BASE, "--unmerge", EXACT_ATOMS),
     # deselect()
     (*_EMERGE_BASE, "--deselect", ATOMS),
     # select()
@@ -350,9 +408,10 @@ def _matches(template: tuple[str, ...], arguments: list[str]) -> bool:
     """
     position = 0
     for item in template:
-        if item == ATOMS:
+        if item in (ATOMS, EXACT_ATOMS):
             rest = arguments[position:]
-            return bool(rest) and all(_is_package_atom(token) for token in rest)
+            allowed = _is_exact_atom if item == EXACT_ATOMS else _is_package_atom
+            return bool(rest) and all(allowed(token) for token in rest)
 
         optional = item.endswith("?")
         expected = item[:-1] if optional else item

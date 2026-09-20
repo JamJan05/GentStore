@@ -77,6 +77,11 @@ overlay-remove:
 translations:
 	$(PYTHON) tools/i18n.py all
 
+# -rs so that a skip says why. Two tests need the compiled .qm catalogues,
+# which are build artifacts — CI and the ebuild both build them before running
+# the suite, and this target deliberately does not: `make translations` needs
+# lrelease from dev-qt/qttools[linguist], and a linter run should not depend on
+# a Qt tool being installed. So they skip, and the reason names the command.
 check:
-	$(PYTHON) -m pytest -q
+	$(PYTHON) -m pytest -q -rs
 	ruff check .

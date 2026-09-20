@@ -76,6 +76,7 @@ from ...models.packages import PackageListModel
 from ...runner import emerge, helper_client
 from ...runner.command import CommandSpec
 from ..context import AppContext
+from ..plaintext import plain_tooltip
 from ..tasks import run_async
 from ..theme import icons
 from ..theme import tokens as t
@@ -691,7 +692,7 @@ class SearchPage(SplitPage):
         ):
             # Docs/02-ui-design.md §8: a button that runs something says exactly
             # what, before it is pressed.
-            button.setToolTip(spec.display if spec is not None else "")
+            button.setToolTip(plain_tooltip(spec.display) if spec is not None else "")
         if not self._gate_is_open():
             self._btn_primary.setToolTip(self._gate_hint())
         self._command.setText(self._primary_spec(info).display)

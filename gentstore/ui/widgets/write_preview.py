@@ -71,12 +71,19 @@ class WritePreview(QFrame):
         layout.addLayout(header)
 
         self._path = QLabel()
+        # Explicit, although gentstore/ui/plaintext.py makes it the default for
+        # every label in the process. This widget is the one that says "this is
+        # what will be written", so the guarantee belongs where it is read: an
+        # atom beginning with "<" is an ordinary upper-bound atom and AutoText
+        # renders it as nothing at all.
+        self._path.setTextFormat(Qt.TextFormat.PlainText)
         self._path.setObjectName("writePath")
         self._path.setWordWrap(True)
         self._path.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         layout.addWidget(self._path)
 
         self._line = QLabel()
+        self._line.setTextFormat(Qt.TextFormat.PlainText)
         self._line.setObjectName("writeLine")
         self._line.setWordWrap(True)
         self._line.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
@@ -100,6 +107,7 @@ class WritePreview(QFrame):
         layout.addLayout(buttons)
 
         self._report = QLabel()
+        self._report.setTextFormat(Qt.TextFormat.PlainText)
         self._report.setObjectName("writeReport")
         self._report.setWordWrap(True)
         self._report.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)

@@ -997,3 +997,64 @@ def test_every_sync_type_the_dialog_offers_is_one_the_launcher_allows() -> None:
     from gentstore.ui.widgets.add_overlay_dialog import SYNC_TYPES
 
     assert set(SYNC_TYPES) <= launcher._SYNC_TYPES
+
+
+def test_the_launcher_refuses_to_unmerge_a_whole_category() -> None:
+    """``*/*`` has had a bar of its own since it was found; this is the same
+    command spelt differently.
+
+    ``sys-libs/*`` is glibc. ``sys-apps/*`` is portage, coreutils and
+    baselayout. The dialog in front of this program says "install, update or
+    remove packages", and removing a category is not what anybody reads that
+    as — nor is it anything the interface can produce: ``emerge.unmerge`` is
+    handed one ``cat/pkg`` at a time.
+    """
+    for atom in ("sys-apps/*", "sys-libs/*", "*/portage", "media-video/*"):
+        with pytest.raises(launcher.LauncherError):
+            launcher.check_arguments(
+                "emerge", [*launcher._EMERGE_BASE, "--unmerge", atom]
+            )
+
+    # A named package is still a named package.
+    launcher.check_arguments(
+        "emerge", [*launcher._EMERGE_BASE, "--unmerge", "media-video/mpv"]
+    )
+    # And a wildcard still reaches the rows that only look at things.
+    launcher.check_arguments(
+        "emerge",
+        [*launcher._EMERGE_BASE, "--pretend", "--verbose", "--unmerge", "media-video/*"],
+    )
+
+
+def test_the_launcher_refuses_a_repository_on_the_local_disk() -> None:
+    """``file://`` names a directory belonging to whoever called this program.
+
+    Syncing from it copies their ebuilds into /var/db/repos and merging one runs
+    their shell script as root — no network, no server, and a dialog that talks
+    about installing packages.
+    """
+    for uri in ("file:///home/someone/evil", "file:///var/db/repos/local"):
+        with pytest.raises(launcher.LauncherError):
+            launcher.check_arguments(
+                "eselect", ["repository", "add", "evil", "git", uri]
+            )
+
+
+def test_the_launcher_refuses_to_add_a_repository_called_gentoo() -> None:
+    """Portage merges every file in repos.conf; a section repeated in one read
+    later replaces the earlier definition."""
+    for name in ("gentoo", "DEFAULT"):
+        with pytest.raises(launcher.LauncherError):
+            launcher.check_arguments(
+                "eselect", ["repository", "add", name, "git", "https://example.org/x.git"]
+            )
+
+
+def test_an_existing_repository_called_gentoo_is_still_ordinary() -> None:
+    """The narrow question is the name a repository may be *given*. Syncing,
+    listing and disabling the main repository are not that question, and
+    refusing the name everywhere would have taken "synchronise gentoo" away to
+    close a hole that is only where a name is chosen."""
+    launcher.check_arguments("emaint", ["sync", "-r", "gentoo"])
+    launcher.check_arguments("eselect", ["repository", "enable", "gentoo"])
+    launcher.check_arguments("eselect", ["repository", "disable", "gentoo"])

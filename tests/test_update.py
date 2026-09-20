@@ -29,6 +29,7 @@ from datetime import date
 from pathlib import Path
 
 import pytest
+from PyQt6.QtWidgets import QWidget
 
 from gentstore.core import glsa, news
 from gentstore.core.emerge_parse import (
@@ -480,3 +481,95 @@ def test_the_machines_own_news_reads(tmp_path: Path, portage_env) -> None:
     assert all(item.repo in environment.repo_names for item in items)
     # Relevance filtering has to actually filter, or it is not doing anything.
     assert len(items) < len(news.load(environment, only_relevant=False))
+
+
+# -- the one privileged install that had no list in front of it -------------
+
+
+@pytest.fixture
+def update_page(app):
+    """The update screen, on its own rather than through the main window.
+
+    Given an owner and torn down explicitly. A page with no parent is destroyed
+    by Python's collector at whatever moment it chooses, and Qt is still holding
+    the C++ object — which is not an error it can report, it is a crash.
+    """
+    from gentstore.ui.context import AppContext  # noqa: PLC0415
+    from gentstore.ui.pages.registry import PAGES_BY_ID  # noqa: PLC0415
+    from gentstore.ui.pages.update import UpdatePage  # noqa: PLC0415
+    from gentstore.ui.tasks import wait_for_tasks  # noqa: PLC0415
+
+    holder = QWidget()
+    context = AppContext(app.settings, holder)
+    page = UpdatePage(PAGES_BY_ID["update"], context, holder)
+    yield page
+    wait_for_tasks()
+    holder.deleteLater()
+    app.processEvents()
+
+
+def _affected_report() -> glsa.Report:
+    return glsa.Report(
+        advisories=(
+            glsa.Advisory(
+                identifier="202501-15",
+                title="OpenSSL: Multiple vulnerabilities",
+                packages=("dev-libs/openssl",),
+                exposure=glsa.Exposure.AFFECTED,
+            ),
+        )
+    )
+
+
+def test_applying_security_fixes_asks_first(update_page, monkeypatch) -> None:
+    """glsa-check -f calls emerge for itself, so it is a privileged install —
+    and it was the only one with nothing shown before it.
+
+    Docs/04-privileges.md §6: depclean shows what it would remove, an uninstall
+    goes through `emerge -pv --unmerge`, an install has the analysis screen.
+    """
+    from PyQt6.QtWidgets import QMessageBox  # noqa: PLC0415
+
+    asked: list[str] = []
+    monkeypatch.setattr(
+        QMessageBox,
+        "question",
+        lambda *args, **kwargs: asked.append(args[2]) or QMessageBox.StandardButton.Cancel,
+    )
+    started: list[object] = []
+    monkeypatch.setattr(update_page, "_start", lambda *a, **k: started.append(a))
+
+    update_page._glsa = _affected_report()
+    update_page._security_fix.click()
+
+    assert asked, "the fix ran without asking"
+    assert "202501-15" in asked[0]
+    assert "dev-libs/openssl" in asked[0]
+    assert started == [], "cancelling still started the command"
+
+
+def test_saying_yes_runs_the_fix(update_page, monkeypatch) -> None:
+    from PyQt6.QtWidgets import QMessageBox  # noqa: PLC0415
+
+    monkeypatch.setattr(
+        QMessageBox, "question", lambda *a, **k: QMessageBox.StandardButton.Yes
+    )
+    started: list[tuple] = []
+    monkeypatch.setattr(update_page, "_start", lambda *a, **k: started.append(a))
+
+    update_page._glsa = _affected_report()
+    update_page._security_fix.click()
+
+    assert len(started) == 1
+    assert started[0][0] == "security"
+    assert started[0][1].argv[:2] == ("glsa-check", "-f")
+
+
+def test_nothing_is_offered_when_nothing_is_affected(update_page, monkeypatch) -> None:
+    from PyQt6.QtWidgets import QMessageBox  # noqa: PLC0415
+
+    asked: list[object] = []
+    monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: asked.append(a))
+    update_page._glsa = glsa.Report()
+    update_page._on_fix_security()
+    assert asked == []

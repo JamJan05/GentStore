@@ -49,6 +49,15 @@ ATOM="app-portage/gentstore"
 #: Where to fetch the ebuild from when there is no clone to read it out of.
 #: GENTSTORE_REF picks a branch or tag; the default is whatever main holds.
 GENTSTORE_REF="${GENTSTORE_REF:-main}"
+# It goes straight into a raw.githubusercontent.com URL below, and a path is
+# just as valid a branch name as a word: "main/../../someone-else/repo/main"
+# would fetch an ebuild from a repository nobody named. sudo clears the
+# environment, so this cannot arrive through `curl … | sudo bash` — but the
+# script is also run directly, and a check costs one line.
+if [[ ! ${GENTSTORE_REF} =~ ^[A-Za-z0-9._/-]+$ || ${GENTSTORE_REF} == *..* ]]; then
+	echo "GENTSTORE_REF is not a branch or tag name: ${GENTSTORE_REF}" >&2
+	exit 1
+fi
 GITHUB_REPO="https://github.com/JamJan05/GentStore.git"
 OVERLAY_BRANCH="overlay"
 #: The newest release ebuild in packaging/, or a sensible word when this

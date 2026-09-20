@@ -180,9 +180,32 @@ def _owners(element) -> tuple[str, ...]:  # noqa: ANN001
     return tuple(owners)
 
 
+#: A ``repositories.xml`` bigger than this is not one, so do not parse it.
+#:
+#: The same limit and the same reason as ``METADATA_MAX_BYTES`` in
+#: core/useflags.py, which this file had no equivalent of. ElementTree resolves
+#: no external entities, but it does expand the ones an internal subset defines,
+#: so a catalogue written to be a decompression bomb would be expanded here —
+#: and this file comes off the network, through ``eselect repository list``,
+#: into a directory the user can write to. A size limit bounds the cheap version
+#: of that; it is not a cure, and the cure is defusedxml, which this project does
+#: not have and would be a dependency to justify.
+#:
+#: Eight mebibytes rather than one: the real catalogue lists every overlay
+#: Gentoo knows about and is a few hundred kilobytes, where a metadata.xml
+#: describes one package.
+CATALOGUE_MAX_BYTES = 8 << 20
+
+
 def parse(path: Path) -> Catalogue:
     """Read one ``repositories.xml``. A broken file gives an empty catalogue."""
     try:
+        size = path.stat().st_size
+        if size > CATALOGUE_MAX_BYTES:
+            log.warning(
+                "Ignoring the repository catalogue %s: %d bytes is not one", path, size
+            )
+            return Catalogue()
         tree = ElementTree.parse(path)
     except (OSError, ElementTree.ParseError) as exc:
         log.warning("Could not read the repository catalogue %s: %s", path, exc)
@@ -244,14 +267,33 @@ _NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_+.-]*$")
 #: contains "://" perfectly happily if you put one at the end of it. The URL
 #: goes on to be synced as root's business, so a URL that is really a command is
 #: a way to run a command.
-_SCHEME = re.compile(r"^(?:https?|git|ssh|rsync|svn|file)://[^\s]+$")
+#:
+#: ``file://`` is deliberately absent, and used to be here. It names a directory
+#: on this machine — in practice one belonging to whoever is running Gentstore —
+#: and syncing from it copies their ebuilds into /var/db/repos, where merging one
+#: runs their shell script as root. ``gentstore-launcher`` refuses it for the
+#: same reason, and the two lists have to say the same thing (see
+#: test_the_overlay_dialog_and_the_launcher_agree_on_url_schemes).
+_SCHEME = re.compile(r"^(?:https?|git|ssh|rsync|svn)://[^\s]+$")
 
 #: ``git@github.com:user/repo.git`` — git's other spelling of ssh://.
 _SCP_LIKE = re.compile(r"^[A-Za-z0-9._-]+@[A-Za-z0-9._-]+:[^\s:]+$")
 
 
+#: Names a repository may not be *given*. See ``_RESERVED_REPOSITORIES`` in
+#: gentstore/helper/gentstore_launcher.py, which is the copy that decides:
+#: Portage merges every file in repos.conf, so a new entry called ``gentoo``
+#: replaces the repository the whole system comes from rather than adding one.
+RESERVED_NAMES = frozenset({"gentoo", "DEFAULT"})
+
+
 def is_valid_name(name: str) -> bool:
-    return bool(_NAME.match(name))
+    """Whether a repository may be *given* this name.
+
+    Not the same question as whether a repository may *have* it — ``gentoo`` is
+    an ordinary thing to sync or list, and only the Add dialog chooses a name.
+    """
+    return bool(_NAME.match(name)) and name not in RESERVED_NAMES
 
 
 def is_valid_uri(uri: str) -> bool:

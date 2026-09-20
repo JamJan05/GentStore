@@ -42,7 +42,7 @@ operations:
 |---|---|
 | `append_line` | append a line to one of the files listed in rule 1a (if an identical one is already there — do nothing and report it) |
 | `append_lines` | append several lines, to the four files in rule 1c, as one operation — all of them or none (see rule 1c) |
-| `replace_line` | replace **one** line matching a pattern (e.g. `USE=` in `make.conf`) |
+| `replace_line` | replace **one** line, found by a shape and a literal (e.g. the assignment to `USE` in `make.conf`) |
 | `remove_line` | remove a line matching verbatim |
 | `write_file` | write a whole file — only for files the application created itself (`repos.conf/<repo>`) |
 | `delete_file` | delete a file the application created |
@@ -59,7 +59,8 @@ Hard rules inside the helper, enforced regardless of what the GUI sent:
    `package.unmask`, `package.mask` and `make.conf`, and nothing else — one level deep for the
    `package.*` names, which may be a file or a directory of one file per package, and no deeper,
    because nothing here builds a deeper path. `write_file` and `delete_file` reach `repos.conf`
-   and `binrepos.conf`, which are the files the application creates whole.
+   and `binrepos.conf`, which are the files the application creates whole — one level deep there
+   too, for the same reason.
 
    A list of what Gentstore writes, not a list of what looks dangerous. `/etc/portage` is not a
    directory of inert settings: `bashrc` is sourced by every merge, `package.env` names files in
@@ -67,6 +68,19 @@ Hard rules inside the helper, enforced regardless of what the GUI sent:
    line appended to any of them is code running as root later on, and none of them is a file
    this application has ever needed to write. Naming what is allowed also covers the ones nobody
    has thought of, which a list of forbidden names cannot do.
+1a′. For `repos.conf` and `binrepos.conf`, **what the file says** matters as well — the same
+   shape of argument as rule 1b makes for `make.conf`, and for the same reason. Portage reads
+   *every* file in `repos.conf` and merges them, so a section repeated in a file read later
+   replaces the earlier definition: a file called `guru.conf` that defines `[gentoo]` does not add
+   a repository, it points every package on the system somewhere else, and ebuilds are shell
+   scripts this machine runs as root while merging. The path check cannot see that, because the
+   path is not where it is written.
+
+   So a whole-file write has to be the one section the application produces: exactly one section,
+   named after the file it is in, no `[DEFAULT]` (which would apply to sections in files this
+   program never wrote), keys drawn from a small list per subtree, and — because `location` names
+   the directory the ebuilds come from — a location only root can write to, asked the same way
+   rule 9 asks it. `gentoo` is refused outright as a section name.
 1b. For `make.conf`, **which line** matters as well, because it is the one name on that list
    whose contents decide what Portage *does* rather than which packages it installs.
    `PORTAGE_BASHRC` names a script sourced during every merge; `ROOT`, `PORTAGE_CONFIGROOT` and
@@ -80,10 +94,48 @@ Hard rules inside the helper, enforced regardless of what the GUI sent:
    line: a request could say “find the line matching `USE=`” quite honestly and hand over
    `ROOT="/somewhere"` to put in its place. Two claims, checked separately.
 
-   The variable names and the character set are a **copy** of `EDITABLE` in
-   `core/makeconf.py`, not an import: the helper imports nothing from the rest of Gentstore so
-   that reading it is reading one file. The test suite compares the two lists and runs what the
-   screen produces through the helper, which is where a copy is allowed to live.
+   **The half that finds the line is not a pattern any more.** `replace_line` used to compile a
+   regular expression out of the request. A regular expression is a program; `re` has no way to
+   give one a deadline; and this process is root — so `^(a+)+$`, seven characters, against a
+   sixty-character line was a root process pinned to a core until somebody killed it, and an
+   earlier `append_line` could put that line in the file. The length cap on the pattern said of
+   itself that it was “a bound, not a cure”, and it was not much of a bound.
+
+   Both callers had always built their pattern as a template around one escaped literal, so the
+   template moved into the helper (`MATCH_KINDS`) and only the literal now crosses the boundary:
+   `match_kind` is `"assignment"` (`NAME=` in `make.conf`) or `"entry"` (a `cat/pkg` at the start
+   of a line), and `match_literal` goes through `re.escape`. There is nothing left to craft.
+   Protocol version 3; a request carrying the old `match` field is refused with a message that
+   says which half is out of date.
+
+   **Two of the nine need their value looked at as well.** The list of nine was drawn up on the
+   grounds that they decide *which packages* get installed rather than *what Portage does*. Two
+   of them do not actually meet that test, and the character set cannot tell, because what makes
+   them dangerous is spelt in ordinary letters and a hyphen:
+
+   - `FEATURES="-sandbox -usersandbox -network-sandbox -userpriv"` takes the walls off every
+     build the machine does afterwards, and `-rsync-verify` stops the sync checking the signature
+     on the tree it just pulled. So a `FEATURES` token may be written *on* if it is one Portage
+     has, and written *off* only if it is a preference rather than a protection — `-ccache` yes,
+     `-sandbox` no. Switching a protection back on is always allowed, which is why the protective
+     names are on a list of their own rather than absent from every list.
+   - `MAKEOPTS` is a command line for `make`, which `emake` expands unquoted, so `-f` in it names
+     a makefile to use instead of the one the ebuild shipped. The settings screen offers this
+     field to say how many jobs to run, and that is what may be written: `-j4`, `-l4.5`,
+     `--jobs=4`, `--load-average=4.5`.
+
+   Both lists are the usual shape — what Gentstore writes, not what looks dangerous — for the
+   reason in rule 1a. Portage grows new protections (`network-sandbox`, `ipc-sandbox` and
+   `pid-sandbox` all arrived after the rest), and a list of forbidden names would not have
+   covered them on the day they appeared. Anything else stays editable by hand, which is already
+   what `core/makeconf.py` says about values its alphabet cannot hold.
+
+   The variable names, the character set and those two lists are a **copy** of `EDITABLE`,
+   `FEATURES_OPTIONAL` and `FEATURES_PROTECTIVE` in `core/makeconf.py`, not an import: the helper
+   imports nothing from the rest of Gentstore so that reading it is reading one file. The test
+   suite compares them and runs what the screen produces through the helper, which is where a
+   copy is allowed to live. The screen refuses the same two things first, so that the reason
+   arrives while the user is still looking at what they typed.
 1c. `append_lines` is narrower again: `package.accept_keywords`, `package.license`,
    `package.use` and `package.unmask`, and nothing else. Those four are what
    `emerge --autounmask` prints blocks of lines for, which is the only thing this operation
@@ -120,6 +172,24 @@ Hard rules inside the helper, enforced regardless of what the GUI sent:
    is what calls the path check. An empty `package.unmask` means exactly what no
    `package.unmask` means — nothing — so the guarantee that matters, that a refused batch writes
    no *line*, is untouched.
+1e. **One line means one line to whoever reads the file next.** The check was against `\n`,
+   and that is not what a line is to `portage.util.grablines`, which opens these files in
+   universal-newline mode: a `\r` in the middle of what this program called one line is a line
+   break to Portage. `append_line` with `"app-x/y flag\rsys-apps/portage -rsync-verify"` wrote
+   **two** configuration entries and the preview the user agreed to had shown one — the whole
+   principle of this application inverted, past the one check whose job was to stop it.
+
+   The test is now `splitlines()`, which breaks on everything universal newlines breaks on and
+   on `\v`, `\f`, `U+0085` and `U+2028` besides. Being stricter than Portage is the right
+   direction: a line Gentstore cannot describe in one piece is a line it has no business writing.
+   A null byte goes with it, for every file rather than only for `make.conf`, because "the file
+   already contains that line" is not a question anybody can answer about a file with a NUL in it.
+
+   The other half is counting the lines that are already there. That was `splitlines()` too,
+   which broke on those same four characters where Portage does not — so a file holding one of
+   them had more lines here than it had there, and "exactly one line matches" was a statement
+   about a different file. It splits on `\n` now, which after universal-newline reading is
+   exactly what Portage does.
 2. It refuses to follow symbolic links that lead outside the permitted area.
 3. Atomic writes: a temporary file in the same directory → `fsync` → `os.replace`. A file is
    never left damaged halfway through a write.
@@ -129,21 +199,38 @@ Hard rules inside the helper, enforced regardless of what the GUI sent:
    it displays what the helper really did.
 7. `write_file` and `delete_file` require an `expect` field — the exact current content of the
    file, or `null` (“this file should not exist yet”). If it does not match, the helper refuses:
-   somebody edited the file in the meantime and their version wins. `cfg_apply` honours the same
-   field when it is given one — it does not require it, because an older interface does not send
-   it, but a request that carries it gets a stronger guarantee.
+   somebody edited the file in the meantime and their version wins.
+
+   `cfg_apply` requires it too, but only for `merge`, and the asymmetry is the point rather than
+   an oversight. An `accept` writes the `._cfg` file that is sitting there — the content is on
+   disk, Portage put it there, and the helper reads it for itself. A `merge` writes text that
+   arrived **in the request**, and nothing else in that operation ties the text to anything the
+   user saw: not the name of the candidate, and not the dialog, which promised to apply the
+   configuration file an update left waiting and said nothing about content the caller invented.
+   Having looked at the target is the one claim a merge can be asked to make, so it is asked for
+   it. An interface too old to send it gets a refusal it can act on, rather than a write nobody
+   previewed.
 8. The permitted directory (`/etc/portage`) is a **constant in the code** — not an argument and
    not an environment variable. The caller composes argv, and with `sudo` partly the environment
    too; either would be a way to redirect a write elsewhere. Tests replace the constant after
    importing the module, which the installed program cannot do.
 9. **`cfg_apply` is the only operation that reaches outside `/etc/portage`** — because that is
-   where Portage leaves `._cfg` files. Its reach is bounded by three conditions at once: the
-   name has to match `._cfgNNNN_`, the file has to lie in a directory Portage protects, and the
-   destination file is derived from the name rather than from the request. The helper reads the
-   list of protected directories **by itself** from `make.globals`, `make.conf` and
-   `/etc/env.d/` — files that belong to root — and not from what arrived on stdin. The parser is
-   deliberately primitive: it recognises only `CONFIG_PROTECT=` as a standalone assignment,
-   because anything cleverer would be a way to widen the reach.
+   where Portage leaves `._cfg` files. Its reach is bounded by four conditions at once: the
+   name has to match `._cfgNNNN_`, the file has to lie in a directory Portage protects, that
+   directory has to be one only root can write to, and the destination file is derived from the
+   name rather than from the request. The helper reads the list of protected directories
+   **by itself** from `make.globals`, `make.conf` and `/etc/env.d/` — files that belong to root —
+   and not from what arrived on stdin. The parser is deliberately primitive: it recognises only
+   `CONFIG_PROTECT=` as a standalone assignment, because anything cleverer would be a way to
+   widen the reach.
+
+   The third condition is asked about the directory the file is **lying in**, and for a while it
+   was only asked about the `CONFIG_PROTECT` entry above it. Those are different questions with
+   different answers. Checking the entry is what stops a doctored `make.conf` from naming
+   somewhere new; it says nothing about `/etc/<somewhere loose>/._cfg0000_x`, because `/etc`
+   passes on every machine there has ever been. What this operation trusts is that Portage put
+   the `._cfg` file there, and the only thing standing behind that is who may write to the one
+   directory it is in.
 
 The helper imports neither PyQt nor anything from `gentstore.ui`. It is meant to be small,
 readable and reviewable end to end by a distrustful user — because that is exactly what Gentoo
@@ -181,6 +268,12 @@ users are.
      a set (`@world` for the update, `@preserved-rebuild` for the rebuild) name it literally,
      which is what keeps a set out of every other row.
 
+     A wildcard is the same argument one step down. `*/*` has been refused since it was found,
+     but `sys-libs/*` is glibc and `sys-apps/*` is portage, coreutils and baselayout — the same
+     command with the same effect, spelt differently. So the row that **removes** takes named
+     packages only, and the rows that merely look at things still take a wildcard: a preview
+     changes nothing, and `emerge.unmerge` is handed one `cat/pkg` at a time anyway.
+
      Every row also **requires** `--ignore-default-opts`, and so does every command
      `runner/emerge.py` builds. Without it the table describes a command that is only a prefix
      of the one that runs: `emerge` reads `EMERGE_DEFAULT_OPTS` out of `make.conf` and puts it
@@ -192,6 +285,17 @@ users are.
      `emerge` the user runs in a terminal, not the ones this window runs for them;
    - `emaint`, `eselect` — a table of complete command templates (`repository add <name> <type>
      <url>`, `profile set <number>` and so on), matched token by token.
+
+     Two things about `repository add` in particular, because it is the one row that chooses a
+     name and a source rather than naming ones that exist. `file://` is **not** an accepted
+     scheme: it points at a directory on this machine, in practice one belonging to whoever
+     called the program, and syncing from it copies their ebuilds into `/var/db/repos` where
+     merging one runs their shell script as root — no network and no server anywhere in the
+     story. And the name may not be `gentoo`: Portage reads every file in `repos.conf` and
+     merges them, so a section repeated in a file read later replaces the earlier definition,
+     and an entry called `gentoo` does not add a repository — it replaces the one the whole
+     system comes from. Both restrictions apply only where a name or a source is **chosen**;
+     `emaint sync -r gentoo` and `eselect repository disable gentoo` are ordinary and stay so.
 
      One thing `emaint` does that this cannot close: `emaint sync` parses `EMERGE_DEFAULT_OPTS`
      for itself (`portage/emaint/modules/sync/sync.py`) and has no equivalent of
@@ -249,6 +353,21 @@ own.
 
 The cost is a six-step update cycle asking six times. That is the honest description of what is
 happening, and being asked for something you did not start is the signal worth having.
+
+**All three `allow_*` axes are `auth_admin`, deliberately.** polkit asks the question three
+times: for the active local session, for an inactive one (a switched-away virtual terminal), and
+for anything else (`allow_any` — a remote session, most often SSH with a forwarded display). The
+tempting tightening is `no` for the last two, and it was considered and not made.
+
+What it would buy is small. `auth_admin` is not "this session is trusted"; it is "type an
+administrator's password, every time, and never remember the answer" (see above). A remote
+attacker who can already run programs as the user still has to produce that password, and one who
+has it does not need Gentstore. What it would cost is an administrator who manages a machine over
+SSH, which on Gentoo is not an edge case — and the failure would be a dialog that never appears,
+with nothing on screen to say why.
+
+The reason this is written down rather than simply left at the default: the default *is* what is
+wanted here, and a reader checking the policy should not have to wonder whether anybody looked.
 
 **A third action would be better still.** `eselect repository add` puts an arbitrary URL into
 `repos.conf` and is a larger thing to consent to than installing a package that is already in a

@@ -23,6 +23,7 @@ byte. Most of these tests are that promise, written down.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -122,9 +123,23 @@ def test_changing_a_value_replaces_exactly_one_line(conf) -> None:
 
 
 def test_the_pattern_is_anchored_so_a_comment_cannot_match(conf) -> None:
-    """"# was MAKEOPTS=…" in a comment must not be the line replaced."""
+    """"# was MAKEOPTS=…" in a comment must not be the line replaced.
+
+    The plan names the shape and the literal; the helper builds the expression
+    from them, because one built here would be a regular expression arriving on
+    the standard input of a root process that cannot time one out.
+    """
+    from gentstore.helper import gentstore_helper as helper  # noqa: PLC0415
+
     plan = makeconf.plan_set(conf, "MAKEOPTS", "-j1")
-    assert plan.match == r"^\s*MAKEOPTS="
+    assert plan.match_kind == "assignment"
+    assert plan.match_literal == "MAKEOPTS"
+
+    built = re.compile(
+        helper.MATCH_KINDS[plan.match_kind].format(literal=re.escape(plan.match_literal))
+    )
+    assert built.search('MAKEOPTS="-j4"')
+    assert not built.search("# was MAKEOPTS=-j8")
 
 
 def test_a_variable_the_file_lacks_is_appended(conf) -> None:
@@ -355,7 +370,7 @@ def test_a_value_that_would_stop_being_a_value_is_refused(value: str) -> None:
         ("ACCEPT_LICENSE", "-* @FREE @BINARY-REDISTRIBUTABLE"),
         ("VIDEO_CARDS", "amdgpu radeonsi"),
         ("CPU_FLAGS_X86", "aes avx avx2 sse4_2"),
-        ("FEATURES", "parallel-fetch -sandbox candy"),
+        ("FEATURES", "parallel-fetch ccache candy"),
         ("L10N", "pl en pt-BR"),
         ("USE", ""),
     ],
@@ -401,3 +416,53 @@ def test_an_unquoted_assignment_is_written_back_quoted(tmp_path: Path) -> None:
     assert makeconf.format_line("MAKEOPTS", "-j8", quote="") == "MAKEOPTS=-j8"
     assert makeconf.format_line("MAKEOPTS", "-j8 -l8", quote="") == 'MAKEOPTS="-j8 -l8"'
     assert makeconf.format_line("USE", "", quote="") == 'USE=""'
+
+
+# -- the two variables whose value is the question --------------------------
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("FEATURES", "-sandbox"),
+        ("FEATURES", "parallel-fetch -usersandbox"),
+        ("FEATURES", "-userpriv"),
+        ("FEATURES", "-rsync-verify"),
+        ("FEATURES", "not-a-real-feature"),
+        ("MAKEOPTS", "-j1 -f/home/someone/theirs.mk"),
+        ("MAKEOPTS", "--eval=x"),
+        ("MAKEOPTS", "-I/tmp"),
+    ],
+)
+def test_the_screen_refuses_a_value_that_changes_what_portage_does(
+    name: str, value: str
+) -> None:
+    """The alphabet cannot see the difference between ``ccache`` and
+    ``-sandbox``: both are ordinary letters and a hyphen.
+
+    FEATURES and MAKEOPTS are on EDITABLE because the nine were taken to decide
+    *which packages* get installed. These two decide what Portage *does* —
+    ``-sandbox`` takes the walls off every build afterwards, and MAKEOPTS is a
+    command line for make where ``-f`` names a makefile. Refused here so the
+    user reads why while they are still looking at what they typed, and refused
+    again in the helper because that is where the request actually arrives.
+    """
+    reason = makeconf.unsafe_value(name, value)
+    assert reason is not None
+    assert value.split()[-1] in reason or name in reason
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["ccache", "-candy", "parallel-fetch ccache buildpkg", "sandbox", "test", ""],
+)
+def test_switching_a_protection_back_on_is_always_allowed(value: str) -> None:
+    """Somebody who turned the sandbox off by hand must be able to turn it on
+    from here — which is why the protective names are on a list rather than
+    absent from every list."""
+    assert makeconf.unsafe_value("FEATURES", value) is None
+
+
+def test_the_suggestion_the_screen_makes_is_one_it_would_accept() -> None:
+    """suggest_makeopts is the one MAKEOPTS value Gentstore proposes by itself."""
+    assert makeconf.unsafe_value("MAKEOPTS", makeconf.suggest_makeopts().value) is None

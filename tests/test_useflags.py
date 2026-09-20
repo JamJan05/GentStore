@@ -280,7 +280,8 @@ def test_changing_an_existing_entry_replaces_exactly_that_line(tmp_path, state) 
     assert plan.op == "replace_line"
     assert plan.previous == "media-video/mpv vulkan"
     assert plan.line == "media-video/mpv jack"
-    assert plan.match is not None
+    assert plan.match_kind == "entry"
+    assert plan.match_literal == "media-video/mpv"
 
 
 def test_going_back_to_the_defaults_removes_the_line(tmp_path, state) -> None:

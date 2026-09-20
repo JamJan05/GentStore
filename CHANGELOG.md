@@ -9,6 +9,182 @@ tag was made.
 
 ## [Unreleased]
 
+### Security
+
+- **A whole-file write now has to be the file Gentstore writes, not just live where one would.**
+  `write_file` proved its path and then wrote whatever it was handed. Portage reads *every* file
+  in `repos.conf` and merges them, and a section repeated in a file read later replaces the
+  earlier definition — so a request naming `repos.conf/anything.conf` and carrying `[gentoo]`
+  did not add a repository, it pointed every package on the system at somewhere else, and
+  ebuilds are shell scripts this machine runs as root while merging. One authentication, behind
+  a dialog that said "change files in /etc/portage", bought the source of all the software on
+  the machine.
+
+  The content is now checked the way `make.conf` lines have been checked since 1b: exactly one
+  section, named after the file it is in, no `[DEFAULT]` (which would reach sections in files
+  this program never wrote), keys from a small list per subtree, `gentoo` refused outright as a
+  section name, and a `location` only root can write to — the same question `cfg_apply` asks
+  about the directory it writes into. Whole-file writes also stop at one level deep now, which
+  the line edits have always done and this operation never did.
+
+- **`cfg_apply` with `merge` now has to say what it expected to find.** `expect` was optional
+  for every decision, which was right for `accept` and wrong for `merge`: an accept writes the
+  `._cfg` file sitting on disk, which the helper can read for itself, but a merge writes text
+  that arrived in the request, and nothing tied that text to anything the user had seen. On a
+  machine with any pending configuration file — the ordinary state after an update, and the
+  whole reason the Configuration files screen exists — that was a way to write chosen content
+  into the file beside it as root. `/etc/sudoers` after a `sudo` update is the short version.
+
+  A merge now carries the target's content as the user was shown it, and is refused if the file
+  has moved on since. `accept` and `reject` are unchanged. Documented as rules 1a′ and 7 in
+  [Docs/04-privileges.md](Docs/04-privileges.md).
+
+- **`cfg_apply` now asks who may write to the directory the `._cfg` file is lying in.** It asked
+  that question about the `CONFIG_PROTECT` entry above it instead, and the two are not the same
+  question: `/etc` belongs to root on every machine there has ever been, so the check passed and
+  said nothing at all about `/etc/<somewhere loose>/._cfg0000_x`. What the operation trusts is
+  that Portage put the file there, and the only thing standing behind that is who could have put
+  it there instead. The comment in `_only_root_can_write` had described the check as if it were
+  being made where it was not.
+
+- **Removing a whole category is no longer something one authentication buys.** `*/*` has been
+  refused since it was found, and `sys-libs/*` walked straight past the same bar — it is glibc,
+  and `sys-apps/*` is portage, coreutils and baselayout. The row that removes now takes named
+  packages only. The rows that merely look at things still take a wildcard, because a preview
+  changes nothing and `emerge --pretend --unmerge 'media-video/*'` is a reasonable thing to
+  want to see.
+
+- **`eselect repository add` no longer accepts `file://`, or the name `gentoo`.** A `file://`
+  source is a directory on this machine — in practice one belonging to whoever called the
+  launcher — and syncing from it copies their ebuilds into `/var/db/repos`, where merging one
+  runs their shell script as root, with no network and no server anywhere in the story. A new
+  repository called `gentoo` is worse than it looks: Portage merges every file in `repos.conf`,
+  so it does not add a repository, it replaces the one every package on the system comes from.
+
+  Both apply only where a name or a source is *chosen*. `emaint sync -r gentoo` and
+  `eselect repository disable gentoo` name a repository that is already there and are as
+  ordinary as they ever were. The "Add repository by hand" dialog refuses the same two things,
+  so its OK button never promises a command the launcher would turn down.
+
+  The niche `file://` served — a local overlay kept in a git repository — is served by
+  `eselect repository create`, or by a `repos.conf` entry with a `location` and no sync at all.
+
+- **`FEATURES` can no longer be used to switch the sandbox off, and `MAKEOPTS` is only ever a
+  number of jobs.** Nine variables are editable on the grounds that they decide which packages
+  get installed rather than what Portage does. Two of them never met that test, and the allowed
+  character set could not tell, because what makes them dangerous is spelt in ordinary letters
+  and a hyphen: `FEATURES="-sandbox -usersandbox -network-sandbox -userpriv"` takes the walls off
+  every build the machine does afterwards, and `MAKEOPTS="-j1 -f/somewhere/theirs.mk"` replaces
+  the makefile the ebuild shipped, because `emake` expands that variable unquoted. Together they
+  are somebody else's code running as root the next time anything is built — behind a dialog that
+  offers to change files in `/etc/portage`.
+
+  A `FEATURES` token may now be switched *on* if Portage has it, and switched *off* only if it
+  is a preference rather than a protection: `-ccache` yes, `-sandbox` no. Turning a protection
+  back on is always allowed, so somebody who disabled the sandbox by hand can re-enable it from
+  the settings screen. `MAKEOPTS` takes `-j4`, `-l4.5`, `--jobs=4` and `--load-average=4.5`.
+  Both lists are the usual shape — what Gentstore writes, not what looks dangerous — because
+  Portage keeps growing new protections and a list of forbidden names would miss the next one.
+  Anything else is still editable by hand, which is what the file already said about values the
+  alphabet cannot hold.
+
+- **A label now shows the text it was given.** `QLabel` defaults to `Qt::AutoText`, which guesses
+  whether a string is HTML, and the guess was wrong in both directions for what this application
+  displays. `<sys-apps/foo-2 ~amd64` is an ordinary line for `emerge --autounmask` to ask for —
+  the `<` is the less-than-this-version operator — and Qt read it as an unclosed tag and rendered
+  **nothing at all**, while the whole line still went to `/etc/portage`. The preview is the write;
+  a preview that is empty while the write is not breaks the principle the application is built on,
+  and it took no attacker to do it.
+
+  The other direction is `DESCRIPTION` out of an ebuild, flag descriptions out of `metadata.xml`,
+  repository descriptions out of `repositories.xml` and news headlines out of a repository — all
+  written by whoever wrote the overlay the user added. `<img src="http://…">` in any of them was a
+  network request from a program whose documentation says it makes none, and `<span style=…>` was
+  a sentence on screen that looked like Gentstore had said it.
+
+  There are 181 `QLabel` calls in the package and none of them wanted HTML, so this is set once
+  for all of them, in `gentstore/ui/plaintext.py`, rather than at each site — a label added next
+  year is covered without anybody remembering. Only the guessing format is replaced; a label that
+  was explicitly given `RichText` keeps it. Tooltips are not labels and Qt guesses about those
+  separately, so the ones carrying a command line, an atom or a path go through `plain_tooltip`,
+  which escapes and wraps the way `log_view` already did.
+
+- **`replace_line` no longer compiles a regular expression out of the request.** A regular
+  expression is a program, `re` has no way to give one a deadline, and the helper is root:
+  `^(a+)+$` is seven characters and never finishes against a sixty-character line, which the
+  request before it could put in the file with an ordinary `append_line`. The interface then gave
+  up after its three-minute timeout and killed `pkexec`, while the helper — a grandchild running
+  as root — carried on burning a core, unkillable by the user who started it. The cap on pattern
+  length described itself as "a bound, not a cure", and seven characters is not much of a bound.
+
+  Both callers had always built their pattern the same way: a fixed template around one literal
+  put through `re.escape`. So the template moved into the helper and only the literal crosses the
+  boundary now — `match_kind` is `"assignment"` or `"entry"`, `match_literal` is a `NAME` or a
+  `cat/pkg`. Nothing arriving there is a program any more. **Protocol version 3**: reinstall the
+  privileged half with `sudo make install-system`, which the window already says when the two
+  halves disagree, and a helper of either age gives a refusal that names the problem instead of a
+  puzzle.
+
+- **"Exactly one line" now means one line to whoever reads the file next.** The check was
+  against `\n`. `portage.util.grablines` opens these files in universal-newline mode, so a `\r`
+  in the middle of what the helper called one line is a line break to Portage — and
+  `append_line` with `"app-x/y flag\rsys-apps/portage -rsync-verify"` wrote **two** configuration
+  entries where the preview had shown one. That is the principle the application is built on,
+  inverted, past the one check whose entire job was to stop it.
+
+  The test is `splitlines()` now, which covers everything universal newlines covers and `\v`,
+  `\f`, `U+0085` and `U+2028` as well; being stricter than Portage is the right direction, since
+  a line Gentstore cannot describe in one piece is one it has no business writing. A null byte is
+  refused with them, for every file rather than only for `make.conf`.
+
+  Counting the lines already in the file was the same mistake mirrored: `splitlines()` broke on
+  those four characters where Portage does not, so a file holding one of them had more lines in
+  the helper's view than in Portage's, and "exactly one line matches this" was a statement about
+  a different file. It splits on `\n` now, which after universal-newline reading is what Portage
+  does exactly.
+
+  All nine were found by a read-through of the two privileged programs; the report and the
+  scripts that reproduce them are in `security-review/`.
+
+### Changed
+
+- **`glsa-check -f` now shows what it will install before asking for a password.** It calls
+  `emerge` for itself, so it is a privileged install — and it was the only one in the application
+  with no list in front of it, where depclean shows what it would remove, an uninstall goes
+  through `emerge -pv --unmerge`, and an ordinary install has the whole analysis screen. The list
+  was already on hand: the button only appears once `glsa-check -l` has come back.
+
+- **The helper answers with JSON whatever arrives.** Deeply nested input made `json.loads` raise
+  `RecursionError`, which is a `RuntimeError` and so slipped past the clause meant to guarantee
+  exactly this — the caller then saw "no answer" with an empty message. Standard input is also
+  bounded now, at four megabytes: it is chosen by the caller, who is not obliged to be Gentstore
+  and is talking to a process running as root.
+
+- **`repositories.xml` is not parsed if it is implausibly large**, the same limit and the same
+  reasoning `core/useflags.py` has always applied to `metadata.xml`. ElementTree expands the
+  entities an internal subset defines, and this file arrives off the network into a directory the
+  user can write to.
+
+- **Two tests that need the compiled translation catalogues now skip, loudly, instead of
+  failing.** `.qm` files are build artifacts; CI and the ebuild both build them before running the
+  suite and `make check` did not, so running the tests locally produced two assertion failures
+  about menu titles and no hint that a build step was missing. They skip with the command to run,
+  and `make check` passes `-rs` so the reason is always printed. A skip is not a pass: on every
+  machine that builds the catalogues, which is every machine CI runs on, they run as before.
+
+- **The release workflow passes its last `${{ }}` through the environment**, the way
+  `website-version.yml` already explained; the actions are pinned to commits rather than to
+  tags, since they run in this repository's context; and the CI test dependencies have versions.
+  The Gentoo container images keep `:latest` deliberately — that nightly job exists to find out
+  whether Gentstore still works against Gentoo as it is today, and a pinned digest would freeze
+  the one thing it is watching.
+
+- **Three comments that promised more than their code delivered** now say what they do not do:
+  `_tampering_risk` does not check the owner and is not meant to, the index cache's fingerprint
+  makes a *stale* cache harmless and not a doctored one, and the polkit policy's three `allow_*`
+  axes are all `auth_admin` on purpose — `allow_any: no` would lock out an administrator working
+  over SSH to buy very little, since `auth_admin` already means a password every time.
+
 ## [1.3.6] — 2026-09-20
 
 ### Added

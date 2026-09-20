@@ -78,8 +78,14 @@ class WritePlan:
     kind: TargetKind
     #: The line being replaced or removed, when there is one.
     previous: str | None = None
-    #: Pattern the helper uses to find that line. Only for ``replace_line``.
-    match: str | None = None
+    #: How the helper is to find the line being replaced. Only for
+    #: ``replace_line``, and a pair rather than a pattern: the helper builds the
+    #: regular expression out of ``MATCH_KINDS`` and ``re.escape``, because one
+    #: supplied by this side would be a program running in a root process that
+    #: cannot be given a deadline. ``"assignment"`` for ``NAME=`` in
+    #: ``make.conf``, ``"entry"`` for a ``cat/pkg`` at the start of a line.
+    match_kind: str | None = None
+    match_literal: str | None = None
 
     @property
     def is_noop(self) -> bool:
@@ -92,8 +98,9 @@ class WritePlan:
     def as_request(self) -> dict[str, object]:
         """The helper request this plan corresponds to."""
         request: dict[str, object] = {"path": str(self.path), "line": self.line}
-        if self.match is not None:
-            request["match"] = self.match
+        if self.match_kind is not None:
+            request["match_kind"] = self.match_kind
+            request["match_literal"] = self.match_literal
         return request
 
 
@@ -246,7 +253,8 @@ def plan_package_use(
         line,
         TargetKind.EXISTING,
         previous=existing,
-        match=_entry_pattern(state.cp).pattern,
+        match_kind="entry",
+        match_literal=state.cp,
     )
 
 
@@ -286,7 +294,8 @@ def plan_entry(
         line,
         TargetKind.EXISTING,
         previous=existing,
-        match=_entry_pattern(atom).pattern,
+        match_kind="entry",
+        match_literal=atom,
     )
 
 

@@ -87,6 +87,50 @@ _SAFE_VALUE = re.compile(f"^[{_SAFE_CHARACTERS}]*$")
 _UNSAFE_CHARACTER = re.compile(f"[^{_SAFE_CHARACTERS}]")
 
 
+#: ``FEATURES`` tokens whose presence or absence is a preference, and those
+#: that protect something and may therefore only be written *on*.
+#:
+#: A copy of ``FEATURES_OPTIONAL`` and ``FEATURES_PROTECTIVE`` in
+#: gentstore/helper/gentstore_helper.py, which is the copy that decides — the
+#: helper imports nothing from here, so that reading it is reading one file.
+#: The test suite compares the two, which is where a copy is allowed to live.
+#:
+#: The alphabet above cannot see the difference between ``ccache`` and
+#: ``-sandbox``: both are ordinary letters and a hyphen. But the first says how
+#: a build runs and the second says whether it is allowed out of its sandbox,
+#: and ``FEATURES`` is on the editable list because it was taken to be the
+#: first kind all the way through.
+FEATURES_OPTIONAL = frozenset(
+    {
+        "binpkg-docompress", "binpkg-dostrip", "binpkg-logs",
+        "binpkg-multi-instance", "buildpkg", "buildsyspkg", "candy", "ccache",
+        "cgroup", "clean-logs", "compress-build-logs", "compressdebug",
+        "distcc", "distcc-pump", "fail-clean", "getbinpkg", "installsources",
+        "keeptemp", "keepwork", "metadata-transfer", "news", "noclean",
+        "nodoc", "noinfo", "noman", "nostrip", "notitles", "parallel-fetch",
+        "parallel-install", "sign", "splitdebug", "test", "xattr",
+    }
+)
+
+FEATURES_PROTECTIVE = frozenset(
+    {
+        "collision-protect", "config-protect-if-modified", "ebuild-locks",
+        "ipc-sandbox", "merge-sync", "mount-sandbox", "multilib-strict",
+        "network-sandbox", "pid-sandbox", "preserve-libs", "protect-owned",
+        "rsync-verify", "sandbox", "sfperms", "strict", "strict-keepdir",
+        "suidctl", "unmerge-orphans", "userfetch", "userpriv", "usersandbox",
+        "usersync", "webrsync-gpg",
+    }
+)
+
+#: What one token of ``MAKEOPTS`` may be — see the note in the helper. It is a
+#: command line for ``make``, and ``-f`` in it names a makefile.
+_MAKEOPTS_TOKEN = re.compile(
+    r"^(?:-j\d{1,4}|-l\d{1,4}(?:\.\d{1,3})?"
+    r"|--jobs=\d{1,4}|--load-average=\d{1,4}(?:\.\d{1,3})?)$"
+)
+
+
 class UnsafeValue(ValueError):
     """A value that cannot be written to ``make.conf`` without changing its syntax."""
 
@@ -114,6 +158,48 @@ def unsafe_value(name: str, value: str) -> str | None:
             f"_ + = @ , . / : ~ * - and spaces. Edit the file by hand for "
             f"anything else."
         )
+    return _unsafe_token(name, value)
+
+
+def _unsafe_token(name: str, value: str) -> str | None:
+    """Why one of the tokens in *value* cannot be written, for the two
+    variables where the alphabet is not the whole question.
+
+    ``FEATURES`` and ``MAKEOPTS`` are on :data:`EDITABLE` because the nine were
+    taken to decide which packages get installed. These two decide what Portage
+    *does*: ``-sandbox`` takes the walls off every build afterwards, and
+    ``MAKEOPTS`` is a command line for ``make`` where ``-f`` names a makefile.
+    Both are spelt in the allowed alphabet, so the check has to be about the
+    tokens rather than the characters. The helper refuses the same two things —
+    it has to, since the request arrives on its standard input — and this copy
+    is what stops the screen offering a line that would then be refused.
+    """
+    if name == "FEATURES":
+        for token in value.split():
+            bare = token[1:] if token.startswith("-") else token
+            if token.startswith("-") and bare not in FEATURES_OPTIONAL:
+                return (
+                    f"{token} switches off {bare}, which protects the build "
+                    f"rather than shaping it. Gentstore does not write that: a "
+                    f"sandbox that is off stays off for everything you install "
+                    f"afterwards. Edit make.conf by hand if you mean it."
+                )
+            if not token.startswith("-") and bare not in (
+                FEATURES_OPTIONAL | FEATURES_PROTECTIVE
+            ):
+                return (
+                    f"{token} is not one of the FEATURES Gentstore knows how to "
+                    f"write. Edit make.conf by hand for anything else."
+                )
+    elif name == "MAKEOPTS":
+        for token in value.split():
+            if not _MAKEOPTS_TOKEN.match(token):
+                return (
+                    f"{token} is not a parallelism option. MAKEOPTS is a command "
+                    f"line for make — -f in it names a makefile to use instead "
+                    f"of the one the ebuild shipped — so Gentstore writes only "
+                    f"how many jobs to run: -j4, -l4, --jobs=4, --load-average=4."
+                )
     return None
 
 
@@ -293,9 +379,13 @@ def plan_set(conf: MakeConf, name: str, value: str) -> WritePlan:
         line,
         _kind(conf),
         previous=existing.raw,
-        # Anchored to the start of the line so a mention of MAKEOPTS inside a
-        # comment or another variable's value cannot be the one replaced.
-        match=rf"^\s*{re.escape(name)}=",
+        # The helper anchors it to the start of the line, so a mention of
+        # MAKEOPTS inside a comment or another variable's value cannot be the
+        # one replaced. The pattern is built there rather than here: a regular
+        # expression arriving on that program's standard input is a program,
+        # and re has no way to stop one that will not finish.
+        match_kind="assignment",
+        match_literal=name,
     )
 
 
