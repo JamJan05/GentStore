@@ -42,7 +42,7 @@ operations:
 |---|---|
 | `append_line` | append a line to one of the files listed in rule 1a (if an identical one is already there — do nothing and report it) |
 | `append_lines` | append several lines, to the four files in rule 1c, as one operation — all of them or none (see rule 1c) |
-| `replace_line` | replace **one** line matching a pattern (e.g. `USE=` in `make.conf`) |
+| `replace_line` | replace **one** line, found by a shape and a literal (e.g. the assignment to `USE` in `make.conf`) |
 | `remove_line` | remove a line matching verbatim |
 | `write_file` | write a whole file — only for files the application created itself (`repos.conf/<repo>`) |
 | `delete_file` | delete a file the application created |
@@ -93,6 +93,20 @@ Hard rules inside the helper, enforced regardless of what the GUI sent:
    matters most for `replace_line`, which used to check only that its pattern found exactly one
    line: a request could say “find the line matching `USE=`” quite honestly and hand over
    `ROOT="/somewhere"` to put in its place. Two claims, checked separately.
+
+   **The half that finds the line is not a pattern any more.** `replace_line` used to compile a
+   regular expression out of the request. A regular expression is a program; `re` has no way to
+   give one a deadline; and this process is root — so `^(a+)+$`, seven characters, against a
+   sixty-character line was a root process pinned to a core until somebody killed it, and an
+   earlier `append_line` could put that line in the file. The length cap on the pattern said of
+   itself that it was “a bound, not a cure”, and it was not much of a bound.
+
+   Both callers had always built their pattern as a template around one escaped literal, so the
+   template moved into the helper (`MATCH_KINDS`) and only the literal now crosses the boundary:
+   `match_kind` is `"assignment"` (`NAME=` in `make.conf`) or `"entry"` (a `cat/pkg` at the start
+   of a line), and `match_literal` goes through `re.escape`. There is nothing left to craft.
+   Protocol version 3; a request carrying the old `match` field is refused with a message that
+   says which half is out of date.
 
    **Two of the nine need their value looked at as well.** The list of nine was drawn up on the
    grounds that they decide *which packages* get installed rather than *what Portage does*. Two

@@ -275,7 +275,8 @@ BACKUP_KEEP_MAX = 100
 #: does it, instead of being deleted.
 CONFIG_ARCHIVE = Path("/etc/config-archive")
 
-#: Bumped to 2 when ``append_lines`` arrived.
+#: Bumped to 2 when ``append_lines`` arrived, and to 3 when ``replace_line``
+#: stopped taking a regular expression.
 #:
 #: The helper is installed separately from the interface — ``make
 #: install-system`` — so the two can be different ages on one machine, and the
@@ -283,21 +284,42 @@ CONFIG_ARCHIVE = Path("/etc/config-archive")
 #: an interface asking an old helper for a grouped write gets ``unknown_op``,
 #: which is indistinguishable from a malformed request; with one, it can say
 #: "the installed helper is older than this window" and mean it.
-PROTOCOL_VERSION = 2
+PROTOCOL_VERSION = 3
 
 _BACKUP_NAME = re.compile(r"^portage\.bak-\d{4}-\d{2}-\d{2}T\d{4}(-\d+)?$")
 _ARCHIVE_NAME = re.compile(r"^portage\.bak-\d{4}-\d{2}-\d{2}T\d{4}(-\d+)?\.tar\.gz$")
 _CFG_PREFIX = re.compile(r"^\._cfg\d{4}_")
 
-#: Longest ``match`` pattern ``replace_line`` will compile.
+#: Longest literal ``replace_line`` will look for.
 #:
-#: A bound, not a cure: nothing in the standard library can time a regular
-#: expression out, so a pattern crafted to backtrack for ever would hang this
-#: process — as root — until somebody killed it. Every pattern Gentstore itself
-#: sends is built with ``re.escape`` around one ``cat/pkg`` (see
-#: gentstore/core/confedit.py), so the length limit costs nothing real and
-#: takes the easiest version of that away.
+#: This used to bound the length of a *regular expression* the request supplied,
+#: and was described here as "a bound, not a cure" — correctly, because nothing
+#: in the standard library can time a regular expression out, so a pattern
+#: crafted to backtrack for ever would hang this process, as root, until
+#: somebody killed it. It turned out not to be much of a bound either: seven
+#: characters, ``^(a+)+$``, against a sixty-character line is already for ever,
+#: and the line can be put in the file by the request before it.
+#:
+#: The cure was available and cheap. Both callers built their pattern as a
+#: template around one escaped literal — ``^\s*NAME=`` in
+#: gentstore/core/makeconf.py and ``^\s*cat/pkg(\s|$)`` in
+#: gentstore/core/confedit.py — so the template moved here and only the literal
+#: arrives on stdin. There is nothing left to craft: :func:`re.escape` makes
+#: every character of it ordinary, and an ordinary pattern of bounded length
+#: cannot backtrack.
 PATTERN_MAX = 256
+
+#: How ``replace_line`` is told which line to look for.
+#:
+#: Two shapes, because the interface has exactly two — a ``make.conf``
+#: assignment and a ``package.*`` entry. Anchored to the start of the line in
+#: both cases, so that a mention of ``MAKEOPTS`` inside a comment, or of
+#: ``media-video/mpv`` inside another entry's value, cannot be the line that
+#: gets replaced.
+MATCH_KINDS = {
+    "assignment": r"^\s*{literal}=",
+    "entry": r"^\s*{literal}(\s|$)",
+}
 
 
 class HelperError(Exception):
@@ -1139,15 +1161,8 @@ def op_replace_line(request: dict[str, Any]) -> dict[str, Any]:
         # its own, and "the line I am replacing looked reasonable" says nothing
         # about the line replacing it.
         _check_make_conf_line(line)
-    pattern = _string(request, "match")
-    if len(pattern) > PATTERN_MAX:
-        raise HelperError(
-            "bad_pattern", f"the match pattern is longer than {PATTERN_MAX} characters"
-        )
-    try:
-        matcher = re.compile(pattern)
-    except re.error as exc:
-        raise HelperError("bad_pattern", f"{pattern!r} is not a valid pattern: {exc}") from exc
+    matcher = _matcher(request)
+    pattern = matcher.pattern
 
     lines = _lines(_read(path))
     hits = [index for index, existing in enumerate(lines) if matcher.search(existing)]
@@ -1167,6 +1182,39 @@ def op_replace_line(request: dict[str, Any]) -> dict[str, Any]:
     lines[index] = line
     atomic_write(path, _joined(lines))
     return {"changed": True, "line": line, "previous": previous, "line_number": index + 1}
+
+
+def _matcher(request: dict[str, Any]) -> re.Pattern[str]:
+    """Build the pattern that finds the line to replace.
+
+    Built here, out of a template named by the request and one literal escaped
+    by this program — rather than compiled from a pattern the request supplies.
+    The difference is the whole of :data:`PATTERN_MAX`'s old problem: a regular
+    expression is a program, ``re`` cannot be given a deadline, and this process
+    is root. Nothing arriving here is a program any more.
+    """
+    if "match" in request:
+        # Said plainly rather than as "'match_kind' must be a string", because
+        # an interface from before version 3 sends this and the person reading
+        # the message needs to know which half is out of date.
+        raise HelperError(
+            "bad_pattern",
+            "'match' is no longer accepted: a regular expression from the "
+            "request is a program this process cannot time out. Send "
+            "'match_kind' and 'match_literal' instead (protocol version 3).",
+        )
+    kind = _string(request, "match_kind")
+    if kind not in MATCH_KINDS:
+        allowed = ", ".join(sorted(MATCH_KINDS))
+        raise HelperError("bad_pattern", f"match_kind must be one of {allowed}")
+    literal = _string(request, "match_literal")
+    if not literal:
+        raise HelperError("bad_pattern", "match_literal is empty")
+    if len(literal) > PATTERN_MAX:
+        raise HelperError(
+            "bad_pattern", f"the literal is longer than {PATTERN_MAX} characters"
+        )
+    return re.compile(MATCH_KINDS[kind].format(literal=re.escape(literal)))
 
 
 def op_remove_line(request: dict[str, Any]) -> dict[str, Any]:

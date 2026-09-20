@@ -379,9 +379,13 @@ def plan_set(conf: MakeConf, name: str, value: str) -> WritePlan:
         line,
         _kind(conf),
         previous=existing.raw,
-        # Anchored to the start of the line so a mention of MAKEOPTS inside a
-        # comment or another variable's value cannot be the one replaced.
-        match=rf"^\s*{re.escape(name)}=",
+        # The helper anchors it to the start of the line, so a mention of
+        # MAKEOPTS inside a comment or another variable's value cannot be the
+        # one replaced. The pattern is built there rather than here: a regular
+        # expression arriving on that program's standard input is a program,
+        # and re has no way to stop one that will not finish.
+        match_kind="assignment",
+        match_literal=name,
     )
 
 

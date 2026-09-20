@@ -3,7 +3,7 @@
 Ta sama treść co w [RAPORT.md](RAPORT.md), ale ułożona według plików, żeby dało się po niej
 pracować. Uzasadnienia, scenariusze ataku i dowody są w raporcie — tutaj jest tylko „gdzie" i „co".
 
-**Stan: GS-01, GS-02, GS-03, GS-04, GS-06, GS-07, GS-08 i GS-09 są naprawione** — wszystkie o wadze Wysokiej oraz integralność podglądu na gałęzi `fix/helper-content-validation`. Zmienione
+**Stan: GS-01, GS-02, GS-03, GS-04, GS-05, GS-06, GS-07, GS-08 i GS-09 są naprawione** — wszystkie o wadze Wysokiej i wszystkie o wadze Średniej poza GS-10 na gałęzi `fix/helper-content-validation`. Zmienione
 pliki: `gentstore/helper/gentstore_helper.py`, `gentstore/ui/pages/cfgfiles.py` (musi teraz
 wysyłać `expect` przy scalaniu), `tests/test_helper.py` (+18 testów),
 `tests/test_cfgfiles.py`, `Docs/04-privileges.md` (reguły 1a, 1a′, 7, 9), `CHANGELOG.md`.
@@ -21,7 +21,7 @@ Reszta listy czeka — nic z niej nie zostało zastosowane.
 | ✅ | [GS-06](RAPORT.md#gs-06--features-i-makeopts-mieszczą-w-dozwolonym-zestawie-znaków-wyłączenie-sandboksa) — `FEATURES="-sandbox"` przechodzi | Wysoka | `gentstore_helper.py` + `core/makeconf.py` | ~35 linii + 2 testy |
 | ✅ | [GS-09](RAPORT.md#gs-09--eselect-repository-add-przyjmuje-file-i-nazwę-kolidującą-z-gentoo) — `file://` i nazwa `gentoo` | Wysoka | `gentstore_launcher.py` + `core/overlays.py` | 6 linii + 2 testy |
 | ✅ | [GS-04](RAPORT.md#gs-04--emerge---unmerge-kategoria-przechodzi-przez-tabelę) — `--unmerge sys-apps/*` | Wysoka | `gentstore/helper/gentstore_launcher.py` | ~12 linii + 1 test |
-| 7 | [GS-05](RAPORT.md#gs-05--wzorzec-match-w-replace_line-to-regex-z-żądania-uruchamiany-w-procesie-roota) — regex z żądania | Średnia | `gentstore_helper.py` + `core/makeconf.py` + `core/confedit.py` | ~25 linii, zmiana protokołu |
+| ✅ | [GS-05](RAPORT.md#gs-05--wzorzec-match-w-replace_line-to-regex-z-żądania-uruchamiany-w-procesie-roota) — regex z żądania | Średnia | `gentstore_helper.py` + `core/makeconf.py` + `core/confedit.py` | ~25 linii, zmiana protokołu |
 | ✅ | [GS-07](RAPORT.md#gs-07--podgląd--zapis-qlabel-w-trybie-autotext-zjada-linię-zaczynającą-się-od-) + [GS-08](RAPORT.md#gs-08--tekst-z-ebuilda-metadataxml-i-katalogu-overlayów-jest-renderowany-jako-html) — `setTextFormat` | Średnia | `gentstore/ui/**` | ~20 jednoliniowych zmian |
 | 9 | [GS-10](RAPORT.md#gs-10--treść-linii-w-package-nie-jest-sprawdzana-wcale-r-przechodzi-tam-gdzie-n-nie) — `\r` i NUL w linii | Średnia | `gentstore/helper/gentstore_helper.py` | ~15 linii + 2 testy |
 | 10 | [GS-12](RAPORT.md#gs-12--helper-nie-odpowiada-json-em-na-zagnieżdżony-json-i-czyta-stdin-bez-ograniczenia) — `RecursionError`, brak limitu stdin | Niska | `gentstore/helper/gentstore_helper.py` | ~10 linii + 2 testy |
@@ -49,7 +49,7 @@ Reszta listy czeka — nic z niej nie zostało zastosowane.
 - [x] **GS-06** — nowa `_check_make_conf_value(name, value)` wołana na końcu
       `_check_make_conf_line` (`:540`): dla `FEATURES` lista dozwolonych tokenów, dla `MAKEOPTS`
       wyłącznie opcje zrównoleglenia. Kopia listy w `core/makeconf.py` + test porównujący.
-- [ ] **GS-05** — `op_replace_line` (`:896`): zamienić pole `match` (regex) na parę
+- [x] **GS-05** — `op_replace_line` (`:896`): zamienić pole `match` (regex) na parę
       `match_kind` + `match_literal`; wzorzec buduje helper przez `re.escape`. Zaktualizować
       `core/makeconf.py:298` i `core/confedit.py:249,289`. `match` zostawić na jedno wydanie jako
       odrzucane z `bad_pattern`, żeby starszy interfejs dostał zrozumiałą odmowę.
@@ -82,7 +82,7 @@ Reszta listy czeka — nic z niej nie zostało zastosowane.
 - [x] **GS-09** — `overlays.py` (`is_valid_name`): odrzucać `gentoo`.
 - [ ] **GS-13** — `overlays.py:183` (`parse`): limit rozmiaru, jak `METADATA_MAX_BYTES`
       w `useflags.py:360`.
-- [ ] **GS-05** — `makeconf.py:298` i `confedit.py:249,289`: przejść na nowe pola żądania.
+- [x] **GS-05** — `makeconf.py:298` i `confedit.py:249,289`: przejść na nowe pola żądania.
 - [x] **GS-06** — `makeconf.py`: kopia listy dozwolonych tokenów `FEATURES`/`MAKEOPTS`.
 - [ ] **GS-16** — `index_cache.py:28-38`: poprawić komentarz — odcisk chroni przed
       *nieświeżością*, nie przed *podmianą* przez tego samego użytkownika.

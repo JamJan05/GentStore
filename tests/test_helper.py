@@ -265,7 +265,13 @@ def test_replace_line_changes_one_line_and_nothing_else(portage: Path) -> None:
     target.write_text(
         '# tuned for this box\nMAKEOPTS="-j4"\n\n# keep\nFEATURES="ccache"\n', encoding="utf-8"
     )
-    answer = call("replace_line", path=str(target), match=r"^MAKEOPTS=", line='MAKEOPTS="-j28"')
+    answer = call(
+        "replace_line",
+        path=str(target),
+        match_kind="assignment",
+        match_literal="MAKEOPTS",
+        line='MAKEOPTS="-j28"',
+    )
 
     assert answer["ok"] and answer["changed"]
     assert answer["previous"] == 'MAKEOPTS="-j4"'
@@ -279,7 +285,13 @@ def test_replace_line_refuses_when_several_lines_match(portage: Path) -> None:
     original = 'MAKEOPTS="-j4"\nMAKEOPTS="-j8"\n'
     target.write_text(original, encoding="utf-8")
 
-    answer = call("replace_line", path=str(target), match=r"^MAKEOPTS=", line='MAKEOPTS="-j1"')
+    answer = call(
+        "replace_line",
+        path=str(target),
+        match_kind="assignment",
+        match_literal="MAKEOPTS",
+        line='MAKEOPTS="-j1"',
+    )
 
     assert answer["code"] == "ambiguous"
     assert target.read_text(encoding="utf-8") == original
@@ -298,8 +310,9 @@ def test_replace_line_refuses_a_smuggled_second_line(portage: Path) -> None:
     answer = call(
         "replace_line",
         path=str(target),
-        match="^MAKEOPTS=",
-        line='MAKEOPTS="-j8"\nFEATURES="-sandbox"',
+        match_kind="assignment",
+        match_literal="MAKEOPTS",
+        line='MAKEOPTS="-j8"\nUSE="X wayland"',
     )
 
     assert answer["code"] == "multiline"
@@ -311,7 +324,13 @@ def test_replace_line_refuses_when_nothing_matches(portage: Path) -> None:
     target.write_text('USE="X"\n', encoding="utf-8")
     # A line make.conf could hold, so that "nothing matches" is what this test
     # gets to be about rather than the shape of the replacement.
-    answer = call("replace_line", path=str(target), match="^NOPE=", line='USE="X wayland"')
+    answer = call(
+        "replace_line",
+        path=str(target),
+        match_kind="assignment",
+        match_literal="NOPE",
+        line='USE="X wayland"',
+    )
     assert answer["code"] == "no_match"
 
 
@@ -1122,20 +1141,99 @@ def test_a_bad_keep_refuses_before_the_change_it_was_attached_to(portage: Path) 
     assert target.read_text(encoding="utf-8") == "media-video/mpv vulkan\n"
 
 
-def test_a_match_pattern_longer_than_the_limit_is_refused(portage: Path) -> None:
-    """Nothing in the standard library can time a regular expression out.
+def test_a_regular_expression_from_the_request_is_no_longer_accepted(portage: Path) -> None:
+    """The cap on pattern length was a bound rather than a cure, and not much
+    of a bound: ``^(a+)+$`` is seven characters and runs for ever against a
+    sixty-character line, which an earlier append_line can put in the file.
 
-    The length cap is a bound rather than a cure, and it is worth a test only
-    because the alternative — an unbounded pattern compiled and run as root — has
-    no upper limit on how long it can hold the process.
+    Nothing in the standard library can give a regular expression a deadline,
+    and this process is root, so the answer is not to compile one at all.
     """
     target = portage / "package.use"
     target.write_text("media-video/mpv vulkan\n", encoding="utf-8")
 
-    too_long = "a" * (helper.PATTERN_MAX + 1)
-    answer = call("replace_line", path=str(target), line="a b", match=too_long)
+    answer = call("replace_line", path=str(target), line="x/y flag", match="^(a+)+$")
+
     assert answer["code"] == "bad_pattern"
-    assert call("replace_line", path=str(target), line="x/y flag", match="^media-video/mpv")["ok"]
+    assert "match_kind" in answer["error"]
+    assert target.read_text(encoding="utf-8") == "media-video/mpv vulkan\n"
+
+
+def test_the_literal_is_still_bounded(portage: Path) -> None:
+    target = portage / "package.use"
+    target.write_text("media-video/mpv vulkan\n", encoding="utf-8")
+    answer = call(
+        "replace_line",
+        path=str(target),
+        line="x/y flag",
+        match_kind="entry",
+        match_literal="a" * (helper.PATTERN_MAX + 1),
+    )
+    assert answer["code"] == "bad_pattern"
+
+
+@pytest.mark.parametrize(
+    "literal",
+    ["media-video/mpv", "^(a+)+$", ".*", "a" * 200, "[", "\\", "cat/pkg(", "$^"],
+)
+def test_every_literal_is_an_ordinary_string(portage: Path, literal: str) -> None:
+    """re.escape makes every character of it ordinary, so there is nothing left
+    to craft: whatever arrives is looked for verbatim or not found."""
+    target = portage / "package.use"
+    target.write_text(f"{literal} vulkan\nmedia-video/other x\n", encoding="utf-8")
+
+    answer = call(
+        "replace_line",
+        path=str(target),
+        line="a/b flag",
+        match_kind="entry",
+        match_literal=literal,
+    )
+
+    assert answer["ok"], answer
+    assert answer["previous"] == f"{literal} vulkan"
+
+
+def test_an_unknown_match_kind_is_refused(portage: Path) -> None:
+    target = portage / "package.use"
+    target.write_text("media-video/mpv vulkan\n", encoding="utf-8")
+    answer = call(
+        "replace_line",
+        path=str(target),
+        line="x/y flag",
+        match_kind="whatever",
+        match_literal="media-video/mpv",
+    )
+    assert answer["code"] == "bad_pattern"
+
+
+def test_the_two_kinds_are_anchored(portage: Path) -> None:
+    """A mention inside a comment, or inside another entry's value, is not the
+    line being replaced."""
+    target = portage / "make.conf"
+    target.write_text('# was MAKEOPTS=-j8\nUSE="X"\n', encoding="utf-8")
+
+    answer = call(
+        "replace_line",
+        path=str(target),
+        line='MAKEOPTS="-j1"',
+        match_kind="assignment",
+        match_literal="MAKEOPTS",
+    )
+
+    assert answer["code"] == "no_match"
+    assert target.read_text(encoding="utf-8") == '# was MAKEOPTS=-j8\nUSE="X"\n'
+
+
+def test_the_interface_and_the_helper_agree_on_how_a_line_is_found(portage: Path) -> None:
+    """The seam: what core/confedit.py and core/makeconf.py put in a plan has to
+    be something this program knows how to build a pattern from."""
+    from gentstore.core import makeconf  # noqa: PLC0415
+
+    conf = makeconf.load(path=portage / "make.conf")
+    plan = makeconf.plan_set(conf, "MAKEOPTS", "-j4")
+    if plan.match_kind is not None:
+        assert plan.match_kind in helper.MATCH_KINDS
 
 
 # -- where cfg_apply may reach ----------------------------------------------

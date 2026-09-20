@@ -6,8 +6,7 @@ uprzywilejowanego nie zostało uruchomione. Wszystkie dowody pochodzą ze skrypt
 `gentstore_helper` / `gentstore_launcher` i wołają ich funkcje na katalogu tymczasowym, tak jak
 robi to `tests/test_helper.py`.
 
-> **Stan po przeglądzie.** Raport opisuje kod w chwili audytu (`9b6ba1d`). **GS-01, GS-02, GS-03, GS-04, GS-06, GS-07, GS-08 i GS-09
-> zostały od tego czasu naprawione** na gałęzi `fix/helper-content-validation`; szczegóły
+> **Stan po przeglądzie.** Raport opisuje kod w chwili audytu (`9b6ba1d`). **GS-01 do GS-09 zostały od tego czasu naprawione** na gałęzi `fix/helper-content-validation`; szczegóły
 > w [POPRAWKI.md](POPRAWKI.md) i w `CHANGELOG.md`. Pozostałe znaleziska stoją niezmienione.
 
 ---

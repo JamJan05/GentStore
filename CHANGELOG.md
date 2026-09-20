@@ -109,7 +109,23 @@ tag was made.
   separately, so the ones carrying a command line, an atom or a path go through `plain_tooltip`,
   which escapes and wraps the way `log_view` already did.
 
-  All seven were found by a read-through of the two privileged programs; the report and the
+- **`replace_line` no longer compiles a regular expression out of the request.** A regular
+  expression is a program, `re` has no way to give one a deadline, and the helper is root:
+  `^(a+)+$` is seven characters and never finishes against a sixty-character line, which the
+  request before it could put in the file with an ordinary `append_line`. The interface then gave
+  up after its three-minute timeout and killed `pkexec`, while the helper — a grandchild running
+  as root — carried on burning a core, unkillable by the user who started it. The cap on pattern
+  length described itself as "a bound, not a cure", and seven characters is not much of a bound.
+
+  Both callers had always built their pattern the same way: a fixed template around one literal
+  put through `re.escape`. So the template moved into the helper and only the literal crosses the
+  boundary now — `match_kind` is `"assignment"` or `"entry"`, `match_literal` is a `NAME` or a
+  `cat/pkg`. Nothing arriving there is a program any more. **Protocol version 3**: reinstall the
+  privileged half with `sudo make install-system`, which the window already says when the two
+  halves disagree, and a helper of either age gives a refusal that names the problem instead of a
+  puzzle.
+
+  All eight were found by a read-through of the two privileged programs; the report and the
   scripts that reproduce them are in `security-review/`.
 
 ## [1.3.6] — 2026-09-20

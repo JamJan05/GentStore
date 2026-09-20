@@ -23,6 +23,7 @@ byte. Most of these tests are that promise, written down.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -122,9 +123,23 @@ def test_changing_a_value_replaces_exactly_one_line(conf) -> None:
 
 
 def test_the_pattern_is_anchored_so_a_comment_cannot_match(conf) -> None:
-    """"# was MAKEOPTS=…" in a comment must not be the line replaced."""
+    """"# was MAKEOPTS=…" in a comment must not be the line replaced.
+
+    The plan names the shape and the literal; the helper builds the expression
+    from them, because one built here would be a regular expression arriving on
+    the standard input of a root process that cannot time one out.
+    """
+    from gentstore.helper import gentstore_helper as helper  # noqa: PLC0415
+
     plan = makeconf.plan_set(conf, "MAKEOPTS", "-j1")
-    assert plan.match == r"^\s*MAKEOPTS="
+    assert plan.match_kind == "assignment"
+    assert plan.match_literal == "MAKEOPTS"
+
+    built = re.compile(
+        helper.MATCH_KINDS[plan.match_kind].format(literal=re.escape(plan.match_literal))
+    )
+    assert built.search('MAKEOPTS="-j4"')
+    assert not built.search("# was MAKEOPTS=-j8")
 
 
 def test_a_variable_the_file_lacks_is_appended(conf) -> None:
