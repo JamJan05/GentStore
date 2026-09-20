@@ -159,13 +159,22 @@ Hard rules inside the helper, enforced regardless of what the GUI sent:
    too; either would be a way to redirect a write elsewhere. Tests replace the constant after
    importing the module, which the installed program cannot do.
 9. **`cfg_apply` is the only operation that reaches outside `/etc/portage`** — because that is
-   where Portage leaves `._cfg` files. Its reach is bounded by three conditions at once: the
-   name has to match `._cfgNNNN_`, the file has to lie in a directory Portage protects, and the
-   destination file is derived from the name rather than from the request. The helper reads the
-   list of protected directories **by itself** from `make.globals`, `make.conf` and
-   `/etc/env.d/` — files that belong to root — and not from what arrived on stdin. The parser is
-   deliberately primitive: it recognises only `CONFIG_PROTECT=` as a standalone assignment,
-   because anything cleverer would be a way to widen the reach.
+   where Portage leaves `._cfg` files. Its reach is bounded by four conditions at once: the
+   name has to match `._cfgNNNN_`, the file has to lie in a directory Portage protects, that
+   directory has to be one only root can write to, and the destination file is derived from the
+   name rather than from the request. The helper reads the list of protected directories
+   **by itself** from `make.globals`, `make.conf` and `/etc/env.d/` — files that belong to root —
+   and not from what arrived on stdin. The parser is deliberately primitive: it recognises only
+   `CONFIG_PROTECT=` as a standalone assignment, because anything cleverer would be a way to
+   widen the reach.
+
+   The third condition is asked about the directory the file is **lying in**, and for a while it
+   was only asked about the `CONFIG_PROTECT` entry above it. Those are different questions with
+   different answers. Checking the entry is what stops a doctored `make.conf` from naming
+   somewhere new; it says nothing about `/etc/<somewhere loose>/._cfg0000_x`, because `/etc`
+   passes on every machine there has ever been. What this operation trusts is that Portage put
+   the `._cfg` file there, and the only thing standing behind that is who may write to the one
+   directory it is in.
 
 The helper imports neither PyQt nor anything from `gentstore.ui`. It is meant to be small,
 readable and reviewable end to end by a distrustful user — because that is exactly what Gentoo

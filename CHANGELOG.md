@@ -39,8 +39,16 @@ tag was made.
   has moved on since. `accept` and `reject` are unchanged. Documented as rules 1a′ and 7 in
   [Docs/04-privileges.md](Docs/04-privileges.md).
 
-  Both were found by a read-through of the two privileged programs; the report and the scripts
-  that reproduce them are in `security-review/`.
+- **`cfg_apply` now asks who may write to the directory the `._cfg` file is lying in.** It asked
+  that question about the `CONFIG_PROTECT` entry above it instead, and the two are not the same
+  question: `/etc` belongs to root on every machine there has ever been, so the check passed and
+  said nothing at all about `/etc/<somewhere loose>/._cfg0000_x`. What the operation trusts is
+  that Portage put the file there, and the only thing standing behind that is who could have put
+  it there instead. The comment in `_only_root_can_write` had described the check as if it were
+  being made where it was not.
+
+  All three were found by a read-through of the two privileged programs; the report and the
+  scripts that reproduce them are in `security-review/`.
 
 ## [1.3.6] — 2026-09-20
 

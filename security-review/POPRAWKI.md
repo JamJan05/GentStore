@@ -3,10 +3,10 @@
 Ta sama treść co w [RAPORT.md](RAPORT.md), ale ułożona według plików, żeby dało się po niej
 pracować. Uzasadnienia, scenariusze ataku i dowody są w raporcie — tutaj jest tylko „gdzie" i „co".
 
-**Stan: GS-01 i GS-02 są naprawione** na gałęzi `fix/helper-content-validation`. Zmienione
+**Stan: GS-01, GS-02 i GS-03 są naprawione** na gałęzi `fix/helper-content-validation`. Zmienione
 pliki: `gentstore/helper/gentstore_helper.py`, `gentstore/ui/pages/cfgfiles.py` (musi teraz
-wysyłać `expect` przy scalaniu), `tests/test_helper.py` (+16 testów),
-`tests/test_cfgfiles.py`, `Docs/04-privileges.md` (reguły 1a, 1a′, 7), `CHANGELOG.md`.
+wysyłać `expect` przy scalaniu), `tests/test_helper.py` (+18 testów),
+`tests/test_cfgfiles.py`, `Docs/04-privileges.md` (reguły 1a, 1a′, 7, 9), `CHANGELOG.md`.
 Reszta listy czeka — nic z niej nie zostało zastosowane.
 
 ---
@@ -17,7 +17,7 @@ Reszta listy czeka — nic z niej nie zostało zastosowane.
 |---|---|---|---|---|
 | ✅ | [GS-01](RAPORT.md#gs-01--write_file-sprawdza-ścieżkę-ale-nie-treść--plik-w-reposconf-może-przedefiniować-sync-uri-repozytorium-gentoo) — `write_file` nie sprawdza treści | Wysoka | `gentstore/helper/gentstore_helper.py` | ~40 linii + 2 testy |
 | ✅ | [GS-02](RAPORT.md#gs-02--cfg_apply-z-decisionmerge-zapisuje-dowolną-treść-i-nie-wymaga-expect) — `cfg_apply merge` bez `expect` | Wysoka | `gentstore/helper/gentstore_helper.py` | 3 linie + 1 test |
-| 3 | [GS-03](RAPORT.md#gs-03--katalog-w-którym-leży-plik-_cfg-nigdy-nie-jest-pytany-o-to-kto-może-w-nim-pisać) — katalog `._cfg` niesprawdzany | Średnia | `gentstore/helper/gentstore_helper.py` | 5 linii + 1 test |
+| ✅ | [GS-03](RAPORT.md#gs-03--katalog-w-którym-leży-plik-_cfg-nigdy-nie-jest-pytany-o-to-kto-może-w-nim-pisać) — katalog `._cfg` niesprawdzany | Średnia | `gentstore/helper/gentstore_helper.py` | 5 linii + 1 test |
 | 4 | [GS-06](RAPORT.md#gs-06--features-i-makeopts-mieszczą-w-dozwolonym-zestawie-znaków-wyłączenie-sandboksa) — `FEATURES="-sandbox"` przechodzi | Wysoka | `gentstore_helper.py` + `core/makeconf.py` | ~35 linii + 2 testy |
 | 5 | [GS-09](RAPORT.md#gs-09--eselect-repository-add-przyjmuje-file-i-nazwę-kolidującą-z-gentoo) — `file://` i nazwa `gentoo` | Wysoka | `gentstore_launcher.py` + `core/overlays.py` | 6 linii + 2 testy |
 | 6 | [GS-04](RAPORT.md#gs-04--emerge---unmerge-kategoria-przechodzi-przez-tabelę) — `--unmerge sys-apps/*` | Wysoka | `gentstore/helper/gentstore_launcher.py` | ~12 linii + 1 test |
@@ -42,7 +42,7 @@ Reszta listy czeka — nic z niej nie zostało zastosowane.
       (`len(relative.parts) > 2` → odmowa), dziś nie ma żadnego.
 - [x] **GS-02** — `op_cfg_apply` (`:1006`): dla `decision == "merge"` wywołać
       `_check_expectation(target, request)` **bezwarunkowo**, nie tylko gdy `"expect" in request`.
-- [ ] **GS-03** — `op_cfg_apply` (`:985`): po sprawdzeniu `_CFG_PREFIX` dołożyć
+- [x] **GS-03** — `op_cfg_apply` (`:985`): po sprawdzeniu `_CFG_PREFIX` dołożyć
       `if not _only_root_can_write(candidate.parent): raise HelperError("unsafe_directory", …)`.
       Przy okazji poprawić docstringi `_only_root_can_write` i `protected_roots`, które dziś
       obiecują dokładnie to sprawdzenie.

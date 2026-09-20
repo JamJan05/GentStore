@@ -1360,3 +1360,46 @@ def test_cfg_apply_merge_into_a_file_that_is_not_there_yet(portage: Path, tmp_pa
 
     assert answer["ok"], answer
     assert (tmp_path / "etc" / "brand-new").read_text(encoding="utf-8") == "merged\n"
+
+
+def test_cfg_apply_refuses_a_directory_others_can_write(
+    portage: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The rule in _only_root_can_write has to hold where the file really is.
+
+    /etc passes that rule on every machine there has ever been, so asking only
+    about the CONFIG_PROTECT entry answered nothing about a loose directory
+    underneath it — and a loose directory is exactly where somebody who is not
+    root could have put the ``._cfg`` file this operation trusts.
+    """
+    loose = tmp_path / "etc" / "loose"
+    loose.mkdir()
+    loose.chmod(0o777)
+    (loose / "victim.conf").write_text("harmless\n", encoding="utf-8")
+    (loose / "._cfg0000_victim.conf").write_text("planted\n", encoding="utf-8")
+    # The check is deliberately asleep when we are not root; this test is about
+    # what it says when we are.
+    monkeypatch.setattr(helper.os, "geteuid", lambda: 0)
+    monkeypatch.setattr(
+        helper, "_only_root_can_write", lambda path: Path(path) != loose
+    )
+
+    answer = call(
+        "cfg_apply", path=str(loose / "._cfg0000_victim.conf"), decision="accept"
+    )
+
+    assert answer["ok"] is False
+    assert answer["code"] == "unsafe_directory"
+    assert (loose / "victim.conf").read_text(encoding="utf-8") == "harmless\n"
+    assert (loose / "._cfg0000_victim.conf").exists()
+
+
+def test_cfg_apply_still_works_where_only_root_can_write(portage: Path, tmp_path) -> None:
+    """The refusal above must not have cost the operation its reason to exist."""
+    target = tmp_path / "etc" / "fstab"
+    target.write_text("old\n", encoding="utf-8")
+    candidate = tmp_path / "etc" / "._cfg0000_fstab"
+    candidate.write_text("new\n", encoding="utf-8")
+
+    assert call("cfg_apply", path=str(candidate), decision="accept")["ok"]
+    assert target.read_text(encoding="utf-8") == "new\n"

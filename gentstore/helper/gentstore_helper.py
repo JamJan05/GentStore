@@ -291,6 +291,14 @@ def _only_root_can_write(path: Path) -> bool:
     new file is exactly what the sticky bit still allows, and creating one is
     the whole of the trick.
 
+    Asked twice, about two different things, and for a while it was only asked
+    about the first. :func:`protected_roots` asks about the CONFIG_PROTECT entry
+    itself, which keeps a doctored ``make.conf`` from naming somewhere new;
+    :func:`op_cfg_apply` asks about the directory the ``._cfg`` file is lying
+    in. Only the second one answers the question in the paragraph above. ``/etc``
+    passes on every machine there has ever been, so a check that stopped there
+    said nothing at all about ``/etc/<somewhere loose>/._cfg0000_x``.
+
     Asked only when we are root, which is the only time the answer means
     anything — run unprivileged, as the test suite does, every directory in a
     fixture belongs to whoever is running it, and refusing on that would be
@@ -334,8 +342,13 @@ def protected_roots() -> list[Path]:
     so ``cfg_apply`` is the one operation that may reach outside
     :data:`CONFIG_ROOT`. It is still the narrowest reach possible: the file has
     to be a ``._cfgNNNN_`` file, inside one of these directories, and its target
-    has to sit right beside it, and the directory has to be one only root can
-    write to — see :func:`_only_root_can_write`.
+    has to sit right beside it.
+
+    What this function checks is that the CONFIG_PROTECT *entry* belongs to
+    root, which is what stops a doctored ``make.conf`` naming somewhere new.
+    Whether the directory the file is actually lying in belongs to root is a
+    second question with a second answer, and :func:`op_cfg_apply` is where it
+    gets asked — see :func:`_only_root_can_write`.
     """
     values: list[str] = []
     for source in CONFIG_PROTECT_SOURCES:
@@ -1113,11 +1126,12 @@ def op_cfg_apply(request: dict[str, Any]) -> dict[str, Any]:
     """Resolve one ``._cfg0000_*`` file: take the new version or drop it.
 
     The only operation that writes outside ``/etc/portage``, because that is
-    where Portage leaves these files. The reach is bounded three ways: the name
+    where Portage leaves these files. The reach is bounded four ways: the name
     must be a ``._cfgNNNN_`` one, the file must be inside a directory Portage
-    protects, and the target is derived from the name rather than supplied.
+    protects, that directory must be one only root can write to, and the target
+    is derived from the name rather than supplied.
 
-    A fourth bound applies to ``merge`` alone, which is the one decision whose
+    A fifth bound applies to ``merge`` alone, which is the one decision whose
     content arrives in the request rather than off the disk: it has to say what
     it expects the target to hold. See the comment further down.
     """
@@ -1126,6 +1140,17 @@ def op_cfg_apply(request: dict[str, Any]) -> dict[str, Any]:
     )
     if not _CFG_PREFIX.match(candidate.name):
         raise HelperError("not_a_cfg_file", f"{candidate.name} is not a ._cfgNNNN_ file")
+    # Asked about the directory the file is actually in, not about the
+    # CONFIG_PROTECT entry it sits under. /etc passes that test on every machine
+    # there has ever been, which is why asking only about /etc answered nothing:
+    # what decides whether an unprivileged user could have planted this
+    # ``._cfgNNNN_`` file is who may write to the one directory it is lying in.
+    if not _only_root_can_write(candidate.parent):
+        raise HelperError(
+            "unsafe_directory",
+            f"{candidate.parent} is writable by somebody other than root, so "
+            f"{candidate.name} is not necessarily a file Portage left there",
+        )
     decision = _string(request, "decision")
     if decision not in ("accept", "reject", "merge"):
         raise HelperError("bad_decision", "decision must be 'accept', 'reject' or 'merge'")
