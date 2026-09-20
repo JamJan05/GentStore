@@ -39,7 +39,9 @@ tag was made.
   send no newline at all, so the buffer grew for as long as the build ran.
 
   There is a 16 KiB cap now, applied on every way out of the class rather than to the buffer
-  alone. A progress bar is compressed to its last frame, which is what a terminal shows anyway;
+  alone, and the cutting walks the string by offset rather than reslicing it — sixty-four
+  megabytes is seventy seconds one way and a fraction of a second the other, on the thread that
+  draws the window. A progress bar is compressed to its last frame, which is what a terminal shows anyway;
   anything still over the cap is passed on in pieces, so nothing is lost and nothing downstream
   receives a string with no upper bound on its length. The size is about
   twenty times the longest line in the logs on the machine this was written on, and several times

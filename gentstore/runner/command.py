@@ -212,11 +212,15 @@ class Command(QObject):
             # anything — which is what a terminal shows — and dropping the rest
             # is usually the whole of the problem.
             self._buffer = self._buffer.rsplit(_CARRIAGE_RETURN, 1)[-1]
-        while len(self._buffer) > MAX_LINE:
-            # Still too long: a line that is never going to end. Pass it on
-            # rather than hold it, so the buffer cannot grow without bound.
-            self._emit(self._buffer[:MAX_LINE])
-            self._buffer = self._buffer[MAX_LINE:]
+        # Still too long: a line that is never going to end. Pass it on rather
+        # than hold it, so the buffer cannot grow without bound — and walk it
+        # by offset, with one slice at the end, for the reason in _emit.
+        sent = 0
+        while len(self._buffer) - sent > MAX_LINE:
+            self._emit(self._buffer[sent : sent + MAX_LINE])
+            sent += MAX_LINE
+        if sent:
+            self._buffer = self._buffer[sent:]
 
     def _emit(self, line: str) -> None:
         """Hand one line to whoever is listening, in pieces if it is too long.
@@ -229,10 +233,17 @@ class Command(QObject):
         lines of any length; a bound that is not applied to them is not a
         bound.
         """
-        while len(line) > MAX_LINE:
-            self.output.emit(line[:MAX_LINE])
-            line = line[MAX_LINE:]
-        self.output.emit(line)
+        if len(line) <= MAX_LINE:
+            self.output.emit(line)
+            return
+        # By offset, not by reslicing. ``line = line[MAX_LINE:]`` copies the
+        # whole remaining tail on every turn, so cutting a long line into
+        # pieces costs the square of its length — sixteen megabytes took six
+        # hundred milliseconds that way and thirteen this way, and a hundred
+        # would have been half a minute of a frozen window. Trading one
+        # unbounded cost for another, on the thread that draws.
+        for start in range(0, len(line), MAX_LINE):
+            self.output.emit(line[start : start + MAX_LINE])
 
     def _flush(self) -> None:
         if self._buffer:

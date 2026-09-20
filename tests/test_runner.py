@@ -1168,3 +1168,35 @@ def test_a_line_exactly_at_the_limit_is_left_whole(runner: Command) -> None:
 
     assert codes == [0]
     assert lines == ["c" * command.MAX_LINE]
+
+
+def test_cutting_a_long_line_up_does_not_cost_its_square(runner: Command) -> None:
+    """`line = line[MAX_LINE:]` copies the whole remaining tail every turn.
+
+    Measured on _emit itself rather than through a subprocess: a pipe and a
+    child writing megabytes are most of the wall clock otherwise, and they hid
+    the difference completely the first time this was written — the test passed
+    against the version it was meant to catch.
+
+    Sixty-four megabytes is about ten seconds of reslicing and about fifty
+    milliseconds by offset. The budget sits between the two with room on both
+    sides. This runs on the thread that draws the window, so the fix for an
+    unbounded line would otherwise have handed back an unbounded cost.
+    """
+    size = 64 * 1024 * 1024
+    seen = 0
+
+    def count(piece: str) -> None:
+        nonlocal seen
+        seen += len(piece)
+
+    runner.output.connect(count)
+    try:
+        started = time.monotonic()
+        runner._emit("a" * size)
+        elapsed = time.monotonic() - started
+    finally:
+        runner.output.disconnect(count)
+
+    assert seen == size, "nothing may be lost in the cutting"
+    assert elapsed < 3.0, f"{elapsed:.1f}s to cut {size} characters up"
