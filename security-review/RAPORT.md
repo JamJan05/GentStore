@@ -1443,7 +1443,7 @@ sprzed audytu i puściłem sześć razy. Czysto. To nie to. Innej hipotezy popar
 
 Crash jest w warstwie C — Python sam z siebie tego nie robi — i niemal na pewno dotyczy sprzątania
 widżetów Qt, czyli tej samej klasy, którą `runner/command.py:close()` opisuje słowami *„to nie jest
-błąd, który Qt może zgłosić, to jest crash"*. Zależy od kolejności, w jakiej Python zwolni obiekty,
+błąd, który Qt może zgłosić, to jest crash”*. Zależy od kolejności, w jakiej Python zwolni obiekty,
 a ta zależy od obciążenia maszyny — stąd milczenie przez kilkadziesiąt przebiegów niczego nie
 dowodzi.
 
@@ -1457,10 +1457,22 @@ w prowadzeniu śledztwa — pytest sam wypisuje ślad Pythona przy takim padzie,
 zgubić. Gdyby wrócił:
 
 ```
-QT_QPA_PLATFORM=offscreen python3 -m pytest -q 2>&1 | tee /tmp/crash.log
+QT_QPA_PLATFORM=offscreen python3 -m pytest -vv 2>&1 | tee /tmp/crash.log
 ```
 
-i szukać ostatniej nazwy pliku przed `Fatal Python error`.
+i odczytać ostatnią linię przed `Fatal Python error` — będzie nią `nodeid` testu, na którym
+proces zginął.
+
+`-vv`, nie `-q`, i ta różnica jest tu całą sprawą. `-q` wypisuje kropkę **po** zakończeniu testu,
+więc test, który zabija proces, nigdy swojej kropki nie dostaje; `-vv` wypisuje `nodeid` **przed**
+uruchomieniem, więc ostatnia linia nazywa winowajcę. Sprawdzone na testcie wołającym `os.abort()`:
+przy `-q` linia przed `Fatal Python error` to `..`, przy `-vv` to
+`test_crash.py::test_the_one_that_dies`.
+
+Zwykle ratuje jeszcze `faulthandler`, który przy takim padzie wypisuje ślad Pythona — ale **nie
+tutaj**: w obu zaobserwowanych wystąpieniach lista ramek Pythona była pusta, a zaraz po niej szedł
+stos C. To znaczy, że crash nastąpił w kodzie C bez ramki Pythona na stosie, czyli dokładnie
+w sprzątaniu Qt. Przy takim padzie `-q` nie da nazwy żadną drogą.
 
 **Czego nie próbowałem w ogóle:**
 - wyścigów (TOCTOU) *empirycznie* — rozumowanie w tabeli §2 przy regule 1 jest analizą kodu,
