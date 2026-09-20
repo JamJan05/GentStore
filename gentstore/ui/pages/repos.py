@@ -57,6 +57,7 @@ from ...core.repos import RepositoryInfo
 from ...runner import eselect, helper_client
 from ..context import AppContext
 from ..i18n import untranslated
+from ..plaintext import plain_tooltip
 from ..tasks import run_async
 from ..theme import icons
 from ..theme import tokens as t
@@ -867,9 +868,9 @@ class ReposPage(SplitPage):
         self._btn_mask.setText(
             self.tr("Show in Portage again") if masked else self.tr("Hide from Portage")
         )
-        self._btn_mask.setToolTip(repos.mask_atom(info.name))
+        self._btn_mask.setToolTip(plain_tooltip(repos.mask_atom(info.name)))
         self._btn_remove.setVisible(not info.is_official)
-        self._btn_sync.setToolTip(f"emaint sync -r {info.name}")
+        self._btn_sync.setToolTip(plain_tooltip(f"emaint sync -r {info.name}"))
         self._refresh_packages()
 
     def _refresh_offer(self) -> None:

@@ -47,6 +47,7 @@ from ...core.licenses import ConditionalLicence, LicenceCondition
 from ...core.licenses import conditional_licences as load_conditional
 from ...runner import helper_client
 from ..context import AppContext
+from ..plaintext import plain_tooltip
 from ..tasks import run_async
 from ..theme import tokens as t
 from ..widgets.clickable_label import ClickableLabel
@@ -105,7 +106,7 @@ class _EntryRow(QFrame):
         # same directory, and repeating it crowds out the part that differs.
         location = QLabel(path.name)
         location.setProperty("role", "mono")
-        location.setToolTip(str(path))
+        location.setToolTip(plain_tooltip(str(path)))
         layout.addWidget(location)
 
         self._remove = ClickableLabel()

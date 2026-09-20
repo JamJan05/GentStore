@@ -63,6 +63,7 @@ from ...runner import emerge, eselect
 from ...runner.command import CommandSpec
 from ..context import AppContext
 from ..i18n import untranslated
+from ..plaintext import plain_tooltip
 from ..tasks import run_async
 from ..theme import icons
 from ..theme import tokens as t
@@ -811,4 +812,4 @@ class UpdatePage(SplitPage):
         self._security_fix.setText(self.tr("Apply the fixes…"))
 
         for step in STEPS:
-            getattr(self, f"_{step.key}_button").setToolTip(step.command)
+            getattr(self, f"_{step.key}_button").setToolTip(plain_tooltip(step.command))

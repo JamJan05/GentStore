@@ -49,6 +49,7 @@ from ...core.confedit import WritePlan
 from ...core.makeconf import EDITABLE, MakeConf, Suggestion
 from ...runner import helper_client
 from ..context import AppContext
+from ..plaintext import plain_tooltip
 from ..tasks import run_async
 from ..theme import tokens as t
 from ..widgets.clickable_label import ClickableLabel
@@ -175,7 +176,7 @@ class _VariableRow(QFrame):
             self._effective.setText(
                 self.tr("Portage uses: {value}").format(value=_shorten(effective))
             )
-            self._effective.setToolTip(effective)
+            self._effective.setToolTip(plain_tooltip(effective))
             self._effective.show()
         else:
             self._effective.hide()

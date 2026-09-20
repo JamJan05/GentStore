@@ -43,6 +43,7 @@ from PyQt6.QtWidgets import (
 
 from ...core.confedit import WritePlan, plan_entry
 from ...core.masking import Block, Blockage, BlockKind, Fix, fix_for
+from ..plaintext import plain_tooltip
 from ..theme import icons
 from ..theme import tokens as t
 from .chips import Pill
@@ -336,7 +337,7 @@ class BlockNotice(QFrame):
         if fix is not None:
             self._action.setText(self._action_text(fix))
             self._action.setProperty("variant", "danger" if not fix.advisable else "")
-            self._action.setToolTip(fix.line)
+            self._action.setToolTip(plain_tooltip(fix.line))
             self._caution.setText(self._caution_text(fix))
             style = self._action.style()
             if style is not None:

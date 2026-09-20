@@ -30,6 +30,7 @@ from . import APP_NAME, DESKTOP_ID, ORG_DOMAIN, ORG_NAME, __version__
 from .logging_setup import setup_logging
 from .settings import FONT_SCALES, Settings
 from .ui.main_window import MainWindow
+from .ui.plaintext import install as install_plain_text
 from .ui.tasks import wait_for_tasks
 from .ui.theme import icons
 from .ui.theme.palette import build_palette
@@ -61,6 +62,10 @@ class GentstoreApplication(QApplication):
         self.setWindowIcon(icons.application_icon())
         self.setStyle("Fusion")
         self.setPalette(build_palette())
+        # Before any window exists, because it works on QEvent.Polish and a
+        # widget is polished once. Kept on self: an event filter is held by raw
+        # pointer on the Qt side, so one nobody references stops running.
+        self._plain_text = install_plain_text(self)
 
         self.settings = Settings()
         self._app_translator = QTranslator(self)

@@ -3,7 +3,7 @@
 Ta sama treść co w [RAPORT.md](RAPORT.md), ale ułożona według plików, żeby dało się po niej
 pracować. Uzasadnienia, scenariusze ataku i dowody są w raporcie — tutaj jest tylko „gdzie" i „co".
 
-**Stan: GS-01, GS-02, GS-03, GS-04, GS-06 i GS-09 są naprawione** — czyli wszystkie o wadze Wysokiej na gałęzi `fix/helper-content-validation`. Zmienione
+**Stan: GS-01, GS-02, GS-03, GS-04, GS-06, GS-07, GS-08 i GS-09 są naprawione** — wszystkie o wadze Wysokiej oraz integralność podglądu na gałęzi `fix/helper-content-validation`. Zmienione
 pliki: `gentstore/helper/gentstore_helper.py`, `gentstore/ui/pages/cfgfiles.py` (musi teraz
 wysyłać `expect` przy scalaniu), `tests/test_helper.py` (+18 testów),
 `tests/test_cfgfiles.py`, `Docs/04-privileges.md` (reguły 1a, 1a′, 7, 9), `CHANGELOG.md`.
@@ -22,7 +22,7 @@ Reszta listy czeka — nic z niej nie zostało zastosowane.
 | ✅ | [GS-09](RAPORT.md#gs-09--eselect-repository-add-przyjmuje-file-i-nazwę-kolidującą-z-gentoo) — `file://` i nazwa `gentoo` | Wysoka | `gentstore_launcher.py` + `core/overlays.py` | 6 linii + 2 testy |
 | ✅ | [GS-04](RAPORT.md#gs-04--emerge---unmerge-kategoria-przechodzi-przez-tabelę) — `--unmerge sys-apps/*` | Wysoka | `gentstore/helper/gentstore_launcher.py` | ~12 linii + 1 test |
 | 7 | [GS-05](RAPORT.md#gs-05--wzorzec-match-w-replace_line-to-regex-z-żądania-uruchamiany-w-procesie-roota) — regex z żądania | Średnia | `gentstore_helper.py` + `core/makeconf.py` + `core/confedit.py` | ~25 linii, zmiana protokołu |
-| 8 | [GS-07](RAPORT.md#gs-07--podgląd--zapis-qlabel-w-trybie-autotext-zjada-linię-zaczynającą-się-od-) + [GS-08](RAPORT.md#gs-08--tekst-z-ebuilda-metadataxml-i-katalogu-overlayów-jest-renderowany-jako-html) — `setTextFormat` | Średnia | `gentstore/ui/**` | ~20 jednoliniowych zmian |
+| ✅ | [GS-07](RAPORT.md#gs-07--podgląd--zapis-qlabel-w-trybie-autotext-zjada-linię-zaczynającą-się-od-) + [GS-08](RAPORT.md#gs-08--tekst-z-ebuilda-metadataxml-i-katalogu-overlayów-jest-renderowany-jako-html) — `setTextFormat` | Średnia | `gentstore/ui/**` | ~20 jednoliniowych zmian |
 | 9 | [GS-10](RAPORT.md#gs-10--treść-linii-w-package-nie-jest-sprawdzana-wcale-r-przechodzi-tam-gdzie-n-nie) — `\r` i NUL w linii | Średnia | `gentstore/helper/gentstore_helper.py` | ~15 linii + 2 testy |
 | 10 | [GS-12](RAPORT.md#gs-12--helper-nie-odpowiada-json-em-na-zagnieżdżony-json-i-czyta-stdin-bez-ograniczenia) — `RecursionError`, brak limitu stdin | Niska | `gentstore/helper/gentstore_helper.py` | ~10 linii + 2 testy |
 | 11 | [GS-11](RAPORT.md#gs-11--glsa-check--f-instaluje-pakiety-jako-root-bez-potwierdzenia-i-bez-podglądu) — `glsa-check -f` bez pytania | Niska | `gentstore/ui/pages/update.py` | ~20 linii |
@@ -92,20 +92,20 @@ Reszta listy czeka — nic z niej nie zostało zastosowane.
 - [x] **GS-02** — `pages/cfgfiles.py` (`_decide`): wysyłać `expect` przy `decision="merge"`,
       a gdy celu nie da się odczytać — odmówić z wyjaśnieniem zamiast wysyłać żądanie, którego
       helper i tak nie przyjmie.
-- [ ] **GS-07/GS-08** — dodać pomocnik `plain_label()` w `ui/widgets/__init__.py` i użyć go
-      (albo dopisać `setTextFormat(Qt.TextFormat.PlainText)`) wszędzie, gdzie do `QLabel` trafia
-      tekst spoza `self.tr()`. Miejsca, które sprawdziłem:
-  - [ ] `widgets/write_preview.py:73` (`_path`), `:79` (`_line`), `:102` (`_report`)
-  - [ ] `widgets/required_changes.py:535` (linia wpisu), `:604` (`_preview_body`),
-        `:576` (`_conflict`), `:293` (`_report`)
-  - [ ] `widgets/block_notice.py:339` — `setToolTip(fix.line)`; podpowiedzi Qt też są rich-textem
-  - [ ] `pages/search.py:287,593` — `DESCRIPTION` z ebuilda
-  - [ ] `widgets/use_flag_row.py:94,262` — opis flagi z `metadata.xml`
-  - [ ] `pages/repos.py:187,890` — opis repozytorium z `repositories.xml`
-  - [ ] `widgets/news_list.py:57` — tytuł newsa GLEP 42
-  - [ ] `pages/cfgfiles.py:78,426` — nazwa pliku konfiguracyjnego
-  - [ ] **przejrzeć resztę** — powyższa lista pochodzi z `grep` po `QLabel(`/`setText(`
-        i **nie jest kompletna**; dziś `setTextFormat` nie pada w `gentstore/ui/` ani razu
+- [x] **GS-07/GS-08** — zrobione inaczej, niż proponował raport. Zamiast pomocnika wołanego
+      w 181 miejscach — jeden filtr zdarzeń `QEvent.Polish` w `gentstore/ui/plaintext.py`,
+      montowany przez `GentstoreApplication`. Zamienia `AutoText` na `PlainText` na każdej
+      etykiecie w procesie, łącznie z wnętrzem `QMessageBox`, i nie rusza jawnego `RichText`.
+      Etykieta dodana za rok jest objęta bez niczyjej pamięci — czego lista miejsc nigdy by
+      nie dała.
+  - [x] jawny `setTextFormat` dodatkowo w obu panelach „Zostanie zapisane"
+        (`write_preview.py`, `required_changes.py`) — gwarancja ma być czytelna tam, gdzie
+        się ją czyta, bez wiedzy o filtrze
+  - [x] podpowiedzi: `QToolTip` zgaduje osobno i nie ma tam formatu do ustawienia, więc
+        `plain_tooltip()` escapuje i owija — tak jak `log_view` robił to od dawna.
+        Zastosowane w `block_notice.py`, `search.py`, `update.py`, `repos.py`, `masks.py`,
+        `makeconf.py`
+  - [x] `tests/test_plaintext.py` — 16 testów, 9 pada po wyłączeniu strażnika
 - [ ] **GS-11** — `pages/update.py:385-389`: pokazać listę przed `glsa-check -f`, albo
       `QMessageBox.question` z identyfikatorami z `glsa-check -l affected`, które już są w pamięci.
 

@@ -130,6 +130,7 @@ class RequiredChanges(QFrame):
 
         #: Portage's own text for a graph it could not resolve, unparsed.
         self._conflict = QLabel()
+        self._conflict.setTextFormat(Qt.TextFormat.PlainText)
         self._conflict.setObjectName("maskComment")
         self._conflict.setWordWrap(True)
         self._conflict.setTextInteractionFlags(
@@ -174,6 +175,9 @@ class RequiredChanges(QFrame):
         self._preview_title.setProperty("role", "subheading")
         preview_layout.addWidget(self._preview_title)
         self._preview_body = QLabel()
+        # See write_preview: this is the other "what will be written" panel,
+        # and the lines in it come out of emerge's own output.
+        self._preview_body.setTextFormat(Qt.TextFormat.PlainText)
         self._preview_body.setObjectName("writeLine")
         self._preview_body.setWordWrap(True)
         self._preview_body.setTextInteractionFlags(
@@ -533,6 +537,7 @@ class RequiredChanges(QFrame):
         text = QVBoxLayout()
         text.setSpacing(t.SPACE_1)
         line = QLabel(entry.line)
+        line.setTextFormat(Qt.TextFormat.PlainText)
         line.setProperty("role", "mono")
         line.setWordWrap(True)
         line.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)

@@ -88,7 +88,28 @@ tag was made.
   Anything else is still editable by hand, which is what the file already said about values the
   alphabet cannot hold.
 
-  All six were found by a read-through of the two privileged programs; the report and the
+- **A label now shows the text it was given.** `QLabel` defaults to `Qt::AutoText`, which guesses
+  whether a string is HTML, and the guess was wrong in both directions for what this application
+  displays. `<sys-apps/foo-2 ~amd64` is an ordinary line for `emerge --autounmask` to ask for —
+  the `<` is the less-than-this-version operator — and Qt read it as an unclosed tag and rendered
+  **nothing at all**, while the whole line still went to `/etc/portage`. The preview is the write;
+  a preview that is empty while the write is not breaks the principle the application is built on,
+  and it took no attacker to do it.
+
+  The other direction is `DESCRIPTION` out of an ebuild, flag descriptions out of `metadata.xml`,
+  repository descriptions out of `repositories.xml` and news headlines out of a repository — all
+  written by whoever wrote the overlay the user added. `<img src="http://…">` in any of them was a
+  network request from a program whose documentation says it makes none, and `<span style=…>` was
+  a sentence on screen that looked like Gentstore had said it.
+
+  There are 181 `QLabel` calls in the package and none of them wanted HTML, so this is set once
+  for all of them, in `gentstore/ui/plaintext.py`, rather than at each site — a label added next
+  year is covered without anybody remembering. Only the guessing format is replaced; a label that
+  was explicitly given `RichText` keeps it. Tooltips are not labels and Qt guesses about those
+  separately, so the ones carrying a command line, an atom or a path go through `plain_tooltip`,
+  which escapes and wraps the way `log_view` already did.
+
+  All seven were found by a read-through of the two privileged programs; the report and the
   scripts that reproduce them are in `security-review/`.
 
 ## [1.3.6] — 2026-09-20
