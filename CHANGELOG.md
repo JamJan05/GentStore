@@ -9,6 +9,20 @@ tag was made.
 
 ## [Unreleased]
 
+A security release. A line-by-line review of the two privileged programs, and of what reaches
+them, turned up nineteen findings — nine in those two programs, the rest in the window and in the
+parsers that read `emerge`'s output. Two ended in code running as root. None of it was reported
+from outside; it had been there since the first release that had a helper. The report, its own
+corrections, and scripts that reproduce each claim are in `security-review/`.
+
+**Reinstall the privileged half after updating** — `sudo make install-system`, or reinstall the
+package. The helper's protocol went from 2 to 3, and an older copy refuses every line
+replacement. The window notices and says so, but it is easier to know first.
+
+This heading carries a paragraph where the others do not, because that instruction is the one
+thing here that stops working if it is missed, and it would otherwise be the third item of
+seventeen.
+
 ### Security
 
 - **One line from an ebuild could stop the window answering.** Two regular expressions in

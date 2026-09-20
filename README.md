@@ -17,13 +17,28 @@ the five principles below costs in practice — is at
 > flags, masks, repositories, the update preview, configuration files, `make.conf`, elog and
 > `@world` — and the privileged one, which has
 > written real `package.use`, `package.license` and `package.accept_keywords` entries through
-> `pkexec` and run `emerge`, `emaint sync` and `eselect` through the launcher. 797 tests pass.
+> `pkexec` and run `emerge`, `emaint sync` and `eselect` through the launcher. 1022 tests pass.
 >
 > What that does not claim: this has run on **one** machine, amd64 only. Bug reports from
 > other setups are the fastest way to make the next release better.
 >
-> Two things to know before installing, because both are deliberate and both are noticed on
-> the first day: **you are asked for your password at every privileged step**, and
+> **This is a security release.** A line-by-line review of the two privileged programs, and of
+> what reaches them, turned up nineteen findings — nine of them in those two programs, the rest
+> in the window and in the parsers that read `emerge`'s output.
+> Two of them ended in code running as root: a whole-file write that checked the path and not
+> the content, so a file in `repos.conf` could redefine where every package on the system comes
+> from; and `cfg_apply`'s merge, which took its text from the request and had no way to tell
+> whether that text was what the user had been shown. The rest are in
+> [`CHANGELOG.md`](CHANGELOG.md) and in [`security-review/`](security-review/), which carries the
+> report, the corrections to the report, and scripts that reproduce every claim in it. None of
+> this was reported from outside; it was there from the first release that had a helper.
+>
+> **After updating, reinstall the privileged half** — `sudo make install-system`, or reinstall
+> the package. The helper's protocol went from 2 to 3 and an older copy refuses every line
+> replacement. The window notices and says so, but it is easier to know first.
+>
+> Two more things to know before installing, because both are deliberate and both are noticed
+> on the first day: **you are asked for your password at every privileged step**, and
 > **`EMERGE_DEFAULT_OPTS` does not apply to the commands this window runs**. Why, under
 > [Installation](#installation) and [Running it](#running-it) below.
 
@@ -58,6 +73,14 @@ configuration file waiting, and an empty panel is a worse picture than a dated o
   `name::repo` into the search box — narrows not only the list but also the detail panel, the
   versions, and the atom `emerge` is given. The same package in two overlays no longer blurs
   together, and no longer depends on repository priority.
+
+These are what the application is built to do, not a report on how well it did it. This release fixed
+several places where they did not hold — the preview panel rendered a line beginning with `<`
+as nothing at all while writing it in full, package descriptions from an ebuild were drawn as
+HTML by a window that had promised to make no network requests, and the helper's "exactly one
+line" was checked against `\n` while Portage also breaks on `\r`, so one request could write two
+entries. [`security-review/`](security-review/) has the lot, including two places where the
+report itself was wrong.
 
 ## Requirements
 
@@ -265,14 +288,20 @@ section verbatim — and lets you search the catalogue of Gentoo repositories. E
 overlay is one click (`eselect repository enable` + `emaint sync -r`), with the command shown
 before it runs. Removing one tells you how many installed packages will lose their ebuild.
 Adding a repository from outside the catalogue gets its own dialog with a warning — ebuilds
-from a foreign source run as root on every build.
+from a foreign source run as root on every build. Two things that dialog will not accept, both
+new in this release: a `file://` source, because that is a directory on this machine and syncing from it
+is "run my ebuilds as root" with no network anywhere in the story; and the name `gentoo`, because
+Portage merges every file in `repos.conf` and an entry with that name does not add a repository,
+it replaces the one every package comes from.
 
 The **System update** screen breaks the update cycle into six steps, each of which runs
 separately and shows its own command: sync, Gentoo news (only the items that concern this
 system — with the reason next to each), a preview in the form of a table, the update itself
 with a live log and an “Interrupt” button, `--depclean` with the list shown before anything is
 removed, and the configuration files. Alongside it is a security-warning panel (`glsa-check`,
-with a readable message when `gentoolkit` is missing). When a build fails, the package, the
+with a readable message when `gentoolkit` is missing); applying the fixes lists the advisories
+and the packages first, which until this release it did not — it was the one privileged install in the
+application with nothing shown before it. When a build fails, the package, the
 `build.log` path and a sentence of advice for the usual causes are pulled out of several
 hundred lines of output.
 
@@ -288,6 +317,14 @@ the profile adds to them. A change replaces **one line**, leaving comments and o
 untouched, and the difference is visible before it is saved. `MAKEOPTS` gets a suggestion
 computed from the core count and the amount of memory (about 2 GiB per job), and
 `CPU_FLAGS_X86` one from `cpuid2cpuflags`, if it is installed.
+
+Two of those variables no longer take any value the character set allows. `FEATURES` may be
+used to switch a protection **on** but not off — `-ccache` yes, `-sandbox` no — and `MAKEOPTS`
+takes a number of jobs and nothing else. Both were writable in full until this release, and both were
+worth more than the dialog in front of them said: `FEATURES="-sandbox -userpriv"` takes the
+walls off every build the machine does afterwards, and `MAKEOPTS` is a command line for `make`
+where `-f` names a makefile. Anything outside those lists is still editable by hand, which is
+what this screen has always said about values it cannot write.
 
 One variable there behaves differently from the rest. `EMERGE_DEFAULT_OPTS` can be edited on
 that screen and applies to the `emerge` **you** run in a terminal, but not to the ones this
@@ -377,6 +414,7 @@ gentstore/
 │   ├── pages/            the application's screens
 │   ├── widgets/          reusable elements
 │   ├── theme/            tokens, style sheet, palette, icons
+│   ├── plaintext.py      stops Qt guessing that a package description is HTML
 │   └── tasks.py          running work off the GUI thread
 └── i18n/             translation catalogues (.ts in the repo, .qm generated)
 ```
@@ -389,6 +427,11 @@ Architecture, the theme, the bilingualism rules, the privilege model and the wor
 [`Docs/`](Docs/README.md).
 
 What changed between one release and the next: [`CHANGELOG.md`](CHANGELOG.md).
+
+The security review those fixes came out of, with the findings, the compliance table between
+the privilege document and the code, an honest list of what was *not* checked, and scripts that
+reproduce each claim: [`security-review/`](security-review/). It carries its own corrections —
+two findings where the first reading was wrong, marked as such rather than quietly edited.
 
 The same ground for somebody who has not installed it yet, with the screenshots readable:
 [www.gentstore.dev](https://www.gentstore.dev/en). The site is built from the `Web` branch of
