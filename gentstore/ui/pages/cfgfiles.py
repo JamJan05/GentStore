@@ -340,7 +340,30 @@ class CfgFilesPage(SplitPage):
 
         fields: dict[str, object] = {"path": str(item.candidate), "decision": decision}
         if decision == "merge":
+            # The helper requires this for a merge and is right to: the text
+            # below came out of the editor, so the only thing tying it to what
+            # the user was shown is the state of the file they were shown it
+            # against. A target that has changed underneath means the diff on
+            # screen described something else, and the write should not go.
+            try:
+                expect = item.target.read_text(encoding="utf-8") if item.target.exists() else None
+            except (OSError, UnicodeDecodeError) as exc:
+                # Unreadable because of permissions, or not text at all. Either
+                # way the helper would compare against something we cannot name,
+                # and the same read there has to produce the same bytes.
+                log.error("Could not read %s: %s", item.target, exc)
+                self._report.setProperty("state", "err")
+                self._report.setText(
+                    self.tr(
+                        "Nothing was changed: {target} cannot be read from here, so "
+                        "there is no way to be sure the merge is based on what is "
+                        "actually in it."
+                    ).format(target=item.target)
+                )
+                self._report.show()
+                return
             fields["content"] = self._editor.toPlainText()
+            fields["expect"] = expect
 
         self._set_busy(True)
         run_async(

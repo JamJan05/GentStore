@@ -38,6 +38,7 @@ that reading it is a matter of reading one file.
 
 from __future__ import annotations
 
+import configparser
 import grp
 import json
 import os
@@ -163,6 +164,38 @@ MAKE_CONF_DEPTH = 1
 #: INI section per repository and are written by ``eselect`` or by us, never
 #: hand-edited into something we would be destroying.
 OWNED_SUBTREES = ("repos.conf", "binrepos.conf")
+
+#: How deep under :data:`CONFIG_ROOT` a whole-file write may go.
+#:
+#: ``repos.conf/<name>.conf`` and nothing deeper. Portage would read a deeper
+#: tree, but nothing here builds a path into one — the same argument as
+#: :data:`LINE_EDITABLE_DEPTH`, which this operation was missing.
+OWNED_DEPTH = 2
+
+#: The keys a section Gentstore writes may set, per subtree.
+#:
+#: A list of what this application writes, not a list of what looks dangerous —
+#: the same rule as :data:`LINE_EDITABLE`, applied one level down. ``repos.conf``
+#: is not a file of inert settings: ``location`` says which directory Portage
+#: reads ebuilds from, and an ebuild is a shell script this machine runs as root
+#: while merging. ``sync-uri`` says where that directory is refilled from.
+#: Naming the keys keeps out the ones nobody has thought of yet.
+OWNED_KEYS = {
+    "repos.conf": frozenset(
+        {"location", "sync-type", "sync-uri", "auto-sync", "priority", "masters"}
+    ),
+    "binrepos.conf": frozenset({"sync-uri", "priority"}),
+}
+
+#: Section names a file written here may not define.
+#:
+#: ``repos.conf`` is read as a stack: Portage reads every file in the directory
+#: and a section repeated in one read later wins. So a file naming ``gentoo``
+#: does not add a repository, it *replaces* the one every package on the system
+#: comes from — and there is no reason for this program to be the one that does
+#: that. ``DEFAULT`` is worse still: ConfigParser applies it to every other
+#: section, including ones in files this program never touched.
+RESERVED_SECTIONS = frozenset({"gentoo", "DEFAULT"})
 
 #: Files that tell us which directories Portage protects, in the order Portage
 #: itself reads them. All of them are owned by root — though see
@@ -540,8 +573,14 @@ def _check_make_conf_line(line: str) -> None:
         )
 
 
-def _require_owned(path: Path) -> None:
-    """Only files Gentstore creates whole may be written or deleted whole."""
+def _require_owned(path: Path) -> str:
+    """Only files Gentstore creates whole may be written or deleted whole.
+
+    Returns the subtree it matched, because "which file" and "which content" are
+    two different questions and the second one is answered per subtree — a
+    ``repos.conf`` section and a ``binrepos.conf`` section do not take the same
+    keys. See :func:`_check_owned_content`.
+    """
     root = _root()
     try:
         relative = path.relative_to(root)
@@ -552,6 +591,93 @@ def _require_owned(path: Path) -> None:
         raise HelperError(
             "not_owned",
             f"whole-file writes are limited to {allowed}; {path} is not there",
+        )
+    if len(relative.parts) > OWNED_DEPTH:
+        raise HelperError(
+            "not_owned", f"{path} is deeper than anything Gentstore writes"
+        )
+    return relative.parts[0]
+
+
+def _nearest_existing(path: Path) -> Path:
+    """The first of *path* and its parents that is actually there."""
+    for candidate in (path, *path.parents):
+        if candidate.exists():
+            return candidate
+    return Path("/")  # pragma: no cover - / always exists
+
+
+def _check_owned_content(subtree: str, path: Path, content: str) -> None:
+    """Refuse a whole-file write that is not the one section Gentstore writes.
+
+    The path check answers "may this file be written". It does not answer what
+    the file then *means*, and for these two subtrees the difference is the
+    whole question: Portage reads every file in ``repos.conf`` and merges them,
+    so a section repeated in a file read later replaces the earlier definition.
+    A request naming the right file and carrying the wrong section is therefore
+    a request to point the system's ebuilds somewhere else — which arrives on
+    standard input like every other one.
+
+    Deliberately not a parser for ``repos.conf``. It answers one question about
+    one file: is this the single section this application produces for a file of
+    that name, spelt the way it spells it.
+    """
+    parser = configparser.ConfigParser()
+    try:
+        parser.read_string(content)
+    except configparser.Error as exc:
+        raise HelperError("bad_content", f"{path.name} is not a configuration file: {exc}") from exc
+
+    if parser.defaults():
+        raise HelperError(
+            "bad_content",
+            "a [DEFAULT] section applies to every repository, including ones "
+            "Gentstore never wrote; refusing to write one",
+        )
+
+    sections = parser.sections()
+    expected = path.name[: -len(".conf")] if path.name.endswith(".conf") else path.name
+    if sections != [expected]:
+        found = ", ".join(f"[{name}]" for name in sections) or "no section at all"
+        raise HelperError(
+            "bad_content",
+            f"{path.name} may define exactly one section, [{expected}]; it has {found}",
+        )
+    if expected in RESERVED_SECTIONS:
+        raise HelperError(
+            "bad_content",
+            f"[{expected}] is not a section Gentstore defines: a file naming it "
+            "replaces the repository the whole system comes from",
+        )
+
+    allowed = OWNED_KEYS[subtree]
+    for key, value in parser[expected].items():
+        if key not in allowed:
+            raise HelperError(
+                "bad_content",
+                f"{key!r} is not one of the keys Gentstore writes in {subtree} "
+                f"({', '.join(sorted(allowed))})",
+            )
+        if key == "location":
+            _check_location(value)
+
+
+def _check_location(value: str) -> None:
+    """``location`` names the directory Portage reads ebuilds from.
+
+    An ebuild is a shell script this machine runs as root while merging, so
+    where they come from is the same question as who may write there — asked
+    the same way :func:`_only_root_can_write` asks it for ``cfg_apply``, and
+    about the nearest directory that exists, because the location itself is
+    normally created by the first sync.
+    """
+    if not value.startswith("/"):
+        raise HelperError("bad_content", f"location must be an absolute path: {value!r}")
+    if not _only_root_can_write(_nearest_existing(Path(value))):
+        raise HelperError(
+            "bad_content",
+            f"{value} is writable by somebody other than root; ebuilds read from "
+            "there would run as root while merging",
         )
 
 
@@ -943,9 +1069,21 @@ def op_remove_line(request: dict[str, Any]) -> dict[str, Any]:
 
 def op_write_file(request: dict[str, Any]) -> dict[str, Any]:
     path = check_path(_string(request, "path"))
-    _require_owned(path)
+    subtree = _require_owned(path)
     content = _string(request, "content")
+    # Three separate claims, checked separately: this file may be written (the
+    # path check, above), the file is still what the caller thinks it is, and
+    # what is going in is the file Gentstore writes. The path check answers only
+    # the first, and repos.conf is a stack — Portage reads every file in it and
+    # a section repeated in one read later wins — so the third question is the
+    # one that decides where the system's ebuilds come from.
+    #
+    # The expectation goes first because it is the cheaper and more specific
+    # refusal: "somebody edited this underneath you" is a different thing to be
+    # told than "this is not a file I write", and a caller that is simply out of
+    # date should hear the first one.
     _check_expectation(path, request)
+    _check_owned_content(subtree, path, content)
     atomic_write(path, content)
     return {"changed": True, "bytes": len(content.encode("utf-8"))}
 
@@ -978,6 +1116,10 @@ def op_cfg_apply(request: dict[str, Any]) -> dict[str, Any]:
     where Portage leaves these files. The reach is bounded three ways: the name
     must be a ``._cfgNNNN_`` one, the file must be inside a directory Portage
     protects, and the target is derived from the name rather than supplied.
+
+    A fourth bound applies to ``merge`` alone, which is the one decision whose
+    content arrives in the request rather than off the disk: it has to say what
+    it expects the target to hold. See the comment further down.
     """
     candidate = check_path(
         _string(request, "path"), must_exist=True, roots=protected_roots()
@@ -998,12 +1140,30 @@ def op_cfg_apply(request: dict[str, Any]) -> dict[str, Any]:
     # candidate goes, so the outcome is the same shape as an accept.
     content = _string(request, "content") if decision == "merge" else _read(candidate)
 
-    # The caller may say what it expects the target to contain — the text whose
-    # diff the user actually looked at. If it does and the file has moved on
-    # since, their version wins, exactly as for write_file. Optional rather than
-    # required only because an older interface does not send it; a request that
-    # carries it gets the stronger guarantee.
-    if "expect" in request:
+    # What the caller expects the target to contain — the text whose diff the
+    # user actually looked at. If the file has moved on since, their version
+    # wins, exactly as for write_file.
+    #
+    # Required for "merge" and optional for "accept", and the asymmetry is the
+    # point rather than an oversight. An "accept" writes the ``._cfg`` file that
+    # is sitting there: the content is on disk, put there by Portage, and this
+    # program can read it for itself. A "merge" writes text that arrived in the
+    # request, and nothing else in the operation ties that text to anything the
+    # user saw — the name of the candidate does not, and the dialog that said
+    # "apply the configuration file this update left waiting" certainly does
+    # not. Having looked at the target is the one claim a merge can be asked to
+    # make, so it is asked for it. An interface too old to send it gets a
+    # refusal it can act on instead of a write nobody previewed.
+    if decision == "merge":
+        if "expect" not in request:
+            raise HelperError(
+                "bad_request",
+                "'expect' is required for a merge: the content comes from the "
+                "request, so the state of the target is what ties it to what "
+                "the user was shown",
+            )
+        _check_expectation(target, request)
+    elif "expect" in request:
         _check_expectation(target, request)
 
     archived = _archive(target) if target.exists() else None

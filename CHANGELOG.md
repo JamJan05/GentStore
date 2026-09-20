@@ -9,6 +9,39 @@ tag was made.
 
 ## [Unreleased]
 
+### Security
+
+- **A whole-file write now has to be the file Gentstore writes, not just live where one would.**
+  `write_file` proved its path and then wrote whatever it was handed. Portage reads *every* file
+  in `repos.conf` and merges them, and a section repeated in a file read later replaces the
+  earlier definition — so a request naming `repos.conf/anything.conf` and carrying `[gentoo]`
+  did not add a repository, it pointed every package on the system at somewhere else, and
+  ebuilds are shell scripts this machine runs as root while merging. One authentication, behind
+  a dialog that said "change files in /etc/portage", bought the source of all the software on
+  the machine.
+
+  The content is now checked the way `make.conf` lines have been checked since 1b: exactly one
+  section, named after the file it is in, no `[DEFAULT]` (which would reach sections in files
+  this program never wrote), keys from a small list per subtree, `gentoo` refused outright as a
+  section name, and a `location` only root can write to — the same question `cfg_apply` asks
+  about the directory it writes into. Whole-file writes also stop at one level deep now, which
+  the line edits have always done and this operation never did.
+
+- **`cfg_apply` with `merge` now has to say what it expected to find.** `expect` was optional
+  for every decision, which was right for `accept` and wrong for `merge`: an accept writes the
+  `._cfg` file sitting on disk, which the helper can read for itself, but a merge writes text
+  that arrived in the request, and nothing tied that text to anything the user had seen. On a
+  machine with any pending configuration file — the ordinary state after an update, and the
+  whole reason the Configuration files screen exists — that was a way to write chosen content
+  into the file beside it as root. `/etc/sudoers` after a `sudo` update is the short version.
+
+  A merge now carries the target's content as the user was shown it, and is refused if the file
+  has moved on since. `accept` and `reject` are unchanged. Documented as rules 1a′ and 7 in
+  [Docs/04-privileges.md](Docs/04-privileges.md).
+
+  Both were found by a read-through of the two privileged programs; the report and the scripts
+  that reproduce them are in `security-review/`.
+
 ## [1.3.6] — 2026-09-20
 
 ### Added

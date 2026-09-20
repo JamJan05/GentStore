@@ -242,6 +242,10 @@ def test_merging_writes_what_the_user_ended_up_with(etc: Path, monkeypatch) -> N
                     "path": str(candidate),
                     "decision": "merge",
                     "content": "mine and theirs\n",
+                    # The merged text arrived in this request, so the helper
+                    # asks what the target looked like when it was merged —
+                    # see test_cfg_apply_merge_requires_an_expectation.
+                    "expect": "old\n",
                 }
             )
         ),

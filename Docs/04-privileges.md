@@ -59,7 +59,8 @@ Hard rules inside the helper, enforced regardless of what the GUI sent:
    `package.unmask`, `package.mask` and `make.conf`, and nothing else — one level deep for the
    `package.*` names, which may be a file or a directory of one file per package, and no deeper,
    because nothing here builds a deeper path. `write_file` and `delete_file` reach `repos.conf`
-   and `binrepos.conf`, which are the files the application creates whole.
+   and `binrepos.conf`, which are the files the application creates whole — one level deep there
+   too, for the same reason.
 
    A list of what Gentstore writes, not a list of what looks dangerous. `/etc/portage` is not a
    directory of inert settings: `bashrc` is sourced by every merge, `package.env` names files in
@@ -67,6 +68,19 @@ Hard rules inside the helper, enforced regardless of what the GUI sent:
    line appended to any of them is code running as root later on, and none of them is a file
    this application has ever needed to write. Naming what is allowed also covers the ones nobody
    has thought of, which a list of forbidden names cannot do.
+1a′. For `repos.conf` and `binrepos.conf`, **what the file says** matters as well — the same
+   shape of argument as rule 1b makes for `make.conf`, and for the same reason. Portage reads
+   *every* file in `repos.conf` and merges them, so a section repeated in a file read later
+   replaces the earlier definition: a file called `guru.conf` that defines `[gentoo]` does not add
+   a repository, it points every package on the system somewhere else, and ebuilds are shell
+   scripts this machine runs as root while merging. The path check cannot see that, because the
+   path is not where it is written.
+
+   So a whole-file write has to be the one section the application produces: exactly one section,
+   named after the file it is in, no `[DEFAULT]` (which would apply to sections in files this
+   program never wrote), keys drawn from a small list per subtree, and — because `location` names
+   the directory the ebuilds come from — a location only root can write to, asked the same way
+   rule 9 asks it. `gentoo` is refused outright as a section name.
 1b. For `make.conf`, **which line** matters as well, because it is the one name on that list
    whose contents decide what Portage *does* rather than which packages it installs.
    `PORTAGE_BASHRC` names a script sourced during every merge; `ROOT`, `PORTAGE_CONFIGROOT` and
@@ -129,9 +143,17 @@ Hard rules inside the helper, enforced regardless of what the GUI sent:
    it displays what the helper really did.
 7. `write_file` and `delete_file` require an `expect` field — the exact current content of the
    file, or `null` (“this file should not exist yet”). If it does not match, the helper refuses:
-   somebody edited the file in the meantime and their version wins. `cfg_apply` honours the same
-   field when it is given one — it does not require it, because an older interface does not send
-   it, but a request that carries it gets a stronger guarantee.
+   somebody edited the file in the meantime and their version wins.
+
+   `cfg_apply` requires it too, but only for `merge`, and the asymmetry is the point rather than
+   an oversight. An `accept` writes the `._cfg` file that is sitting there — the content is on
+   disk, Portage put it there, and the helper reads it for itself. A `merge` writes text that
+   arrived **in the request**, and nothing else in that operation ties the text to anything the
+   user saw: not the name of the candidate, and not the dialog, which promised to apply the
+   configuration file an update left waiting and said nothing about content the caller invented.
+   Having looked at the target is the one claim a merge can be asked to make, so it is asked for
+   it. An interface too old to send it gets a refusal it can act on, rather than a write nobody
+   previewed.
 8. The permitted directory (`/etc/portage`) is a **constant in the code** — not an argument and
    not an environment variable. The caller composes argv, and with `sudo` partly the environment
    too; either would be a way to redirect a write elsewhere. Tests replace the constant after
