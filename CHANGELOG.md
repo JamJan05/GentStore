@@ -24,7 +24,7 @@ tag was made.
   took the longest run, and anything the old pattern matched by backtracking `[^\]]*` matches
   without. `_SIZE` stopped being a pattern — the unit is a suffix, so it is found with `endswith`,
   and the number is the run in front of it, so it is found by walking back. One pass each, with
-  nothing to reconsider. A million characters now parse in single-digit milliseconds.
+  nothing to reconsider. A million characters now parse in 5 ms and 11 ms respectively.
 
   The two implementations were compared on 80,000 random strings and all nine parser fixtures
   before the old one was removed: no answer changed.
