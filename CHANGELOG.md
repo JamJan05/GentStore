@@ -47,7 +47,29 @@ tag was made.
   it there instead. The comment in `_only_root_can_write` had described the check as if it were
   being made where it was not.
 
-  All three were found by a read-through of the two privileged programs; the report and the
+- **Removing a whole category is no longer something one authentication buys.** `*/*` has been
+  refused since it was found, and `sys-libs/*` walked straight past the same bar — it is glibc,
+  and `sys-apps/*` is portage, coreutils and baselayout. The row that removes now takes named
+  packages only. The rows that merely look at things still take a wildcard, because a preview
+  changes nothing and `emerge --pretend --unmerge 'media-video/*'` is a reasonable thing to
+  want to see.
+
+- **`eselect repository add` no longer accepts `file://`, or the name `gentoo`.** A `file://`
+  source is a directory on this machine — in practice one belonging to whoever called the
+  launcher — and syncing from it copies their ebuilds into `/var/db/repos`, where merging one
+  runs their shell script as root, with no network and no server anywhere in the story. A new
+  repository called `gentoo` is worse than it looks: Portage merges every file in `repos.conf`,
+  so it does not add a repository, it replaces the one every package on the system comes from.
+
+  Both apply only where a name or a source is *chosen*. `emaint sync -r gentoo` and
+  `eselect repository disable gentoo` name a repository that is already there and are as
+  ordinary as they ever were. The "Add repository by hand" dialog refuses the same two things,
+  so its OK button never promises a command the launcher would turn down.
+
+  The niche `file://` served — a local overlay kept in a git repository — is served by
+  `eselect repository create`, or by a `repos.conf` entry with a `location` and no sync at all.
+
+  All five were found by a read-through of the two privileged programs; the report and the
   scripts that reproduce them are in `security-review/`.
 
 ## [1.3.6] — 2026-09-20

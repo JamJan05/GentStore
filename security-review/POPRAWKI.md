@@ -3,7 +3,7 @@
 Ta sama treść co w [RAPORT.md](RAPORT.md), ale ułożona według plików, żeby dało się po niej
 pracować. Uzasadnienia, scenariusze ataku i dowody są w raporcie — tutaj jest tylko „gdzie" i „co".
 
-**Stan: GS-01, GS-02 i GS-03 są naprawione** na gałęzi `fix/helper-content-validation`. Zmienione
+**Stan: GS-01, GS-02, GS-03, GS-04 i GS-09 są naprawione** na gałęzi `fix/helper-content-validation`. Zmienione
 pliki: `gentstore/helper/gentstore_helper.py`, `gentstore/ui/pages/cfgfiles.py` (musi teraz
 wysyłać `expect` przy scalaniu), `tests/test_helper.py` (+18 testów),
 `tests/test_cfgfiles.py`, `Docs/04-privileges.md` (reguły 1a, 1a′, 7, 9), `CHANGELOG.md`.
@@ -19,8 +19,8 @@ Reszta listy czeka — nic z niej nie zostało zastosowane.
 | ✅ | [GS-02](RAPORT.md#gs-02--cfg_apply-z-decisionmerge-zapisuje-dowolną-treść-i-nie-wymaga-expect) — `cfg_apply merge` bez `expect` | Wysoka | `gentstore/helper/gentstore_helper.py` | 3 linie + 1 test |
 | ✅ | [GS-03](RAPORT.md#gs-03--katalog-w-którym-leży-plik-_cfg-nigdy-nie-jest-pytany-o-to-kto-może-w-nim-pisać) — katalog `._cfg` niesprawdzany | Średnia | `gentstore/helper/gentstore_helper.py` | 5 linii + 1 test |
 | 4 | [GS-06](RAPORT.md#gs-06--features-i-makeopts-mieszczą-w-dozwolonym-zestawie-znaków-wyłączenie-sandboksa) — `FEATURES="-sandbox"` przechodzi | Wysoka | `gentstore_helper.py` + `core/makeconf.py` | ~35 linii + 2 testy |
-| 5 | [GS-09](RAPORT.md#gs-09--eselect-repository-add-przyjmuje-file-i-nazwę-kolidującą-z-gentoo) — `file://` i nazwa `gentoo` | Wysoka | `gentstore_launcher.py` + `core/overlays.py` | 6 linii + 2 testy |
-| 6 | [GS-04](RAPORT.md#gs-04--emerge---unmerge-kategoria-przechodzi-przez-tabelę) — `--unmerge sys-apps/*` | Wysoka | `gentstore/helper/gentstore_launcher.py` | ~12 linii + 1 test |
+| ✅ | [GS-09](RAPORT.md#gs-09--eselect-repository-add-przyjmuje-file-i-nazwę-kolidującą-z-gentoo) — `file://` i nazwa `gentoo` | Wysoka | `gentstore_launcher.py` + `core/overlays.py` | 6 linii + 2 testy |
+| ✅ | [GS-04](RAPORT.md#gs-04--emerge---unmerge-kategoria-przechodzi-przez-tabelę) — `--unmerge sys-apps/*` | Wysoka | `gentstore/helper/gentstore_launcher.py` | ~12 linii + 1 test |
 | 7 | [GS-05](RAPORT.md#gs-05--wzorzec-match-w-replace_line-to-regex-z-żądania-uruchamiany-w-procesie-roota) — regex z żądania | Średnia | `gentstore_helper.py` + `core/makeconf.py` + `core/confedit.py` | ~25 linii, zmiana protokołu |
 | 8 | [GS-07](RAPORT.md#gs-07--podgląd--zapis-qlabel-w-trybie-autotext-zjada-linię-zaczynającą-się-od-) + [GS-08](RAPORT.md#gs-08--tekst-z-ebuilda-metadataxml-i-katalogu-overlayów-jest-renderowany-jako-html) — `setTextFormat` | Średnia | `gentstore/ui/**` | ~20 jednoliniowych zmian |
 | 9 | [GS-10](RAPORT.md#gs-10--treść-linii-w-package-nie-jest-sprawdzana-wcale-r-przechodzi-tam-gdzie-n-nie) — `\r` i NUL w linii | Średnia | `gentstore/helper/gentstore_helper.py` | ~15 linii + 2 testy |
@@ -64,20 +64,22 @@ Reszta listy czeka — nic z niej nie zostało zastosowane.
 
 ## `gentstore/helper/gentstore_launcher.py`
 
-- [ ] **GS-04** — nowy znacznik `EXACT_ATOMS` (atom bez `*`) i obsługa w `_matches` (`:343`);
+- [x] **GS-04** — nowy znacznik `EXACT_ATOMS` (atom bez `*`) i obsługa w `_matches` (`:343`);
       użyć w wierszu `unmerge()` (`:306`). Podgląd (`unmerge_pretend`, `:304`) zostaje przy
       `ATOMS` — nic nie usuwa.
-- [ ] **GS-09** — `_URI` (`:157`): usunąć `file` z listy schematów.
-- [ ] **GS-09** — `_is_repository` (`:205`): odrzucać `gentoo` i `DEFAULT`.
+- [x] **GS-09** — `_URI` (`:157`): usunąć `file` z listy schematów.
+- [x] **GS-09** — nowy `_is_new_repository` + znacznik `NEW_REPOSITORY`: `gentoo` i `DEFAULT`
+      odrzucane **tylko** w wierszu `repository add`. `_is_repository` zostaje bez zmian, bo
+      `emaint sync -r gentoo` i `eselect repository disable gentoo` to zwykłe operacje.
 - [ ] *(opcjonalnie)* `resolve` (`:101`): sprawdzać, że znaleziony program należy do roota i nie
       jest zapisywalny dla grupy/innych — dziś `SEARCH_PATH` jest stałe, więc to tylko hartowanie.
 
 ## `gentstore/core/`
 
-- [ ] **GS-09** — `overlays.py:247` (`_SCHEME`): usunąć `file`, żeby okno nie włączało przycisku
+- [x] **GS-09** — `overlays.py:247` (`_SCHEME`): usunąć `file`, żeby okno nie włączało przycisku
       dla czegoś, czego launcher odmówi. Test
       `test_the_overlay_dialog_and_the_launcher_agree_on_url_schemes` sam wychwyci rozjazd.
-- [ ] **GS-09** — `overlays.py` (`is_valid_name`): odrzucać `gentoo`.
+- [x] **GS-09** — `overlays.py` (`is_valid_name`): odrzucać `gentoo`.
 - [ ] **GS-13** — `overlays.py:183` (`parse`): limit rozmiaru, jak `METADATA_MAX_BYTES`
       w `useflags.py:360`.
 - [ ] **GS-05** — `makeconf.py:298` i `confedit.py:249,289`: przejść na nowe pola żądania.
@@ -134,8 +136,8 @@ Szkice są przy każdym znalezisku w raporcie. Braki zebrane:
 - [ ] `test_helper.py` — „jedna linia" wobec `\r`, U+2028 i NUL (GS-10)
 - [ ] `test_helper.py` — `replace_line` zostawia resztę pliku bajt w bajt (GS-10b)
 - [ ] `test_helper.py` — zagnieżdżony JSON i limit stdin (GS-12)
-- [ ] `test_runner.py` — `--unmerge sys-apps/*` odrzucone, podgląd nadal dozwolony (GS-04)
-- [ ] `test_runner.py` — `file://` i nazwa `gentoo` odrzucone (GS-09)
+- [x] `test_runner.py` — `--unmerge sys-apps/*` odrzucone, podgląd nadal dozwolony (GS-04)
+- [x] `test_runner.py` — `file://` i nazwa `gentoo` odrzucone (GS-09)
 - [ ] **nowy** `test_preview_integrity.py` — podgląd pokazuje dokładnie te bajty, które zostaną
       zapisane, i każdy `QLabel` niosący dane ma jawny `textFormat` (GS-07, GS-08)
 

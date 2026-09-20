@@ -179,7 +179,6 @@ def test_nonsense_repository_names_are_refused(name: str) -> None:
         "rsync://rsync.gentoo.org/gentoo-portage",
         "git@github.com:x/y.git",
         "ssh://git@example.org/repo.git",
-        "file:///var/db/repos/local",
     ],
 )
 def test_plausible_urls_are_allowed(uri: str) -> None:
@@ -189,6 +188,32 @@ def test_plausible_urls_are_allowed(uri: str) -> None:
 @pytest.mark.parametrize("uri", ["", "   ", "just-a-word", "-u://x", "wss://x/y"])
 def test_nonsense_urls_are_refused(uri: str) -> None:
     assert not overlays.is_valid_uri(uri)
+
+
+@pytest.mark.parametrize(
+    "uri", ["file:///var/db/repos/local", "file:///home/someone/overlay", "file://./here"]
+)
+def test_a_url_pointing_at_this_machine_is_refused(uri: str) -> None:
+    """A local directory is whoever-is-running-this's directory.
+
+    Syncing from it copies their ebuilds into /var/db/repos, and merging one
+    runs their shell script as root — with no network and no server anywhere in
+    the story, behind a dialog that says "install, update or remove packages".
+    A local overlay is made with `eselect repository create`, or with a
+    repos.conf entry that has a location and no sync at all.
+    """
+    assert not overlays.is_valid_uri(uri)
+
+
+@pytest.mark.parametrize("name", ["gentoo", "DEFAULT"])
+def test_a_repository_may_not_be_given_a_reserved_name(name: str) -> None:
+    """Portage merges every file in repos.conf, so a new entry called `gentoo`
+    does not add a repository — it replaces the one the system comes from.
+
+    Being *given* the name is the narrow question. Having it is not: `gentoo` is
+    an ordinary thing to sync, list or look at, and only the Add dialog chooses.
+    """
+    assert not overlays.is_valid_name(name)
 
 
 @pytest.mark.parametrize(

@@ -212,6 +212,12 @@ users are.
      a set (`@world` for the update, `@preserved-rebuild` for the rebuild) name it literally,
      which is what keeps a set out of every other row.
 
+     A wildcard is the same argument one step down. `*/*` has been refused since it was found,
+     but `sys-libs/*` is glibc and `sys-apps/*` is portage, coreutils and baselayout — the same
+     command with the same effect, spelt differently. So the row that **removes** takes named
+     packages only, and the rows that merely look at things still take a wildcard: a preview
+     changes nothing, and `emerge.unmerge` is handed one `cat/pkg` at a time anyway.
+
      Every row also **requires** `--ignore-default-opts`, and so does every command
      `runner/emerge.py` builds. Without it the table describes a command that is only a prefix
      of the one that runs: `emerge` reads `EMERGE_DEFAULT_OPTS` out of `make.conf` and puts it
@@ -223,6 +229,17 @@ users are.
      `emerge` the user runs in a terminal, not the ones this window runs for them;
    - `emaint`, `eselect` — a table of complete command templates (`repository add <name> <type>
      <url>`, `profile set <number>` and so on), matched token by token.
+
+     Two things about `repository add` in particular, because it is the one row that chooses a
+     name and a source rather than naming ones that exist. `file://` is **not** an accepted
+     scheme: it points at a directory on this machine, in practice one belonging to whoever
+     called the program, and syncing from it copies their ebuilds into `/var/db/repos` where
+     merging one runs their shell script as root — no network and no server anywhere in the
+     story. And the name may not be `gentoo`: Portage reads every file in `repos.conf` and
+     merges them, so a section repeated in a file read later replaces the earlier definition,
+     and an entry called `gentoo` does not add a repository — it replaces the one the whole
+     system comes from. Both restrictions apply only where a name or a source is **chosen**;
+     `emaint sync -r gentoo` and `eselect repository disable gentoo` are ordinary and stay so.
 
      One thing `emaint` does that this cannot close: `emaint sync` parses `EMERGE_DEFAULT_OPTS`
      for itself (`portage/emaint/modules/sync/sync.py`) and has no equivalent of

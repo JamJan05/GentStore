@@ -244,14 +244,33 @@ _NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_+.-]*$")
 #: contains "://" perfectly happily if you put one at the end of it. The URL
 #: goes on to be synced as root's business, so a URL that is really a command is
 #: a way to run a command.
-_SCHEME = re.compile(r"^(?:https?|git|ssh|rsync|svn|file)://[^\s]+$")
+#:
+#: ``file://`` is deliberately absent, and used to be here. It names a directory
+#: on this machine — in practice one belonging to whoever is running Gentstore —
+#: and syncing from it copies their ebuilds into /var/db/repos, where merging one
+#: runs their shell script as root. ``gentstore-launcher`` refuses it for the
+#: same reason, and the two lists have to say the same thing (see
+#: test_the_overlay_dialog_and_the_launcher_agree_on_url_schemes).
+_SCHEME = re.compile(r"^(?:https?|git|ssh|rsync|svn)://[^\s]+$")
 
 #: ``git@github.com:user/repo.git`` — git's other spelling of ssh://.
 _SCP_LIKE = re.compile(r"^[A-Za-z0-9._-]+@[A-Za-z0-9._-]+:[^\s:]+$")
 
 
+#: Names a repository may not be *given*. See ``_RESERVED_REPOSITORIES`` in
+#: gentstore/helper/gentstore_launcher.py, which is the copy that decides:
+#: Portage merges every file in repos.conf, so a new entry called ``gentoo``
+#: replaces the repository the whole system comes from rather than adding one.
+RESERVED_NAMES = frozenset({"gentoo", "DEFAULT"})
+
+
 def is_valid_name(name: str) -> bool:
-    return bool(_NAME.match(name))
+    """Whether a repository may be *given* this name.
+
+    Not the same question as whether a repository may *have* it — ``gentoo`` is
+    an ordinary thing to sync or list, and only the Add dialog chooses a name.
+    """
+    return bool(_NAME.match(name)) and name not in RESERVED_NAMES
 
 
 def is_valid_uri(uri: str) -> bool:
