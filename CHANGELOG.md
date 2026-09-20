@@ -9,6 +9,8 @@ tag was made.
 
 ## [Unreleased]
 
+## [1.3.6] — 2026-09-20
+
 ### Added
 
 - **Everything Portage wants changed, in one screen and one password.** Installing Hyprland
@@ -627,7 +629,8 @@ comes from the `portage` API rather than from parsing ebuilds. Everything privil
 Bilingual (Polish and English) through Qt's own translation system; the documentation and the
 source strings are English.
 
-[Unreleased]: https://github.com/JamJan05/GentStore/compare/v1.3.5...HEAD
+[Unreleased]: https://github.com/JamJan05/GentStore/compare/v1.3.6...HEAD
+[1.3.6]: https://github.com/JamJan05/GentStore/compare/v1.3.5...v1.3.6
 [1.3.5]: https://github.com/JamJan05/GentStore/compare/v1.3.1...v1.3.5
 [1.3.1]: https://github.com/JamJan05/GentStore/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/JamJan05/GentStore/compare/v1.1.2...v1.3.0
