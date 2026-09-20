@@ -290,6 +290,15 @@ _BACKUP_NAME = re.compile(r"^portage\.bak-\d{4}-\d{2}-\d{2}T\d{4}(-\d+)?$")
 _ARCHIVE_NAME = re.compile(r"^portage\.bak-\d{4}-\d{2}-\d{2}T\d{4}(-\d+)?\.tar\.gz$")
 _CFG_PREFIX = re.compile(r"^\._cfg\d{4}_")
 
+#: Longest request this program will read.
+#:
+#: The largest one Gentstore sends is a grouped write of :data:`BATCH_MAX`
+#: lines, or a ``repos.conf`` file; both are a few kilobytes. This is four
+#: megabytes, which is not a limit anybody will meet by accident — and standard
+#: input is chosen by the caller, who is not obliged to be Gentstore and is
+#: talking to a process running as root.
+STDIN_MAX = 4 << 20
+
 #: Longest literal ``replace_line`` will look for.
 #:
 #: This used to bound the length of a *regular expression* the request supplied,
@@ -1537,9 +1546,26 @@ def main(stdin=None, stdout=None) -> int:  # noqa: ANN001 - streams, injected by
     stdout = stdout or sys.stdout
 
     try:
-        payload = stdin.read()
+        # One byte more than the limit, so that reaching it is distinguishable
+        # from exactly filling it.
+        payload = stdin.read(STDIN_MAX + 1)
     except OSError as exc:  # pragma: no cover
         print(json.dumps({"ok": False, "code": "no_input", "error": str(exc)}), file=stdout)
+        return 2
+
+    if len(payload) > STDIN_MAX:
+        print(
+            json.dumps(
+                {
+                    "ok": False,
+                    "code": "too_large",
+                    "error": f"a request is at most {STDIN_MAX} bytes",
+                    "version": PROTOCOL_VERSION,
+                }
+            ),
+            file=stdout,
+        )
+        stdout.flush()
         return 2
 
     try:
@@ -1553,6 +1579,17 @@ def main(stdin=None, stdout=None) -> int:  # noqa: ANN001 - streams, injected by
         response = {"ok": False, "code": "bad_json", "error": str(exc)}
     except OSError as exc:
         response = {"ok": False, "code": "os_error", "error": str(exc)}
+    except RecursionError:
+        # json.loads on deeply nested input. RecursionError is a RuntimeError,
+        # so the clause below never saw it and this program answered a request
+        # with a traceback and no JSON at all — which the caller reads as
+        # "no_answer with an empty stderr", the least informative outcome there
+        # is.
+        response = {
+            "ok": False,
+            "code": "bad_json",
+            "error": "the request is nested too deeply to read",
+        }
     except (TypeError, ValueError) as exc:
         # Nothing should reach here — every field is checked above — but this
         # process is root and its whole contract is "one JSON answer, always".

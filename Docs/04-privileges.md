@@ -354,6 +354,21 @@ own.
 The cost is a six-step update cycle asking six times. That is the honest description of what is
 happening, and being asked for something you did not start is the signal worth having.
 
+**All three `allow_*` axes are `auth_admin`, deliberately.** polkit asks the question three
+times: for the active local session, for an inactive one (a switched-away virtual terminal), and
+for anything else (`allow_any` — a remote session, most often SSH with a forwarded display). The
+tempting tightening is `no` for the last two, and it was considered and not made.
+
+What it would buy is small. `auth_admin` is not "this session is trusted"; it is "type an
+administrator's password, every time, and never remember the answer" (see above). A remote
+attacker who can already run programs as the user still has to produce that password, and one who
+has it does not need Gentstore. What it would cost is an administrator who manages a machine over
+SSH, which on Gentoo is not an edge case — and the failure would be a dialog that never appears,
+with nothing on screen to say why.
+
+The reason this is written down rather than simply left at the default: the default *is* what is
+wanted here, and a reader checking the policy should not have to wonder whether anybody looked.
+
 **A third action would be better still.** `eselect repository add` puts an arbitrary URL into
 `repos.conf` and is a larger thing to consent to than installing a package that is already in a
 repository you trust — but polkit binds an action to an **executable path**, not to its

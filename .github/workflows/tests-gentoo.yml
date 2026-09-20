@@ -27,7 +27,7 @@ jobs:
     timeout-minutes: 180
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5
         with:
           # Same reason as in tests.yml: tests/test_release.py resolves every
           # ref CHANGELOG.md links to, and a shallow clone holds none of them.
@@ -35,6 +35,13 @@ jobs:
 
       # The tree as a volume, which is how the Gentoo images are meant to be
       # used together: no `emerge --sync` on a runner.
+      #
+      # `:latest` on purpose, and not an oversight to be tidied away. This job
+      # runs nightly to find out whether Gentstore still works against Gentoo as
+      # it is *today* — a pinned digest would freeze the one thing it exists to
+      # watch, and would then pass for months after the answer had changed. The
+      # actions above are pinned because they run code in this repository's
+      # context; these images are the subject of the test, not part of it.
       - name: A repository snapshot to mount into the stage3
         run: docker create --name portage-tree gentoo/portage:latest /bin/true
 

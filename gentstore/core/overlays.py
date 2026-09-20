@@ -180,9 +180,32 @@ def _owners(element) -> tuple[str, ...]:  # noqa: ANN001
     return tuple(owners)
 
 
+#: A ``repositories.xml`` bigger than this is not one, so do not parse it.
+#:
+#: The same limit and the same reason as ``METADATA_MAX_BYTES`` in
+#: core/useflags.py, which this file had no equivalent of. ElementTree resolves
+#: no external entities, but it does expand the ones an internal subset defines,
+#: so a catalogue written to be a decompression bomb would be expanded here —
+#: and this file comes off the network, through ``eselect repository list``,
+#: into a directory the user can write to. A size limit bounds the cheap version
+#: of that; it is not a cure, and the cure is defusedxml, which this project does
+#: not have and would be a dependency to justify.
+#:
+#: Eight megabytes rather than one: the real catalogue lists every overlay
+#: Gentoo knows about and is a few hundred kilobytes, where a metadata.xml
+#: describes one package.
+CATALOGUE_MAX_BYTES = 8 << 20
+
+
 def parse(path: Path) -> Catalogue:
     """Read one ``repositories.xml``. A broken file gives an empty catalogue."""
     try:
+        size = path.stat().st_size
+        if size > CATALOGUE_MAX_BYTES:
+            log.warning(
+                "Ignoring the repository catalogue %s: %d bytes is not one", path, size
+            )
+            return Catalogue()
         tree = ElementTree.parse(path)
     except (OSError, ElementTree.ParseError) as exc:
         log.warning("Could not read the repository catalogue %s: %s", path, exc)

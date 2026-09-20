@@ -1767,3 +1767,52 @@ def test_a_line_that_is_already_there_is_recognised_as_already_there(
     assert first["changed"] is True
     assert second["changed"] is False
     assert target.read_text(encoding="utf-8").count("app-x/y flag") == 1
+
+
+# -- the contract: one JSON answer, always ----------------------------------
+
+
+def test_a_deeply_nested_request_is_a_refusal_not_a_traceback() -> None:
+    """RecursionError is a RuntimeError, so the sieve in main() never saw it.
+
+    json.loads raises it on deeply nested input, and this program then answered
+    a request with a traceback on stderr and no JSON at all — which the client
+    reads as "no_answer" with an empty message, the least informative outcome
+    there is. The comment above that sieve already said a traceback instead of
+    an answer is a worse bug than whatever caused it.
+    """
+    stdout = io.StringIO()
+    helper.main(io.StringIO("[" * 200_000 + "]" * 200_000), stdout)
+
+    answer = json.loads(stdout.getvalue())
+    assert answer["ok"] is False
+    assert answer["code"] == "bad_json"
+
+
+def test_a_request_larger_than_the_limit_is_refused() -> None:
+    """Standard input is chosen by the caller, who is not obliged to be
+    Gentstore and is talking to a process running as root."""
+    stdout = io.StringIO()
+    payload = '{"op": "backup", "pad": "' + "x" * helper.STDIN_MAX + '"}'
+    helper.main(io.StringIO(payload), stdout)
+
+    answer = json.loads(stdout.getvalue())
+    assert answer["code"] == "too_large"
+
+
+def test_the_answer_is_json_whatever_arrives(portage: Path) -> None:
+    """The whole contract of this program, as one test."""
+    for payload in (
+        "",
+        "not json",
+        "[" * 100_000 + "]" * 100_000,
+        '{"op": "append_line"}',
+        '{"op": "nonsense"}',
+        "[1, 2, 3]",
+        '{"op": "append_line", "path": 7, "line": null}',
+    ):
+        stdout = io.StringIO()
+        helper.main(io.StringIO(payload), stdout)
+        answer = json.loads(stdout.getvalue())
+        assert answer["ok"] is False, payload
+        assert answer["code"], payload

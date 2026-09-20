@@ -146,6 +146,45 @@ tag was made.
   All nine were found by a read-through of the two privileged programs; the report and the
   scripts that reproduce them are in `security-review/`.
 
+### Changed
+
+- **`glsa-check -f` now shows what it will install before asking for a password.** It calls
+  `emerge` for itself, so it is a privileged install — and it was the only one in the application
+  with no list in front of it, where depclean shows what it would remove, an uninstall goes
+  through `emerge -pv --unmerge`, and an ordinary install has the whole analysis screen. The list
+  was already on hand: the button only appears once `glsa-check -l` has come back.
+
+- **The helper answers with JSON whatever arrives.** Deeply nested input made `json.loads` raise
+  `RecursionError`, which is a `RuntimeError` and so slipped past the clause meant to guarantee
+  exactly this — the caller then saw "no answer" with an empty message. Standard input is also
+  bounded now, at four megabytes: it is chosen by the caller, who is not obliged to be Gentstore
+  and is talking to a process running as root.
+
+- **`repositories.xml` is not parsed if it is implausibly large**, the same limit and the same
+  reasoning `core/useflags.py` has always applied to `metadata.xml`. ElementTree expands the
+  entities an internal subset defines, and this file arrives off the network into a directory the
+  user can write to.
+
+- **Two tests that need the compiled translation catalogues now skip, loudly, instead of
+  failing.** `.qm` files are build artifacts; CI and the ebuild both build them before running the
+  suite and `make check` did not, so running the tests locally produced two assertion failures
+  about menu titles and no hint that a build step was missing. They skip with the command to run,
+  and `make check` passes `-rs` so the reason is always printed. A skip is not a pass: on every
+  machine that builds the catalogues, which is every machine CI runs on, they run as before.
+
+- **The release workflow passes its last `${{ }}` through the environment**, the way
+  `website-version.yml` already explained; the actions are pinned to commits rather than to
+  tags, since they run in this repository's context; and the CI test dependencies have versions.
+  The Gentoo container images keep `:latest` deliberately — that nightly job exists to find out
+  whether Gentstore still works against Gentoo as it is today, and a pinned digest would freeze
+  the one thing it is watching.
+
+- **Three comments that promised more than their code delivered** now say what they do not do:
+  `_tampering_risk` does not check the owner and is not meant to, the index cache's fingerprint
+  makes a *stale* cache harmless and not a doctored one, and the polkit policy's three `allow_*`
+  axes are all `auth_admin` on purpose — `allow_any: no` would lock out an administrator working
+  over SSH to buy very little, since `auth_admin` already means a password every time.
+
 ## [1.3.6] — 2026-09-20
 
 ### Added

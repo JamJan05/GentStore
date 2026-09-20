@@ -6,7 +6,7 @@ uprzywilejowanego nie zostało uruchomione. Wszystkie dowody pochodzą ze skrypt
 `gentstore_helper` / `gentstore_launcher` i wołają ich funkcje na katalogu tymczasowym, tak jak
 robi to `tests/test_helper.py`.
 
-> **Stan po przeglądzie.** Raport opisuje kod w chwili audytu (`9b6ba1d`). **GS-01 do GS-10 zostały od tego czasu naprawione** na gałęzi `fix/helper-content-validation`; szczegóły
+> **Stan po przeglądzie.** Raport opisuje kod w chwili audytu (`9b6ba1d`). **wszystkie znaleziska, GS-01 do GS-18, zostały od tego czasu rozstrzygnięte** na gałęzi `fix/helper-content-validation`; szczegóły
 > w [POPRAWKI.md](POPRAWKI.md) i w `CHANGELOG.md`. Pozostałe znaleziska stoją niezmienione.
 
 ---
@@ -1279,9 +1279,15 @@ Drobiazgi, po jednym zdaniu:
 - **Akcje przypięte do tagów** (`actions/checkout@v5`, `actions/setup-python@v5`), a nie do SHA.
   Przy `permissions: contents: write` w `release.yml` i `overlay.yml` przejęcie tagu akcji daje
   zapis do repozytorium.
-- **`tests.yml:63`** — `pip install --upgrade pip pytest ruff PyQt6 portage` bez przypięcia wersji;
-  **`tests-gentoo.yml:39`** — `gentoo/portage:latest`. Dla CI testowego to niski koszt; dla
-  spójności z resztą projektu warto przypiąć.
+- **`tests.yml:63`** — `pip install --upgrade pip pytest ruff PyQt6 portage` bez przypięcia wersji.
+  Przypięte.
+
+  > **SPROSTOWANIE.** W tym samym punkcie napisałem, że warto przypiąć też
+  > `gentoo/portage:latest` (`tests-gentoo.yml:39`). **To była zła rada.** Ten workflow to nocny
+  > cron, którego jedynym zadaniem jest sprawdzić, czy Gentstore nadal działa wobec Gentoo *w tej
+  > postaci, w jakiej jest dzisiaj*. Przypięcie do konkretnego digestu zamroziłoby dokładnie to,
+  > co on obserwuje, i przechodziłby miesiącami po tym, jak odpowiedź by się zmieniła. Zostawione
+  > na `:latest`, z komentarzem w pliku, żeby następny czytelnik tego nie „naprawił".
 - **`packaging/make-overlay.sh`** — wariant `curl … | sudo bash`, w którym jedyną weryfikacją
   pobranej treści jest `grep -q '^EGIT_REPO_URI='` (`:122`). Skrypt sam to nazywa („A 404 page or
   a captive portal is still a 200 to the shell"), ale to sprawdzenie odpowiada na inne pytanie niż

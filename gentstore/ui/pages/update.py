@@ -384,9 +384,7 @@ class UpdatePage(SplitPage):
         self._result_label(layout, "security")
         self._security_fix = QPushButton()
         self._security_fix.setProperty("variant", "danger")
-        self._security_fix.clicked.connect(
-            lambda: self._start("security", eselect.fix_glsa())
-        )
+        self._security_fix.clicked.connect(self._on_fix_security)
         self._security_fix.hide()
         layout.addWidget(self._security_fix, 0, Qt.AlignmentFlag.AlignLeft)
         layout.addStretch(1)
@@ -579,6 +577,52 @@ class UpdatePage(SplitPage):
         )
         if answer == QMessageBox.StandardButton.Yes:
             self._start("clean", emerge.depclean())
+
+    def _on_fix_security(self) -> None:
+        """Docs/04-privileges.md §6: say what will happen, then ask.
+
+        ``glsa-check -f`` calls ``emerge`` for itself, so this is the only
+        privileged install in the application, and it was the only one with no
+        list in front of it. Everything else shows one: depclean has the
+        packages it would remove, an uninstall goes through ``emerge -pv
+        --unmerge``, an install has the whole analysis screen. The list is
+        already on hand here — the button only appears once ``glsa-check -l``
+        has come back — so there was nothing to run and nothing to wait for,
+        which is the only reason it could have been left out.
+        """
+        report = getattr(self, "_glsa", None)
+        affected = report.affected if report is not None else ()
+        if not affected:
+            return
+
+        packages = sorted({package for item in affected for package in item.packages})
+        detail = "\n".join(f"{item.identifier}  {item.title}" for item in affected[:10])
+        if len(affected) > 10:
+            detail += "\n…"
+
+        question = (
+            self.tr("%n security advisory/advisories apply to this system:", "", len(affected))
+            + f"\n\n{detail}\n\n"
+            + self.tr("Fixing them builds and installs these packages:")
+            + "\n"
+            + "\n".join(packages[:10])
+            + ("\n…" if len(packages) > 10 else "")
+            + "\n\n"
+            + self.tr(
+                "glsa-check works out the versions for itself and runs emerge, so "
+                "the list above is what it starts from rather than the exact plan."
+            )
+        )
+
+        answer = QMessageBox.question(
+            self,
+            self.tr("Apply security fixes"),
+            question,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel,
+        )
+        if answer == QMessageBox.StandardButton.Yes:
+            self._start("security", eselect.fix_glsa())
 
     def _on_mark_news_read(self) -> None:
         writable = news.state_is_writable()

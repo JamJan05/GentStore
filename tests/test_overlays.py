@@ -386,3 +386,32 @@ def test_the_installed_packages_add_up(portage_env) -> None:
         for info in repos.list_repositories(portage_env, count_packages=False)
     )
     assert 0 < from_repos <= len(portage_env.vardb.cpv_all())
+
+
+def test_an_implausibly_large_catalogue_is_not_parsed(tmp_path: Path) -> None:
+    """ElementTree expands the entities an internal subset defines, and this
+    file comes off the network into a directory the user can write to.
+
+    The same limit core/useflags.py puts on metadata.xml, which this file had
+    no equivalent of — larger, because the real catalogue lists every overlay
+    Gentoo knows about where a metadata.xml describes one package.
+    """
+    path = tmp_path / "repositories.xml"
+    path.write_bytes(b"<repositories>" + b"<repo><name>x</name></repo>" * 400_000)
+
+    assert path.stat().st_size > overlays.CATALOGUE_MAX_BYTES
+    assert overlays.parse(path).entries == ()
+
+
+def test_a_catalogue_of_an_ordinary_size_is_still_read(tmp_path: Path) -> None:
+    path = tmp_path / "repositories.xml"
+    path.write_text(
+        "<repositories>"
+        "<repo quality='experimental' status='unofficial'>"
+        "<name>guru</name><description lang='en'>User contributed</description>"
+        "<source type='git'>https://anongit.gentoo.org/git/repo/proj/guru.git</source>"
+        "</repo></repositories>",
+        encoding="utf-8",
+    )
+    catalogue = overlays.parse(path)
+    assert [entry.name for entry in catalogue.entries] == ["guru"]

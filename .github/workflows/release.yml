@@ -65,7 +65,7 @@ jobs:
 
     steps:
       - name: Check out the whole history
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5
         with:
           # publish-overlay.sh describes the branch it writes with `git describe
           # --tags`, and the release tarball is cut from a tag: a shallow clone
@@ -84,6 +84,10 @@ jobs:
           # ${{ }} is substituted before bash ever sees the line, so a value
           # with a quote in it would not be a bad version, it would be code.
           INPUT_VERSION: ${{ inputs.version }}
+          # dry_run is a boolean input, so GitHub already limits it to true or
+          # false — but it was the one ${{ }} left inside a `run:` block, and a
+          # rule with an exception in it is a rule nobody can check at a glance.
+          INPUT_DRY_RUN: ${{ inputs.dry_run }}
         run: |
           set -euo pipefail
           if [[ ${GITHUB_EVENT_NAME} == workflow_dispatch ]]; then
@@ -97,7 +101,7 @@ jobs:
           {
             echo "VERSION=${version}"
             echo "TAG=v${version}"
-            echo "DRY=${{ github.event.inputs.dry_run || 'false' }}"
+            echo "DRY=${INPUT_DRY_RUN:-false}"
           } >> "${GITHUB_ENV}"
 
       - name: Rewrite the version, commit and tag

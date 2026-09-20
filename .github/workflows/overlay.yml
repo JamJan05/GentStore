@@ -44,7 +44,7 @@ jobs:
 
     steps:
       - name: Check out the whole history
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5
         with:
           # publish-overlay.sh names the branch it writes after `git describe
           # --tags`, which a shallow clone cannot answer.

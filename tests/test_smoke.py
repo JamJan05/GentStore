@@ -78,7 +78,7 @@ def test_unknown_page_is_ignored(window: MainWindow) -> None:
     assert window.current_page_id() == "search"
 
 
-def test_page_titles_follow_the_language(app: GentstoreApplication) -> None:
+def test_page_titles_follow_the_language(app: GentstoreApplication, translations) -> None:
     app.apply_language("en")
     assert PAGES[0].title == "Search & install"
 
@@ -89,7 +89,7 @@ def test_page_titles_follow_the_language(app: GentstoreApplication) -> None:
 
 
 def test_switching_language_retranslates_the_window(
-    app: GentstoreApplication, window: MainWindow
+    app: GentstoreApplication, window: MainWindow, translations
 ) -> None:
     """The whole window must follow a language switch without a restart.
 

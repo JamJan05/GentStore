@@ -29,7 +29,21 @@ fraction of a second. Two things make that safe:
 creates at login and removes when the last session ends, so a cached index
 cannot outlive the boot that produced it. Without that variable — a bare TTY, a
 container — the file falls back to ``~/.cache``, where it does survive a reboot;
-the fingerprint below is what makes that harmless rather than a second rule.
+the fingerprint below is what makes a *stale* one harmless rather than a second
+rule.
+
+Staleness is all it makes harmless. :func:`fingerprint` is a digest of public
+repository state — names, locations, directory timestamps — not a signature, so
+anyone who can write the file can also compute the digest that makes it look
+current. That is the same user who runs Gentstore, and against them it is no
+barrier at all: a doctored cache can name a package, a description and a
+repository of its choosing, and the search screen shows them.
+
+It is not left that way out of carelessness. Anything running as that user can
+already call ``gentstore-launcher`` directly, so the cache buys an attacker no
+reach they did not have. What it does buy is a way to mislead the *user* about
+what they are agreeing to, which is worth saying out loud rather than leaving
+the word "harmless" to cover both.
 
 *What is checked before it is used.* :func:`fingerprint` describes the state of
 the repositories in a few milliseconds: which ones are configured, where they

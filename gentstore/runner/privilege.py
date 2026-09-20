@@ -250,6 +250,20 @@ def _tampering_risk(path: Path) -> str | None:
     the sticky bit is what stops one user from renaming another user's file out
     of the way, which is exactly the move this is looking for. The file itself
     still has to be the owner's alone.
+
+    **What this does not check is the owner**, and the omission is the point
+    rather than an oversight. In a checkout the owner is the same user who runs
+    Gentstore, so against anything running as *that* user — an editor plugin, a
+    dependency installed with ``-e`` — this function is worth nothing, and it is
+    not meant to be worth anything: see :data:`DEV_VARIABLE`, which says so at
+    length. What it is for is the other case, a tree on a shared disk or under
+    ``/tmp``, where *somebody else* could swap the file out. The protection
+    against the owner is ``sudo make install-system``, which is why the variable
+    this guards is off by default.
+
+    Nor is it a moment in time. The file is checked here and handed to
+    ``pkexec`` afterwards, and the owner may rewrite it in between. Same answer:
+    against the owner there is nothing to defend.
     """
     try:
         mode = path.stat().st_mode

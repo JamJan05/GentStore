@@ -3,8 +3,8 @@
 Ta sama treść co w [RAPORT.md](RAPORT.md), ale ułożona według plików, żeby dało się po niej
 pracować. Uzasadnienia, scenariusze ataku i dowody są w raporcie — tutaj jest tylko „gdzie" i „co".
 
-**Stan: GS-01 do GS-10 są naprawione** — wszystkie o wadze Wysokiej i Średniej.
-Zostały tylko GS-11 do GS-18 (Niska/Info) na gałęzi `fix/helper-content-validation`. Zmienione
+**Stan: wszystkie znaleziska, GS-01 do GS-18, są rozstrzygnięte.** Jedno (GS-14, polityka
+polkit) rozstrzygnięte świadomie *bez* zmiany kodu — uzasadnienie w `Docs/04-privileges.md §3`. na gałęzi `fix/helper-content-validation`. Zmienione
 pliki: `gentstore/helper/gentstore_helper.py`, `gentstore/ui/pages/cfgfiles.py` (musi teraz
 wysyłać `expect` przy scalaniu), `tests/test_helper.py` (+18 testów),
 `tests/test_cfgfiles.py`, `Docs/04-privileges.md` (reguły 1a, 1a′, 7, 9), `CHANGELOG.md`.
@@ -25,12 +25,12 @@ Reszta listy czeka — nic z niej nie zostało zastosowane.
 | ✅ | [GS-05](RAPORT.md#gs-05--wzorzec-match-w-replace_line-to-regex-z-żądania-uruchamiany-w-procesie-roota) — regex z żądania | Średnia | `gentstore_helper.py` + `core/makeconf.py` + `core/confedit.py` | ~25 linii, zmiana protokołu |
 | ✅ | [GS-07](RAPORT.md#gs-07--podgląd--zapis-qlabel-w-trybie-autotext-zjada-linię-zaczynającą-się-od-) + [GS-08](RAPORT.md#gs-08--tekst-z-ebuilda-metadataxml-i-katalogu-overlayów-jest-renderowany-jako-html) — `setTextFormat` | Średnia | `gentstore/ui/**` | ~20 jednoliniowych zmian |
 | ✅ | [GS-10](RAPORT.md#gs-10--treść-linii-w-package-nie-jest-sprawdzana-wcale-r-przechodzi-tam-gdzie-n-nie) — `\r` i NUL w linii | Średnia | `gentstore/helper/gentstore_helper.py` | ~15 linii + 2 testy |
-| 10 | [GS-12](RAPORT.md#gs-12--helper-nie-odpowiada-json-em-na-zagnieżdżony-json-i-czyta-stdin-bez-ograniczenia) — `RecursionError`, brak limitu stdin | Niska | `gentstore/helper/gentstore_helper.py` | ~10 linii + 2 testy |
-| 11 | [GS-11](RAPORT.md#gs-11--glsa-check--f-instaluje-pakiety-jako-root-bez-potwierdzenia-i-bez-podglądu) — `glsa-check -f` bez pytania | Niska | `gentstore/ui/pages/update.py` | ~20 linii |
-| 12 | [GS-13](RAPORT.md#gs-13--coreoverlayspy-czyta-repositoriesxml-bez-limitu-rozmiaru) — brak limitu na `repositories.xml` | Niska | `gentstore/core/overlays.py` | 6 linii + 1 test |
-| 13 | [GS-14](RAPORT.md#gs-14--allow_inactive--auth_admin--sesja-zdalna-może-uwierzytelnić) — `allow_inactive` | Info | `data/org.gentoo.gentstore.policy` | 2 linie, do decyzji |
-| 14 | [GS-15](RAPORT.md#gs-15--_tampering_risk-nie-sprawdza-właściciela), [GS-16](RAPORT.md#gs-16--cache-indeksu-i-katalog-overlayów-decydują-o-tożsamości-pokazywanego-pakietu) — docstringi obiecują więcej, niż dają | Info | `runner/privilege.py`, `core/index_cache.py` | komentarze |
-| 15 | [GS-18](RAPORT.md#gs-18--łańcuch-dostaw-drobiazgi-w-ci-i-w-skryptach-pakujących) — CI i skrypty pakujące | Info | `.github/workflows/`, `packaging/` | drobiazgi |
+| ✅ | [GS-12](RAPORT.md#gs-12--helper-nie-odpowiada-json-em-na-zagnieżdżony-json-i-czyta-stdin-bez-ograniczenia) — `RecursionError`, brak limitu stdin | Niska | `gentstore/helper/gentstore_helper.py` | ~10 linii + 2 testy |
+| ✅ | [GS-11](RAPORT.md#gs-11--glsa-check--f-instaluje-pakiety-jako-root-bez-potwierdzenia-i-bez-podglądu) — `glsa-check -f` bez pytania | Niska | `gentstore/ui/pages/update.py` | ~20 linii |
+| ✅ | [GS-13](RAPORT.md#gs-13--coreoverlayspy-czyta-repositoriesxml-bez-limitu-rozmiaru) — brak limitu na `repositories.xml` | Niska | `gentstore/core/overlays.py` | 6 linii + 1 test |
+| ✅ | [GS-14](RAPORT.md#gs-14--allow_inactive--auth_admin--sesja-zdalna-może-uwierzytelnić) — `allow_inactive` | Info | `data/org.gentoo.gentstore.policy` | 2 linie, do decyzji |
+| ✅ | [GS-15](RAPORT.md#gs-15--_tampering_risk-nie-sprawdza-właściciela), [GS-16](RAPORT.md#gs-16--cache-indeksu-i-katalog-overlayów-decydują-o-tożsamości-pokazywanego-pakietu) — docstringi obiecują więcej, niż dają | Info | `runner/privilege.py`, `core/index_cache.py` | komentarze |
+| ✅ | [GS-18](RAPORT.md#gs-18--łańcuch-dostaw-drobiazgi-w-ci-i-w-skryptach-pakujących) — CI i skrypty pakujące | Info | `.github/workflows/`, `packaging/` | drobiazgi |
 
 ---
 
@@ -62,7 +62,7 @@ Reszta listy czeka — nic z niej nie zostało zastosowane.
       `portage.util.grablines` — helper i Portage liczą linie identycznie. Normalizacja CRLF→LF
       zostaje i jest teraz świadoma: to konsekwencja czytania pliku tak, jak czyta go Portage,
       dla którego oba zapisy znaczą to samo.
-- [ ] **GS-12** — `main` (`:1154`): `stdin.read(STDIN_MAX + 1)` + odmowa `too_large`;
+- [x] **GS-12** — `main` (`:1154`): `stdin.read(STDIN_MAX + 1)` + odmowa `too_large`;
       dołożyć `except RecursionError` do sita wyjątków.
 
 ## `gentstore/helper/gentstore_launcher.py`
@@ -83,11 +83,11 @@ Reszta listy czeka — nic z niej nie zostało zastosowane.
       dla czegoś, czego launcher odmówi. Test
       `test_the_overlay_dialog_and_the_launcher_agree_on_url_schemes` sam wychwyci rozjazd.
 - [x] **GS-09** — `overlays.py` (`is_valid_name`): odrzucać `gentoo`.
-- [ ] **GS-13** — `overlays.py:183` (`parse`): limit rozmiaru, jak `METADATA_MAX_BYTES`
+- [x] **GS-13** — `overlays.py:183` (`parse`): limit rozmiaru, jak `METADATA_MAX_BYTES`
       w `useflags.py:360`.
 - [x] **GS-05** — `makeconf.py:298` i `confedit.py:249,289`: przejść na nowe pola żądania.
 - [x] **GS-06** — `makeconf.py`: kopia listy dozwolonych tokenów `FEATURES`/`MAKEOPTS`.
-- [ ] **GS-16** — `index_cache.py:28-38`: poprawić komentarz — odcisk chroni przed
+- [x] **GS-16** — `index_cache.py:28-38`: poprawić komentarz — odcisk chroni przed
       *nieświeżością*, nie przed *podmianą* przez tego samego użytkownika.
 
 ## `gentstore/ui/`
@@ -109,20 +109,20 @@ Reszta listy czeka — nic z niej nie zostało zastosowane.
         Zastosowane w `block_notice.py`, `search.py`, `update.py`, `repos.py`, `masks.py`,
         `makeconf.py`
   - [x] `tests/test_plaintext.py` — 16 testów, 9 pada po wyłączeniu strażnika
-- [ ] **GS-11** — `pages/update.py:385-389`: pokazać listę przed `glsa-check -f`, albo
+- [x] **GS-11** — `pages/update.py:385-389`: pokazać listę przed `glsa-check -f`, albo
       `QMessageBox.question` z identyfikatorami z `glsa-check -l affected`, które już są w pamięci.
 
 ## `data/` i `packaging/`
 
-- [ ] **GS-14** — `org.gentoo.gentstore.policy:43,57`: rozważyć `allow_any`/`allow_inactive` = `no`.
+- [x] **GS-14** — `org.gentoo.gentstore.policy:43,57`: rozważyć `allow_any`/`allow_inactive` = `no`.
       Do decyzji z użytkownikami — na maszynie zarządzanej przez SSH to odcina aplikację.
-- [ ] **GS-18** — `packaging/make-overlay.sh:51`: ograniczyć `GENTSTORE_REF` do
+- [x] **GS-18** — `packaging/make-overlay.sh:51`: ograniczyć `GENTSTORE_REF` do
       `^[A-Za-z0-9._/-]+$`, zanim trafi do `RAW_BASE`.
-- [ ] **GS-18** — `.github/workflows/release.yml:100`: przenieść
+- [x] **GS-18** — `.github/workflows/release.yml:100`: przenieść
       `${{ github.event.inputs.dry_run }}` do `env:`, tak jak robi to `website-version.yml`.
-- [ ] **GS-18** — przypiąć akcje do SHA zamiast do tagów (`actions/checkout@v5`,
+- [x] **GS-18** — przypiąć akcje do SHA zamiast do tagów (`actions/checkout@v5`,
       `actions/setup-python@v5`) w workflowach z `permissions: contents: write`.
-- [ ] **GS-18** — przypiąć wersje w `tests.yml:63` (`pip install …`) i obraz
+- [x] **GS-18** — przypiąć wersje w `tests.yml:63` (`pip install …`) i obraz
       `gentoo/portage:latest` w `tests-gentoo.yml:39`.
 
 ## `tests/`
@@ -134,12 +134,12 @@ Szkice są przy każdym znalezisku w raporcie. Braki zebrane:
       `test_cfg_apply_without_an_expectation_still_works` okazał się już dotyczyć wyłącznie
       `decision="accept"`, więc został bez zmian; poprawki wymagał natomiast
       `tests/test_cfgfiles.py::test_merging_writes_what_the_user_ended_up_with`.
-- [ ] `test_helper.py` — katalog kandydata `._cfg` a `_only_root_can_write` (GS-03)
+- [x] `test_helper.py` — katalog kandydata `._cfg` a `_only_root_can_write` (GS-03)
 - [x] `test_helper.py` — `FEATURES`/`MAKEOPTS` (GS-06) — 27 testów po obu stronach szwu
 - [x] `test_helper.py` — „jedna linia" wobec `\r`, U+2028 i NUL (GS-10) — 11 testów,
       w tym jeden biorący prawdziwe `portage.util.grablines` za wyrocznię
 - [x] `test_helper.py` — `replace_line` zostawia resztę pliku bajt w bajt (GS-10b)
-- [ ] `test_helper.py` — zagnieżdżony JSON i limit stdin (GS-12)
+- [x] `test_helper.py` — zagnieżdżony JSON i limit stdin (GS-12)
 - [x] `test_runner.py` — `--unmerge sys-apps/*` odrzucone, podgląd nadal dozwolony (GS-04)
 - [x] `test_runner.py` — `file://` i nazwa `gentoo` odrzucone (GS-09)
 - [ ] **nowy** `test_preview_integrity.py` — podgląd pokazuje dokładnie te bajty, które zostaną
