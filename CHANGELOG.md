@@ -135,7 +135,7 @@ tag was made.
 
 - **The package frame reported on runs that were not about that package.** One runner and one log
   panel serve the whole window, so every command ends up back in the search screen. Pressing
-  "Update @world" in the toolbar with a package on screen left that update's report inside the
+  `Update @world` in the toolbar with a package on screen left that update's report inside the
   package's frame — a conflict about the whole system, shown under the name of something the run
   never mentioned. The frame is now filled only by commands the screen itself started.
 
