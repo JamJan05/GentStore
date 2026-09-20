@@ -357,7 +357,7 @@ def test_the_workflow_commits_the_ebuild_after_the_tag(workflow: str) -> None:
     steps = [
         workflow.index("git tag -a"),
         workflow.index("git archive"),
-        workflow.index('cp "${previous}" "${new}"'),
+        workflow.index("tools/release.py ebuild"),
         workflow.index('git commit -m "packaging: the ${VERSION} ebuild'),
     ]
     assert steps == sorted(steps), "the ebuild is no longer written after the tarball is cut"
@@ -471,3 +471,102 @@ def test_every_ref_the_changelog_links_to_still_exists() -> None:
             capture_output=True, text=True, check=False,
         )
         assert resolved.returncode == 0, f"CHANGELOG.md links to {ref}, which is not in this repo"
+
+
+# -- the release ebuild carries what the live one depends on --------------------
+
+#: Two ebuilds cut down to what this is about: the release one fetches and is
+#: behind on dependencies, the live one clones and is where they are added.
+PREVIOUS_EBUILD = """EAPI=8
+
+SRC_URI="https://example.invalid/${P}.tar.gz"
+KEYWORDS="~amd64"
+
+# What it needed back then.
+RDEPEND="
+\tdev-python/pyqt6
+"
+BDEPEND="
+\tdev-qt/qttools:6[linguist]
+"
+
+src_install() {
+\tdodoc README.md
+}
+"""
+
+LIVE_EBUILD = """EAPI=8
+
+inherit git-r3
+EGIT_REPO_URI="https://example.invalid/thing.git"
+KEYWORDS=""
+
+# The reason, which travels with the dependency.
+RDEPEND="
+\tdev-python/pyqt6
+\tdev-qt/qtsvg:6
+"
+BDEPEND="
+\tdev-qt/qttools:6[linguist]
+"
+
+src_install() {
+\tdodoc README.md
+}
+"""
+
+
+def test_a_generated_ebuild_takes_the_live_dependencies_and_nothing_else() -> None:
+    """The one thing the last release cannot be the source of truth for.
+
+    Everything that makes a release ebuild a release ebuild is the last one's —
+    SRC_URI, the keyword, the install phases — and the dependency list is the
+    live one's, comment and all. Without this the chain carries whatever the
+    first release needed and nothing added since, which is how dev-qt/qtsvg was
+    missing from every release while sitting in gentstore-9999.ebuild.
+    """
+    sys.path.insert(0, str(ROOT / "tools"))
+    import release as release_module
+
+    written = release_module.with_live_dependencies(PREVIOUS_EBUILD, LIVE_EBUILD)
+
+    assert "dev-qt/qtsvg:6" in written, "the dependency the live ebuild added did not travel"
+    assert "# The reason, which travels with the dependency." in written
+    assert "# What it needed back then." not in written, "the stale comment stayed behind"
+
+    assert 'SRC_URI="https://example.invalid/${P}.tar.gz"' in written
+    assert 'KEYWORDS="~amd64"' in written, "it took the live ebuild's empty keywords"
+    assert "git-r3" not in written, "a release ebuild must not also clone"
+    assert "dodoc README.md" in written
+
+
+def test_a_dependency_block_on_only_one_side_is_refused() -> None:
+    """Where a new variable belongs in a file is a decision, not a substitution."""
+    sys.path.insert(0, str(ROOT / "tools"))
+    import release as release_module
+
+    live = LIVE_EBUILD.replace('BDEPEND="', 'PDEPEND="\n\tsome/thing\n"\nBDEPEND="', 1)
+    with pytest.raises(SystemExit):
+        release_module.with_live_dependencies(PREVIOUS_EBUILD, live)
+
+
+def test_the_tree_is_ready_for_the_next_release_to_be_generated() -> None:
+    """The real two ebuilds, run through the real function.
+
+    A synthetic pair proves the substitution; this proves the files it will be
+    handed on release day still have the shape it needs — one dependency block
+    each, the same set on both sides, and a release ebuild to copy from.
+    """
+    sys.path.insert(0, str(ROOT / "tools"))
+    import release as release_module
+
+    previous = release_module.previous_release_ebuild()
+    written = release_module.with_live_dependencies(
+        previous.read_text(), (EBUILDS / "gentstore-9999.ebuild").read_text()
+    )
+    for name in release_module.DEPENDENCIES:
+        pattern = release_module.dependency_block(name)
+        assert pattern.findall(written) == pattern.findall(
+            (EBUILDS / "gentstore-9999.ebuild").read_text()
+        ), f"{name} did not come out matching the live ebuild"
+    assert "SRC_URI=" in written and "git-r3" not in written

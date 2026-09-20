@@ -21,6 +21,7 @@
     python tools/release.py check [X.Y.Z]     verify every place agrees
     python tools/release.py bump X.Y.Z        rewrite every place, close the changelog
     python tools/release.py notes X.Y.Z       print that release's changelog section
+    python tools/release.py ebuild X.Y.Z      write that release's ebuild
 
 Four files say what version this is, and before this script they said it in four
 independent edits: 1.1.0 shipped with the README still announcing 1.0.0, which is
@@ -28,9 +29,10 @@ exactly the failure a release is least likely to notice. They are now written
 together or not at all, and ``check`` is what the release workflow runs against a
 tag before it will publish anything.
 
-The ebuild is deliberately not on the list. A release ebuild carries no version —
-``SRC_URI`` is built from ``${PV}`` and the file name supplies that — so there is
-nothing in it to substitute. See .github/workflows/release.yml.
+The ebuild states no version of its own — ``SRC_URI`` is built from ``${PV}`` and
+the file name supplies that — so it is not in the rewriting above. It is written
+here all the same, by ``ebuild``, because one part of it cannot be inherited from
+the last release: what the package needs installed. See .github/workflows/release.yml.
 """
 
 from __future__ import annotations
@@ -42,6 +44,9 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+
+ATOM = ROOT / "packaging" / "app-portage" / "gentstore"
+LIVE_EBUILD = ATOM / "gentstore-9999.ebuild"
 
 PYPROJECT = ROOT / "pyproject.toml"
 INIT = ROOT / "gentstore" / "__init__.py"
@@ -84,6 +89,18 @@ UNRELEASED_LINK = re.compile(
 )
 
 RELEASE_NUMBER = re.compile(r"^\d+\.\d+\.\d+$")
+
+#: ``gentstore-1.3.5.ebuild``, and a revision bump of one, which sorts after it.
+EBUILD_NAME = re.compile(r"^gentstore-(\d+)\.(\d+)\.(\d+)(?:-r(\d+))?$")
+
+#: The variables a release ebuild has to state exactly as the live one does.
+#: Everything else about the two is meant to differ — one clones where the other
+#: fetches — but what the package needs installed is not a property of how its
+#: source arrived, and a release ebuild that is only ever copied from the last
+#: release inherits the dependency list of whatever shipped before it and never
+#: anything newer. dev-qt/qtsvg is how that was found: added to the live ebuild,
+#: it would have reached no release ebuild ever.
+DEPENDENCIES = ("DEPEND", "RDEPEND", "BDEPEND", "PDEPEND", "IDEPEND")
 
 
 def fail(message: str) -> None:
@@ -200,6 +217,92 @@ def do_notes(args: argparse.Namespace) -> None:
     print(body)
 
 
+def dependency_block(name: str) -> re.Pattern[str]:
+    """``NAME="…"``, and the comment lines written directly above it.
+
+    The comments come with it on purpose: in these ebuilds they are where the
+    reason a dependency exists is written down, and a dependency carried into a
+    release without its reason is one nobody can later decide to remove.
+
+    A dependency string holds no quote of its own, so ``[^"]*`` is exactly the
+    assignment and there is nothing here that needs a shell parser.
+    """
+    return re.compile(rf'(?:^#[^\n]*\n)*^{name}="[^"]*"$', re.M)
+
+
+def with_live_dependencies(previous: str, live: str) -> str:
+    """*previous* — the last release's ebuild — with *live*'s dependency blocks.
+
+    Everything else in *previous* is what makes it a release ebuild and is kept:
+    ``SRC_URI``, ``KEYWORDS``, the inherits, the install phases. Only what the
+    package needs is replaced, because that is the one thing the last release
+    cannot be a source of truth for.
+
+    A block that is in one ebuild and not the other is refused rather than
+    guessed at. Where a new variable belongs in a file is a decision, and a
+    release is not the moment to have a script make it.
+    """
+    for name in DEPENDENCIES:
+        pattern = dependency_block(name)
+        theirs = list(pattern.finditer(live))
+        ours = list(pattern.finditer(previous))
+        if len(theirs) > 1 or len(ours) > 1:
+            fail(f"{name} is stated more than once; which one counts is not for this to decide")
+        if bool(theirs) != bool(ours):
+            missing = "the last release's" if theirs else LIVE_EBUILD.name
+            holds = LIVE_EBUILD.name if theirs else "the last release's"
+            fail(
+                f"{holds} ebuild states {name} and {missing} ebuild does not.\n"
+                f"  Put it in both by hand once, then this can carry it every time."
+            )
+        if not theirs:
+            continue
+        here = ours[0]
+        previous = previous[: here.start()] + theirs[0].group(0) + previous[here.end() :]
+    return previous
+
+
+def previous_release_ebuild(exclude: Path | None = None) -> Path:
+    """The newest ebuild that *fetches*, which is not the same as the newest one.
+
+    ``9999`` sorts above every release there will ever be, so picking by version
+    alone picks the live ebuild and produces a release that clones from git.
+    *exclude* is the file being written: a re-run over a release that already
+    exists must still copy the one before it, not itself.
+    """
+    fetching = []
+    for path in ATOM.glob("gentstore-*.ebuild"):
+        if path == exclude or not re.search(r"^SRC_URI=", read(path), re.M):
+            continue
+        named = EBUILD_NAME.match(path.stem)
+        if named:
+            fetching.append((tuple(int(part or 0) for part in named.groups()), path))
+    if not fetching:
+        fail("there is no release ebuild to copy")
+    return max(fetching)[1]
+
+
+def do_ebuild(args: argparse.Namespace) -> None:
+    """Write the ebuild for *version*: the last release's, with live dependencies.
+
+    The release workflow used to do this with ``cp`` alone, and that is how a
+    dependency added to gentstore-9999.ebuild reached no release: each release
+    ebuild was a copy of the one before it, so the chain carried whatever 1.0.0
+    happened to need and nothing since. The generated file is otherwise exactly
+    what that ``cp`` produced.
+    """
+    version = args.version.removeprefix("v")
+    if not RELEASE_NUMBER.match(version):
+        fail(f"{version} is not an X.Y.Z release number")
+
+    target = ATOM / f"gentstore-{version}.ebuild"
+    previous = previous_release_ebuild(exclude=target)
+    target.write_text(with_live_dependencies(read(previous), read(LIVE_EBUILD)), encoding="utf-8")
+
+    print(f"  {target.relative_to(ROOT)}")
+    print(f"copied from {previous.name}, dependencies from {LIVE_EBUILD.name}")
+
+
 def do_bump(args: argparse.Namespace) -> None:
     """Write the new number everywhere and close the changelog's Unreleased section."""
     new = args.version.removeprefix("v")
@@ -273,6 +376,7 @@ COMMANDS = {
     "current": do_current,
     "check": do_check,
     "notes": do_notes,
+    "ebuild": do_ebuild,
     "bump": do_bump,
 }
 
@@ -288,6 +392,9 @@ def main(argv: list[str] | None = None) -> int:
 
     noting = sub.add_parser("notes", help="print a release's changelog section")
     noting.add_argument("version")
+
+    writing = sub.add_parser("ebuild", help="write that release's ebuild")
+    writing.add_argument("version")
 
     bumping = sub.add_parser("bump", help="rewrite every place and close [Unreleased]")
     bumping.add_argument("version")

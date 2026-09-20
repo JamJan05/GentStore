@@ -66,6 +66,17 @@ tag was made.
 
 ### Fixed
 
+- **A dependency added to the live ebuild reached no release.** The release workflow wrote each
+  release's ebuild by copying the previous release's, so what a release declares it needs was
+  whatever the release before it declared, back to 1.0.0. `gentstore-9999.ebuild` is where a
+  dependency gets added, and nothing carried it across: the qtsvg fix above would have gone out in
+  1.3.6 with the ebuild still not asking for it. The ebuild is now written by
+  `tools/release.py ebuild`, which takes everything that makes a release ebuild a release ebuild
+  — `SRC_URI`, the keyword, the install phases — from the last release, and every `*DEPEND` block,
+  comments included, from the live one. A block on only one side is refused rather than guessed at:
+  where a new variable belongs in a file is a decision, and a release is not the moment to have a
+  script make it.
+
 - **An installed copy with no icons at all, which the nightly job had been saying since the day
   it could.** The ebuild never asked for `dev-qt/qtsvg`. Every icon here is an SVG — the
   interface glyphs and the application's own — and without that package `QIcon` reads none of

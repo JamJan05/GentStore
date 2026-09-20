@@ -203,22 +203,18 @@ jobs:
           # subdirectory lists that subdirectory, relative to itself. Asking it
           # there for CHANGELOG.md is a check that can only ever answer no.
           git ls-tree -r --name-only "${TAG}" > tagged.txt
-          cd "${ATOM_DIR}"
 
           # A release ebuild holds no version number of its own: SRC_URI is built
           # from ${PV} and ${P}, which come from the file name. So the new one is
-          # a copy of the last release's, not a rewrite of anything.
-          # The last one that *fetches*, not the last one by name: 9999 sorts
-          # above every release there will ever be, so picking by version alone
-          # copies the live ebuild and produces a release that clones from git.
-          previous=""
-          for candidate in $(ls gentstore-*.ebuild | sort -V); do
-            grep -q '^SRC_URI=' "${candidate}" && previous="${candidate}"
-          done
-          [[ -n ${previous} ]] || { echo "::error::no release ebuild to copy"; exit 1; }
+          # the last release's, not a rewrite of anything — except for what the
+          # package needs installed, which is taken from gentstore-9999.ebuild.
+          # That exception is the whole reason this is a script and not a cp:
+          # each release ebuild being a copy of the one before it means the chain
+          # carries the dependencies of the first release and nothing added
+          # since. dev-qt/qtsvg spent three weeks being exactly that.
+          python3 tools/release.py ebuild "${VERSION}"
           new="gentstore-${VERSION}.ebuild"
-          cp "${previous}" "${new}"
-          echo "${new} copied from ${previous}"
+          cd "${ATOM_DIR}"
 
           # The one line that is not simply inherited. 1.0.0 and 1.1.0 predate
           # CHANGELOG.md, so their ebuilds cannot install a file their tarballs
