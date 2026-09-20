@@ -47,6 +47,27 @@ GRACE_MS = 10_000
 #: cannot, so only the text after the last one is kept.
 _CARRIAGE_RETURN = "\r"
 
+#: How much of one line this will hold before passing it on unfinished.
+#:
+#: Output arrives in chunks and is held until a newline arrives to say the line
+#: is over. Nothing guaranteed one ever would. A build that prints its progress
+#: with carriage returns and no newline — ninja, wget, anything with a bar —
+#: grows this buffer for as long as it runs, and an ebuild that means harm can
+#: simply never print one at all. Neither needs the other to be a problem: the
+#: first is ordinary software, the second is a line with no upper bound on its
+#: length arriving at parsers that have to look at every character of it.
+#:
+#: Sixteen kibibytes is about twenty times the longest line in the logs on the
+#: machine this was written on, and several times a compiler invocation with a
+#: hundred include paths, which is the longest thing a build realistically
+#: prints. The number is also chosen against :data:`gentstore.ui.widgets.
+#: log_view.MAX_LINES`: the widget keeps 20 000 blocks, so the two together are
+#: what bounds how much of a runaway command can be held in memory at once.
+#:
+#: Not a substitute for parsers that do not backtrack — see the note on _ROW in
+#: core/emerge_parse.py. It is the floor under them.
+MAX_LINE = 16 * 1024
+
 
 @dataclass(frozen=True, slots=True)
 class CommandSpec:
@@ -183,11 +204,50 @@ class Command(QObject):
         self._buffer += chunk
         *complete, self._buffer = self._buffer.split("\n")
         for line in complete:
-            self.output.emit(line.rsplit(_CARRIAGE_RETURN, 1)[-1])
+            self._emit(line.rsplit(_CARRIAGE_RETURN, 1)[-1])
+
+        if len(self._buffer) > MAX_LINE:
+            # A progress bar overwrites itself and never sends a newline, so
+            # the whole of it is waiting here. Only the last frame is worth
+            # anything — which is what a terminal shows — and dropping the rest
+            # is usually the whole of the problem.
+            self._buffer = self._buffer.rsplit(_CARRIAGE_RETURN, 1)[-1]
+        # Still too long: a line that is never going to end. Pass it on rather
+        # than hold it, so the buffer cannot grow without bound — and walk it
+        # by offset, with one slice at the end, for the reason in _emit.
+        sent = 0
+        while len(self._buffer) - sent > MAX_LINE:
+            self._emit(self._buffer[sent : sent + MAX_LINE])
+            sent += MAX_LINE
+        if sent:
+            self._buffer = self._buffer[sent:]
+
+    def _emit(self, line: str) -> None:
+        """Hand one line to whoever is listening, in pieces if it is too long.
+
+        Every way out of this class goes through here, and that is the whole
+        reason it exists. The first version of this bounded the *unfinished*
+        buffer and left finished lines alone — so a line that did end, a
+        hundred megabytes and then a newline, walked straight past the limit it
+        was supposed to be under. Splitting on newlines hands you complete
+        lines of any length; a bound that is not applied to them is not a
+        bound.
+        """
+        if len(line) <= MAX_LINE:
+            self.output.emit(line)
+            return
+        # By offset, not by reslicing. ``line = line[MAX_LINE:]`` copies the
+        # whole remaining tail on every turn, so cutting a long line into
+        # pieces costs the square of its length — sixteen megabytes took six
+        # hundred milliseconds that way and thirteen this way, and a hundred
+        # would have been half a minute of a frozen window. Trading one
+        # unbounded cost for another, on the thread that draws.
+        for start in range(0, len(line), MAX_LINE):
+            self.output.emit(line[start : start + MAX_LINE])
 
     def _flush(self) -> None:
         if self._buffer:
-            self.output.emit(self._buffer.rsplit(_CARRIAGE_RETURN, 1)[-1])
+            self._emit(self._buffer.rsplit(_CARRIAGE_RETURN, 1)[-1])
             self._buffer = ""
 
     # -- stopping ----------------------------------------------------------

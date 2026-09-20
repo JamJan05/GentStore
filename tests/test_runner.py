@@ -34,7 +34,7 @@ from PyQt6.QtWidgets import QApplication
 from gentstore.core import backup as backup_core
 from gentstore.helper import gentstore_helper as helper
 from gentstore.helper import gentstore_launcher as launcher
-from gentstore.runner import emerge, eselect, privilege
+from gentstore.runner import command, emerge, eselect, privilege
 from gentstore.runner.command import Command, CommandError, CommandSpec
 from gentstore.ui.widgets.log_view import classify
 
@@ -1058,3 +1058,145 @@ def test_an_existing_repository_called_gentoo_is_still_ordinary() -> None:
     launcher.check_arguments("emaint", ["sync", "-r", "gentoo"])
     launcher.check_arguments("eselect", ["repository", "enable", "gentoo"])
     launcher.check_arguments("eselect", ["repository", "disable", "gentoo"])
+
+
+# -- a line that never ends -------------------------------------------------
+
+
+def test_a_line_that_never_ends_is_passed_on_in_pieces(runner: Command) -> None:
+    """Output is held until a newline says the line is over, and nothing
+    guaranteed one ever would.
+
+    An ebuild that means harm simply never prints one; the buffer then grows for
+    as long as the command runs, and every character of it reaches parsers that
+    have to look at all of them. Passed on in pieces instead — nothing is lost,
+    and nothing downstream is handed a string with no upper bound on its length.
+    """
+    size = command.MAX_LINE * 3 + 500
+    spec = CommandSpec(
+        argv=(sys.executable, "-c", f"import sys; sys.stdout.write('a' * {size})"),
+    )
+    lines, codes = run_and_wait(runner, spec)
+
+    assert codes == [0]
+    assert "".join(lines) == "a" * size, "the output has to survive the splitting"
+    assert max(len(line) for line in lines) <= command.MAX_LINE
+
+
+def test_a_progress_bar_does_not_grow_without_end(runner: Command) -> None:
+    """ninja, wget and anything else with a bar overwrite one line with carriage
+    returns and never send a newline.
+
+    That is ordinary software, not an attack, and only the last frame is worth
+    keeping — which is what a terminal shows anyway.
+    """
+    frames = command.MAX_LINE // 8 + 100
+    spec = CommandSpec(
+        argv=(
+            sys.executable,
+            "-c",
+            f"import sys\nfor i in range({frames}): sys.stdout.write('\\rstep %06d' % i)",
+        ),
+    )
+    lines, codes = run_and_wait(runner, spec)
+
+    assert codes == [0]
+    assert max((len(line) for line in lines), default=0) <= command.MAX_LINE
+    # Whatever survived is a frame, not a wall of them glued together.
+    assert lines, "the last frame still has to arrive"
+    assert lines[-1].startswith("step "), lines[-1][:60]
+
+
+def test_an_ordinary_long_line_is_still_one_line(runner: Command) -> None:
+    """The cap has to sit above anything a build really prints. The longest
+    line in the portage logs on the machine this was written on was 715
+    characters; a compiler invocation with a hundred include paths is the
+    realistic upper bound and is still far below."""
+    line = "x" * 4000
+    spec = CommandSpec(argv=(sys.executable, "-c", f"print('{line}')"))
+    lines, codes = run_and_wait(runner, spec)
+
+    assert codes == [0]
+    assert lines == [line]
+
+
+def test_a_finished_line_is_bounded_too(runner: Command) -> None:
+    """The first version of the cap bounded the unfinished buffer and left the
+    finished lines alone.
+
+    Splitting on newlines hands you complete lines of any length, so a line that
+    did end — three times the limit and then a newline — walked straight past
+    the bound it was supposed to be under. A bound that is not applied to every
+    way out is not a bound.
+    """
+    size = command.MAX_LINE * 3
+    spec = CommandSpec(
+        argv=(sys.executable, "-c", f"import sys; sys.stdout.write('a' * {size} + '\\n')"),
+    )
+    lines, codes = run_and_wait(runner, spec)
+
+    assert codes == [0]
+    assert max(len(line) for line in lines) <= command.MAX_LINE
+    assert "".join(lines) == "a" * size
+
+
+def test_the_boundary_itself(runner: Command) -> None:
+    """One character over, with a newline after it — the smallest input that
+    tells the two versions apart."""
+    size = command.MAX_LINE + 1
+    spec = CommandSpec(
+        argv=(sys.executable, "-c", f"import sys; sys.stdout.write('b' * {size} + '\\n')"),
+    )
+    lines, codes = run_and_wait(runner, spec)
+
+    assert codes == [0]
+    assert [len(line) for line in lines] == [command.MAX_LINE, 1]
+    assert "".join(lines) == "b" * size
+
+
+def test_a_line_exactly_at_the_limit_is_left_whole(runner: Command) -> None:
+    """The cap is a maximum, not a target: a line of exactly MAX_LINE is one
+    line, and splitting it would be the off-by-one nobody notices."""
+    spec = CommandSpec(
+        argv=(
+            sys.executable,
+            "-c",
+            f"import sys; sys.stdout.write('c' * {command.MAX_LINE} + '\\n')",
+        ),
+    )
+    lines, codes = run_and_wait(runner, spec)
+
+    assert codes == [0]
+    assert lines == ["c" * command.MAX_LINE]
+
+
+def test_cutting_a_long_line_up_does_not_cost_its_square(runner: Command) -> None:
+    """`line = line[MAX_LINE:]` copies the whole remaining tail every turn.
+
+    Measured on _emit itself rather than through a subprocess: a pipe and a
+    child writing megabytes are most of the wall clock otherwise, and they hid
+    the difference completely the first time this was written — the test passed
+    against the version it was meant to catch.
+
+    Sixty-four megabytes is about ten seconds of reslicing and about fifty
+    milliseconds by offset. The budget sits between the two with room on both
+    sides. This runs on the thread that draws the window, so the fix for an
+    unbounded line would otherwise have handed back an unbounded cost.
+    """
+    size = 64 * 1024 * 1024
+    seen = 0
+
+    def count(piece: str) -> None:
+        nonlocal seen
+        seen += len(piece)
+
+    runner.output.connect(count)
+    try:
+        started = time.monotonic()
+        runner._emit("a" * size)
+        elapsed = time.monotonic() - started
+    finally:
+        runner.output.disconnect(count)
+
+    assert seen == size, "nothing may be lost in the cutting"
+    assert elapsed < 3.0, f"{elapsed:.1f}s to cut {size} characters up"
