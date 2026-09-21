@@ -1447,11 +1447,51 @@ błąd, który Qt może zgłosić, to jest crash”*. Zależy od kolejności, w 
 a ta zależy od obciążenia maszyny — stąd milczenie przez kilkadziesiąt przebiegów niczego nie
 dowodzi.
 
-**Nie jest naprawiony. Przestał się pojawiać.** To dwie różne rzeczy i nie należy ich mylić.
-Nie dotyczy działającej aplikacji — okno uruchomione w trakcie pracy chodziło i zamknęło się
-czysto; objawia się wyłącznie w zestawie testów.
+~~**Nie jest naprawiony. Przestał się pojawiać.**~~ ~~Nie dotyczy działającej aplikacji — okno
+uruchomione w trakcie pracy chodziło i zamknęło się czysto; objawia się wyłącznie w zestawie
+testów.~~ **Nieaktualne — patrz sprostowanie niżej.**
 
-Czego brakuje, żeby to domknąć: **nazwy testu, na którym się urywa.** Przy obu wystąpieniach miałem
+> **SPROSTOWANIE (1.4.1).** Zdiagnozowany i naprawiony. Dwa zdania powyżej były nieprawdziwe,
+> a drugie z nich w sposób, który ma znaczenie.
+>
+> **Nie ginie na żadnym teście.** Ginie po ostatnim, w teardownie sesyjnego fixture'a `app`:
+> `_pytest/fixtures.py:1163` zeruje `cached_result`, PyQt kasuje `QApplication`, a `~QApplication`
+> niszczy pozostałe widżety najwyższego poziomu — od 4 do 12 bezrodzicielskich okien, które
+> zostawiły po sobie fixture'y bez teardownu, a których osłony Pythona jeszcze żyły. Pad wypada
+> **przed** podsumowaniem pytest, stąd `make check` bez bilansu testów. Pytanie o „nazwę testu"
+> nie miało odpowiedzi, bo było źle postawione.
+>
+> **Dotyczy działającej aplikacji, i to przy każdym zamknięciu.** `main()` tworzy `QApplication`
+> przed `MainWindow`, obie jako zmienne lokalne jednej ramki; CPython zwalnia je w kolejności
+> utworzenia, więc aplikacja ginęła pierwsza. Zmierzone na prawdziwym punkcie wejścia: 8/8 przy
+> zimnym cache indeksu, 8/8 przy ciepłym, 3/3 po ustabilizowanej sesji, **5/5 na realnej sesji
+> Wayland**. Nikt tego nie widział, bo nie ma czego: okno już zniknęło, `closeEvent` zdążył
+> zapisać ustawienia i zatrzymać polecenie, a jedynym śladem jest kod wyjścia 139, który
+> uruchamiacz pulpitu wyrzuca. Zdanie „okno chodziło i zamknęło się czysto" było prawdziwe —
+> i właśnie dlatego mylące.
+>
+> **To nie jest podatność.** Nic sterowanego z zewnątrz do tego nie dochodzi; czasy życia
+> obiektów wynikają ze struktury `main()`, nie z danych wejściowych. Kosztem jest kod wyjścia,
+> który psuje wszystko, co program opakowuje, oraz zrzut pamięci procesu przy każdym zamknięciu
+> tam, gdzie zrzuty są włączone.
+>
+> **Hipoteza o testach przełączających język była trafna co do miejsca, nie co do przyczyny.**
+> `apply_language` woła `installTranslator`, a Qt rozsyła wtedy `LanguageChange` do każdego
+> widżetu w procesie — to jedyna operacja w zestawie dotykająca wszystkich naraz, więc właśnie
+> tam trafia się w porzucone okno. Złapany w ten sposób szósty pad to abort z `qFatal`, nie SEGV.
+> Odrzucenie tej hipotezy po sześciu czystych przebiegach, przy częstości rzędu 1 %, było
+> odrzuceniem bez dowodu: szansa zobaczenia zera w sześciu przebiegach wynosiła ~94 %.
+>
+> **Dlaczego kilkadziesiąt czystych przebiegów niczego nie dowodziło.** 542 zwykłe przebiegi
+> pełnego zestawu — zero padów. Pod `MALLOC_PERTURB_=165 PYTHONMALLOC=malloc`, które nie tworzy
+> use-after-free, tylko czyni je natychmiast śmiertelnym — cztery pady. Zależność jest od układu
+> sterty, nie od obciążenia: w reprodukcji poza pytest dwa okna padają, trzy i cztery nie, pięć
+> pada. Cisza przez tydzień nie znaczy nic.
+>
+> Naprawione w dwóch miejscach: teardown w pięciu fixture'ach (`tests/conftest.py` dostał
+> wspólne `destroy`) oraz `_release()` w `gentstore/app.py`, zwalniające okno przed aplikacją.
+
+~~Czego brakuje, żeby to domknąć: **nazwy testu, na którym się urywa.**~~ Przy obu wystąpieniach miałem
 tylko obcięty ogon wyjścia, bez linii poprzedzającej `Fatal Python error`, i to był błąd
 w prowadzeniu śledztwa — pytest sam wypisuje ślad Pythona przy takim padzie, wystarczyło go nie
 zgubić. Gdyby wrócił:
@@ -1473,6 +1513,13 @@ Zwykle ratuje jeszcze `faulthandler`, który przy takim padzie wypisuje ślad Py
 tutaj**: w obu zaobserwowanych wystąpieniach lista ramek Pythona była pusta, a zaraz po niej szedł
 stos C. To znaczy, że crash nastąpił w kodzie C bez ramki Pythona na stosie, czyli dokładnie
 w sprzątaniu Qt. Przy takim padzie `-q` nie da nazwy żadną drogą.
+
+> **SPROSTOWANIE (1.4.1).** Ta obserwacja okazała się najcenniejsza w całym akapicie i wskazywała
+> nie na zestaw testów, lecz na aplikację. Pad w teardownie pytest **ma** ramki Pythona
+> (`_pytest/fixtures.py:1163`). Dosłowne `<no Python frame>` wypisuje dopiero pad przy wyjściu
+> `gentstore` — i ten padał przy każdym zamknięciu. Z uciętego ogona nie da się orzec, które
+> z dwóch wystąpień było które. Rada o `-vv` zamiast `-q` pozostaje słuszna i tu akurat bezradna:
+> pad jest w sprzątaniu sesji, więc żadna nazwa testu go nie wskaże.
 
 **Czego nie próbowałem w ogóle:**
 - wyścigów (TOCTOU) *empirycznie* — rozumowanie w tabeli §2 przy regule 1 jest analizą kodu,
