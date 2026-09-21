@@ -9,6 +9,70 @@ tag was made.
 
 ## [Unreleased]
 
+The segfault that §4 of the security report listed as unexplained. It was two faults of one kind,
+and the report was wrong about the more important of them: it does not only affect the test suite.
+`gentstore` segfaulted on **every exit**, and had done since the window existed.
+
+Nothing to do after updating. Nothing in the interface changes.
+
+### Fixed
+
+- **`gentstore` crashed on every exit.** `main()` builds the `QApplication` and then the
+  `MainWindow`, both as locals of one frame, and CPython releases a frame's locals in the order
+  they were created — so the application went first and `~QApplication` deleted a window whose
+  Python wrapper was still alive. Qt deleting a widget out from under a live wrapper is not an
+  error it can report, it is a crash, and it is the class `runner/command.py:close()` already
+  names.
+
+  Measured on the real entry point, closing the window on a timer and reading the exit status:
+  8 of 8 with a cold index cache, 8 of 8 with a warm one, 3 of 3 after a settled twenty-second
+  session, and 5 of 5 on a real Wayland session rather than the offscreen platform. Not a race
+  and not a headless artefact. `_release()` now destroys the window before the application lets
+  go, and the window is closed before the task drain rather than after it, so a running `emerge`
+  is stopped at once instead of five seconds later.
+
+  Nobody had seen it because there is nothing to see: the window is already gone, `closeEvent`
+  has synced the settings and stopped the command, and the only evidence is an exit status of
+  139 — which a desktop launcher discards. It is **not** a vulnerability: nothing
+  attacker-controlled reaches it, since the lifetimes follow the structure of `main()` and not
+  any input. What it cost was an exit status that breaks anything wrapping the program, and a
+  core dump of the process on every exit wherever core dumps are enabled.
+
+- **The test suite died in its own teardown.** Not on any test: after the last one, when pytest
+  clears the session-scoped `app` fixture. Between four and twelve parentless widgets built by
+  fixtures that never destroyed them were still standing, with their wrappers alive, and
+  `~QApplication` took them. The crash lands before pytest prints its summary, which is why
+  `make check` showed a bare memory-protection violation with no test tally — and why looking for
+  "the test it breaks on" could never converge. There is no such test.
+
+  Five fixtures now tear down, through one `destroy` helper in `tests/conftest.py`. The helper
+  exists because the fourth of its four lines is easy to miss: `deleteLater` hands ownership to
+  C++ and posts a `DeferredDelete` event, and a suite that never calls `app.exec()` never
+  delivers one — so the widget stops being Python's problem and still stands. Top-level widgets
+  alive when the `app` fixture is cleared: 34–78 before, of which 4–12 belonged to Python; 3
+  after, none of them Python's.
+
+  Two fixtures had been doing this correctly all along, in `test_cfgfiles.py` and
+  `test_update.py`, and their docstrings describe the hazard exactly. They were right and the
+  others were not.
+
+### Changed
+
+- Two regression tests come with the above. One destroys a window and asserts it is **gone**
+  rather than merely scheduled, which catches a later simplification back to a bare
+  `deleteLater`. The other runs the entry point in its own process and fails if it is killed by a
+  signal, because the exit status was the only place this was ever visible.
+
+- **`security-review/RAPORT.md` §4 no longer says the crash does not concern the running
+  application.** It did, on every exit. The paragraph is struck and corrected underneath rather
+  than rewritten, the way the two earlier corrections in that section are written — a report that
+  quietly edits its own record is worth less than one that shows where it was wrong. Three of its
+  claims are addressed by name: the empty list of Python frames was its most useful observation
+  and pointed at the application rather than the suite; "which test does it break on" had no
+  answer because there is no such test; and the language-switching hypothesis was the right place
+  and the wrong culprit, rejected after six clean runs where six runs had a 94 % chance of showing
+  nothing.
+
 ## [1.4.0] — 2026-09-20
 
 A security release. A line-by-line review of the two privileged programs, and of what reaches
