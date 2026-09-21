@@ -172,6 +172,12 @@ def main(argv: list[str] | None = None) -> int:
     try:
         return app.exec()
     finally:
+        # Before the wait, not after it. exec() can return without the window
+        # having been closed -- a session manager quitting the application does
+        # that -- and closeEvent is what stops a command that is still running.
+        # Waiting first would leave an emerge running for the length of the
+        # wait, for no reason.
+        window.close()
         if not wait_for_tasks():
             log.warning("A background task was still running at shutdown")
         _release(app, window)
@@ -186,16 +192,14 @@ def _release(app: GentstoreApplication, window: MainWindow) -> None:
     deleting a widget out from under a live wrapper is not an error it can
     report, it is a crash, and it happened on every single exit.
 
-    ``close`` covers the one way out that does not go through the window: the
-    Quit action goes to :meth:`MainWindow.close`, but ``app.quit()`` from
-    anywhere else does not, and ``closeEvent`` is what stops a command that is
-    still running. Calling it twice is harmless.
+    Destruction only. Closing the window belongs to the caller and happens
+    earlier, because ``closeEvent`` is what stops a running command and that
+    should not wait behind a task drain.
 
     ``deleteLater`` alone would not do it. It hands ownership to C++ and posts
     a ``DeferredDelete`` event, and there is no event loop left to deliver one
     by the time this runs, so the flush is what actually runs the destructor.
     """
-    window.close()
     window.deleteLater()
     app.processEvents()
     app.sendPostedEvents(None, QEvent.Type.DeferredDelete)
