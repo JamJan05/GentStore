@@ -34,6 +34,7 @@ import os
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest  # noqa: E402
+from PyQt6.QtCore import QEvent  # noqa: E402
 
 from gentstore.app import GentstoreApplication  # noqa: E402
 
@@ -46,6 +47,40 @@ def app(tmp_path_factory: pytest.TempPathFactory) -> GentstoreApplication:
 
     existing = GentstoreApplication.instance()
     return existing if isinstance(existing, GentstoreApplication) else GentstoreApplication([])
+
+
+@pytest.fixture
+def destroy(app):  # noqa: ANN001, ANN201 - hands back a function
+    """Destroy a widget now, instead of leaving it for ``~QApplication``.
+
+    It lives here because five fixtures across three modules need the same four
+    lines, and because not having them is what produced this suite's segfault.
+
+    A widget built with no parent belongs to Python, and a test that simply
+    stops referencing it does not destroy it: the connections its own menus and
+    toolbar hold keep it standing. What eventually destroys it is
+    ``~QApplication``, when pytest clears the session-scoped :func:`app` fixture
+    at the end of the run — and by then Qt is deleting widgets whose Python
+    wrappers are still alive. That is not an error Qt can report, it is a crash,
+    the same class ``runner/command.py:close()`` describes.
+
+    ``deleteLater`` alone is not enough either, and this is the part that is
+    easy to miss: it hands ownership to C++ and posts a ``DeferredDelete``
+    event, but a suite that never calls ``app.exec()`` never delivers one. The
+    widget stops being Python's problem and still stands. The explicit flush is
+    what actually runs the destructor.
+
+    ``close`` first, because for a window that is the path the application
+    itself takes, and it stops a command that is still running.
+    """
+
+    def _destroy(widget) -> None:  # noqa: ANN001 - any QWidget
+        widget.close()
+        widget.deleteLater()
+        app.processEvents()
+        app.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+
+    return _destroy
 
 
 @pytest.fixture(scope="session")
