@@ -1451,7 +1451,7 @@ dowodzi.
 uruchomione w trakcie pracy chodziło i zamknęło się czysto; objawia się wyłącznie w zestawie
 testów.~~ **Nieaktualne — patrz sprostowanie niżej.**
 
-> **SPROSTOWANIE (1.4.1).** Zdiagnozowany i naprawiony. Dwa zdania powyżej były nieprawdziwe,
+> **SPROSTOWANIE (dopisane po naprawie).** Zdiagnozowany i naprawiony. Dwa zdania powyżej były nieprawdziwe,
 > a drugie z nich w sposób, który ma znaczenie.
 >
 > **Nie ginie na żadnym teście.** Ginie po ostatnim, w teardownie sesyjnego fixture'a `app`:
@@ -1500,8 +1500,9 @@ zgubić. Gdyby wrócił:
 QT_QPA_PLATFORM=offscreen python3 -m pytest -vv 2>&1 | tee /tmp/crash.log
 ```
 
-i odczytać ostatnią linię przed `Fatal Python error` — będzie nią `nodeid` testu, na którym
-proces zginął.
+~~i odczytać ostatnią linię przed `Fatal Python error` — będzie nią `nodeid` testu, na którym
+proces zginął.~~ **Nie będzie — pad wypada w sprzątaniu sesji, po ostatnim teście; patrz
+sprostowanie niżej.**
 
 `-vv`, nie `-q`, i ta różnica jest tu całą sprawą. `-q` wypisuje kropkę **po** zakończeniu testu,
 więc test, który zabija proces, nigdy swojej kropki nie dostaje; `-vv` wypisuje `nodeid` **przed**
@@ -1514,11 +1515,11 @@ tutaj**: w obu zaobserwowanych wystąpieniach lista ramek Pythona była pusta, a
 stos C. To znaczy, że crash nastąpił w kodzie C bez ramki Pythona na stosie, czyli dokładnie
 w sprzątaniu Qt. Przy takim padzie `-q` nie da nazwy żadną drogą.
 
-> **SPROSTOWANIE (1.4.1).** Ta obserwacja okazała się najcenniejsza w całym akapicie i wskazywała
+> **SPROSTOWANIE (dopisane po naprawie).** Ta obserwacja okazała się najcenniejsza w całym akapicie i wskazywała
 > nie na zestaw testów, lecz na aplikację. Pad w teardownie pytest **ma** ramki Pythona
 > (`_pytest/fixtures.py:1163`). Dosłowne `<no Python frame>` wypisuje dopiero pad przy wyjściu
-> `gentstore` — i ten padał przy każdym zamknięciu. Z uciętego ogona nie da się orzec, które
-> z dwóch wystąpień było które. Rada o `-vv` zamiast `-q` pozostaje słuszna i tu akurat bezradna:
+> `gentstore` — i ten padał przy każdym zamknięciu. Z uciętego ogona nie da się orzec, z którym
+> z dwóch padów miało się wtedy do czynienia. Rada o `-vv` zamiast `-q` pozostaje słuszna i tu akurat bezradna:
 > pad jest w sprzątaniu sesji, więc żadna nazwa testu go nie wskaże.
 
 **Czego nie próbowałem w ogóle:**
