@@ -9,6 +9,8 @@ tag was made.
 
 ## [Unreleased]
 
+## [1.4.1] — 2026-09-21
+
 The segfault that §4 of the security report listed as unexplained. It was two faults of one kind,
 and the report was wrong about the more important of them: it does not only affect the test suite.
 `gentstore` segfaulted on **every exit**, and had done since the window existed.
@@ -925,7 +927,8 @@ comes from the `portage` API rather than from parsing ebuilds. Everything privil
 Bilingual (Polish and English) through Qt's own translation system; the documentation and the
 source strings are English.
 
-[Unreleased]: https://github.com/JamJan05/GentStore/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/JamJan05/GentStore/compare/v1.4.1...HEAD
+[1.4.1]: https://github.com/JamJan05/GentStore/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/JamJan05/GentStore/compare/v1.3.6...v1.4.0
 [1.3.6]: https://github.com/JamJan05/GentStore/compare/v1.3.5...v1.3.6
 [1.3.5]: https://github.com/JamJan05/GentStore/compare/v1.3.1...v1.3.5
