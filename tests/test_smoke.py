@@ -25,6 +25,7 @@ a terminal and in CI:
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -214,3 +215,76 @@ def test_the_masks_screen_says_it_is_still_working(window: MainWindow) -> None:
     page._rebuild_conditional()
     settled = [label.text() for label in page._conditional_entries.findChildren(QLabel)]
     assert settled and settled != texts
+
+
+# -- leaving ----------------------------------------------------------------
+
+
+def test_the_window_is_destroyed_before_the_application_lets_go(app) -> None:  # noqa: ANN001
+    """``main`` builds the application first and the window second, and CPython
+    releases a frame's locals in that same order — so without this the
+    application went first and ``~QApplication`` deleted a window whose Python
+    wrapper was still alive.
+
+    The assertion is on the widget actually being gone, not merely scheduled.
+    ``deleteLater`` hands ownership to C++ and posts a ``DeferredDelete`` that
+    nothing is left to deliver, so a version of :func:`_release` that stops
+    there would leave the window standing and this would catch it.
+    """
+    from PyQt6 import sip
+
+    from gentstore.app import _release
+
+    window = MainWindow(app.settings)
+    _release(app, window)
+    assert sip.isdeleted(window), "the window outlived the call that was meant to destroy it"
+
+
+def test_the_application_exits_without_being_killed(tmp_path) -> None:
+    """The whole entry point, in its own process, because that is where it went
+    wrong: gentstore segfaulted on every exit, after the window was already
+    gone, so nothing on screen ever showed it and only the exit status did.
+
+    A signal is what this is looking for. A non-zero but orderly exit is left
+    alone, because a host where the application declines to start is not what
+    is being tested here.
+    """
+    import subprocess
+    import sys
+
+    driver = (
+        "import os, sys\n"
+        "os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')\n"
+        "from PyQt6.QtCore import QTimer\n"
+        "from PyQt6.QtWidgets import QApplication\n"
+        "import gentstore.app as a\n"
+        "show = a.MainWindow.show\n"
+        "def leave():\n"
+        "    for w in list(QApplication.topLevelWidgets()):\n"
+        "        w.close()\n"
+        "    QApplication.instance().quit()\n"
+        "def patched(self):\n"
+        "    show(self)\n"
+        "    QTimer.singleShot(100, leave)\n"
+        "a.MainWindow.show = patched\n"
+        "sys.exit(a.main(['gentstore']))\n"
+    )
+
+    environment = dict(os.environ)
+    environment.update(
+        QT_QPA_PLATFORM="offscreen",
+        XDG_CONFIG_HOME=str(tmp_path / "config"),
+        XDG_STATE_HOME=str(tmp_path / "state"),
+        XDG_RUNTIME_DIR=str(tmp_path / "run"),
+        PYTHONPATH=str(Path(__file__).resolve().parent.parent),
+    )
+    (tmp_path / "run").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "run").chmod(0o700)
+
+    result = subprocess.run(  # noqa: S603
+        [sys.executable, "-c", driver], env=environment, capture_output=True, timeout=120
+    )
+    assert result.returncode >= 0, (
+        f"the process was killed by signal {-result.returncode}; "
+        f"stderr tail: {result.stderr.decode(errors='replace')[-2000:]}"
+    )

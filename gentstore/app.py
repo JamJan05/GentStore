@@ -23,7 +23,7 @@ import logging
 import sys
 from pathlib import Path
 
-from PyQt6.QtCore import QLibraryInfo, QLocale, QTranslator
+from PyQt6.QtCore import QEvent, QLibraryInfo, QLocale, QTranslator
 from PyQt6.QtWidgets import QApplication
 
 from . import APP_NAME, DESKTOP_ID, ORG_DOMAIN, ORG_NAME, __version__
@@ -174,6 +174,31 @@ def main(argv: list[str] | None = None) -> int:
     finally:
         if not wait_for_tasks():
             log.warning("A background task was still running at shutdown")
+        _release(app, window)
+
+
+def _release(app: GentstoreApplication, window: MainWindow) -> None:
+    """Destroy the window before letting go of the application.
+
+    Both are locals of :func:`main`, and CPython releases a frame's locals in
+    the order they were created — so the application goes first, and
+    ``~QApplication`` deletes a window whose Python wrapper is still alive. Qt
+    deleting a widget out from under a live wrapper is not an error it can
+    report, it is a crash, and it happened on every single exit.
+
+    ``close`` covers the one way out that does not go through the window: the
+    Quit action goes to :meth:`MainWindow.close`, but ``app.quit()`` from
+    anywhere else does not, and ``closeEvent`` is what stops a command that is
+    still running. Calling it twice is harmless.
+
+    ``deleteLater`` alone would not do it. It hands ownership to C++ and posts
+    a ``DeferredDelete`` event, and there is no event loop left to deliver one
+    by the time this runs, so the flush is what actually runs the destructor.
+    """
+    window.close()
+    window.deleteLater()
+    app.processEvents()
+    app.sendPostedEvents(None, QEvent.Type.DeferredDelete)
 
 
 if __name__ == "__main__":  # pragma: no cover
